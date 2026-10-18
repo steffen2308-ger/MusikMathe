@@ -48,7 +48,7 @@ Private Tabs verbergen weder die IP-Adresse noch Aktivitäten vor Websites oder 
 Auf der Startseite gibt es drei neue Zugänge für Deutschland:
 
 - **Wikipedia · meistgelesen**: lokale Ansicht mit den 50 meistgelesenen Artikeln aus Deutschland (Wikimedia Analytics API, DE, alle Wikipedia-Sprachen). Das aktuelle verfügbare Tagesdatum wird angezeigt; bei fehlenden Tagesdaten werden bis zu sieben vergangene Tage geprüft. Wikipedia veröffentlicht gerundete Artikelaufrufe, keine Suchanfragen. Keine Umdeutung einer Sprachrangliste in ein Länderranking. Die Liste wird erst beim Öffnen geladen; Netzwerkfehler liefern eine Wiederholen-Ansicht, keine erfundenen Zahlen.
-- **Meistbesuchte Webseiten**: [Similarweb Deutschland-Ranking](https://www.similarweb.com/top-websites/germany/).
+- **Meistbesuchte Webseiten**: [Öffentliche Semrush-Rangliste für Deutschland](https://www.semrush.com/trending-websites/de/all/) ohne Anmeldung (die führenden 20 Webseiten sind frei sichtbar).
 - **Google Trends**: [Aktuelle Suchtrends für Deutschland, deutsche Oberfläche](https://trends.google.com/trending?geo=DE&hl=de).
 
 Die Wikipedia-Ansicht basiert auf dem offiziellen [Country-Ranking-Endpunkt](https://doc.wikimedia.org/generated-data-platform/aqs/analytics-api/reference/page-views.html). Sie verwendet weder Standortfreigabe noch Browsercookies.
@@ -95,3 +95,7 @@ Die Zuordnung erfolgt zur exakten HTTPS-Origin einschließlich abweichender Port
 In privaten Tabs wird der Passwortmanager vollständig ausgelassen. Auch Android-Autofill und die alten WebView-Formulardaten-Funktionen bleiben dort aus. Der gewählte eigene Passwortspeicher wird ebenfalls in normalen Tabs anstelle der System-Autofill-Speicherung verwendet. Allgemeines Löschen von Verlauf und Cookies entfernt keine Passwörter; dafür gibt es die eigene Passwortverwaltung. Ohne funktionierenden WebMessage-Support bleiben die expliziten Menüaktionen nutzbar. Komplexe mehrstufige Formulare, mehrere Passwortfelder, geschlossene Shadow-DOMs oder Login-Iframes sind nicht automatisch abgedeckt.
 
 Prüfungen: authentifizierte Verschlüsselung, zufällige Nonces, falsche Schlüssel und manipulierte Dateien; echte Android-Keystore-Persistenz; native Speichernachfrage, Ausfüllen im echten WebView, Wiederherstellung und Login-Löschung; Website-/Port-Trennung, Navigation während der Kontenauswahl, ungültige Nachrichtentoken und Ausschluss privater Tabs. Die Geräteprüfungen laufen auf Android 9 und Android 15, mit ausdrücklich geprüftem WebMessage-Support auf Android 15.
+
+## Kompakte Browserleisten (0.4.1)
+
+Die Adressleiste ist 28 statt 56 dp hoch, die untere Buttonreihe 25 statt 50 dp. Die Symbole bleiben lesbar; dadurch steht mehr Fläche für Webseiten zur Verfügung.

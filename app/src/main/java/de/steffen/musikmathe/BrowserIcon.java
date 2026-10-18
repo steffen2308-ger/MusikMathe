@@ -7,21 +7,27 @@ import android.graphics.Path;
 import android.graphics.RectF;
 import android.view.View;
 
-/** Small vector controls with generous touch targets and spoken labels. */
+/** Vector controls with spoken labels and a compact toolbar layout. */
 final class BrowserIcon extends View {
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final boolean compact;
     final String kind;
     int count = 1;
     BrowserIcon(Context context, String kind, String label) {
-        super(context); this.kind = kind; setContentDescription(label); setFocusable(true); setClickable(true);
+        this(context, kind, label, false);
+    }
+    BrowserIcon(Context context, String kind, String label, boolean compact) {
+        super(context); this.kind = kind; this.compact = compact; setContentDescription(label); setFocusable(true); setClickable(true);
         android.util.TypedValue value = new android.util.TypedValue();
         context.getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, value, true);
         setBackgroundResource(value.resourceId);
     }
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        float unit = Math.min(getWidth(), getHeight()) / 48f;
-        canvas.save(); canvas.translate((getWidth() - 48 * unit) / 2, (getHeight() - 48 * unit) / 2); canvas.scale(unit, unit);
+        float unit = compact ? Math.min(getWidth() / 48f, getHeight() / 32f) : Math.min(getWidth(), getHeight()) / 48f;
+        // Compact controls retain readable glyphs; leave room above the video for its badge.
+        float centerY = compact && kind.equals("video") && count > 0 ? 20 : 24;
+        canvas.save(); canvas.translate(getWidth() / 2f - 24 * unit, getHeight() / 2f - centerY * unit); canvas.scale(unit, unit);
         paint.setColor(isEnabled() ? 0xff234a43 : 0xffb3c5be); paint.setStrokeWidth(2); paint.setStrokeCap(Paint.Cap.ROUND);
         paint.setStrokeJoin(Paint.Join.ROUND); paint.setStyle(Paint.Style.STROKE);
         switch (kind) {

@@ -117,8 +117,11 @@ public class MainActivity extends Activity {
         GradientDrawable drawable = new GradientDrawable(); drawable.setColor(color); drawable.setCornerRadius(dp(radius)); return drawable;
     }
     private BrowserIcon icon(LinearLayout row, String kind, String label, Runnable action) {
-        BrowserIcon icon = new BrowserIcon(this, kind, label);
-        row.addView(icon, new LinearLayout.LayoutParams(dp(48), dp(48))); icon.setOnClickListener(v -> action.run()); return icon;
+        return icon(row, kind, label, action, 48);
+    }
+    private BrowserIcon icon(LinearLayout row, String kind, String label, Runnable action, int height) {
+        BrowserIcon icon = new BrowserIcon(this, kind, label, height < 48);
+        row.addView(icon, new LinearLayout.LayoutParams(dp(48), dp(height))); icon.setOnClickListener(v -> action.run()); return icon;
     }
     private void buildInterface() {
         root = new FrameLayout(this); root.setBackgroundColor(isPrivateMode() ? 0xffede5f4 : PAPER);
@@ -132,15 +135,16 @@ public class MainActivity extends Activity {
             });
         }
         if (Build.VERSION.SDK_INT >= 26) getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
-        top = new LinearLayout(this); top.setGravity(Gravity.CENTER_VERTICAL); top.setPadding(dp(6), dp(4), dp(6), dp(4));
-        shell.addView(top, new LinearLayout.LayoutParams(-1, dp(56)));
-        LinearLayout omnibox = new LinearLayout(this); omnibox.setGravity(Gravity.CENTER_VERTICAL); omnibox.setBackground(rounded(0xffe5eeea, 24));
-        top.addView(omnibox, new LinearLayout.LayoutParams(0, dp(48), 1));
-        siteState = text("⊕", 20); siteState.setGravity(Gravity.CENTER); siteState.setContentDescription("Informationen zur Seite");
+        top = new LinearLayout(this); top.setGravity(Gravity.CENTER_VERTICAL); top.setPadding(dp(6), dp(2), dp(6), dp(2));
+        shell.addView(top, new LinearLayout.LayoutParams(-1, dp(28)));
+        LinearLayout omnibox = new LinearLayout(this); omnibox.setGravity(Gravity.CENTER_VERTICAL); omnibox.setBackground(rounded(0xffe5eeea, 12));
+        top.addView(omnibox, new LinearLayout.LayoutParams(0, dp(24), 1));
+        siteState = text("⊕", 18); siteState.setIncludeFontPadding(false); siteState.setGravity(Gravity.CENTER); siteState.setContentDescription("Informationen zur Seite");
         omnibox.addView(siteState, new LinearLayout.LayoutParams(dp(44), -1)); siteState.setOnClickListener(v -> siteInfo());
         address = new EditText(this); address.setSingleLine(true); address.setSelectAllOnFocus(true); address.setTextSize(16); address.setTextColor(INK);
         address.setHint("Adresse oder Suche"); address.setHintTextColor(0xff647e75); address.setContentDescription("Adresse oder Suchbegriff"); address.setBackgroundColor(Color.TRANSPARENT);
         address.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI); address.setImeOptions(EditorInfo.IME_ACTION_GO | EditorInfo.IME_FLAG_NO_EXTRACT_UI | (isPrivateMode() && Build.VERSION.SDK_INT >= 26 ? EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING : 0));
+        address.setMinimumHeight(0); address.setMinHeight(0); address.setIncludeFontPadding(false); address.setGravity(Gravity.CENTER_VERTICAL);
         address.setPadding(0,0,dp(8),0); omnibox.addView(address, new LinearLayout.LayoutParams(0,-1,1));
         address.setOnKeyListener((v,key,event) -> {
             if (key != KeyEvent.KEYCODE_ENTER) return false;
@@ -152,21 +156,21 @@ public class MainActivity extends Activity {
                 navigateTyped(address.getText().toString()); return true;
             } return false;
         });
-        BrowserIcon reload = icon(top, "reload", "Neu laden oder Laden stoppen", () -> { WebView w = activeView(); if(w != null) { if(w.getProgress() < 100)w.stopLoading();else w.reload(); } });
+        BrowserIcon reload = icon(top, "reload", "Neu laden oder Laden stoppen", () -> { WebView w = activeView(); if(w != null) { if(w.getProgress() < 100)w.stopLoading();else w.reload(); } }, 24);
         reload.setOnLongClickListener(v -> { WebView w=activeView();if(w!=null){w.clearCache(false);w.reload();}return true; });
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal); progress.setMax(100); progress.setProgressTintList(android.content.res.ColorStateList.valueOf(0xff247e6d));
         shell.addView(progress, new LinearLayout.LayoutParams(-1, dp(2))); progress.setVisibility(View.INVISIBLE);
         pages = new FrameLayout(this); pages.setBackgroundColor(Color.WHITE); shell.addView(pages, new LinearLayout.LayoutParams(-1, 0, 1));
         bottom = new LinearLayout(this); bottom.setGravity(Gravity.CENTER_VERTICAL);
-        shell.addView(bottom, new LinearLayout.LayoutParams(-1, dp(50)));
-        back = icon(bottom, "back", "Zurück", this::goBack);
-        forward = icon(bottom, "forward", "Vorwärts", () -> { if(activeView()!=null && activeView().canGoForward())activeView().goForward(); });
-        icon(bottom, "home", "Startseite", () -> navigate(Address.HOME));
-        videoButton=icon(bottom,"video","Videos auf dieser Seite",this::showVideos);
+        shell.addView(bottom, new LinearLayout.LayoutParams(-1, dp(25)));
+        back = icon(bottom, "back", "Zurück", this::goBack, 25);
+        forward = icon(bottom, "forward", "Vorwärts", () -> { if(activeView()!=null && activeView().canGoForward())activeView().goForward(); }, 25);
+        icon(bottom, "home", "Startseite", () -> navigate(Address.HOME), 25);
+        videoButton=icon(bottom,"video","Videos auf dieser Seite",this::showVideos,25);
         View space = new View(this); bottom.addView(space, new LinearLayout.LayoutParams(0,1,1));
-        tabButton = icon(bottom, "tabs", "Tabs anzeigen", this::showTabs);
+        tabButton = icon(bottom, "tabs", "Tabs anzeigen", this::showTabs, 25);
         tabButton.setOnLongClickListener(v -> { newTab(Address.HOME, true); return true; });
-        icon(bottom, "menu", "Menü", this::menu);
+        icon(bottom, "menu", "Menü", this::menu, 25);
     }
     private Tab active() { return tabs.isEmpty() ? null : tabs.get(selected); }
     private WebView activeView() { Tab tab=active(); return tab==null ? null : tab.view; }
@@ -364,7 +368,7 @@ public class MainActivity extends Activity {
                 case 8: tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: new AlertDialog.Builder(this).setTitle("MusikMathe · 0.4.0").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenz: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: new AlertDialog.Builder(this).setTitle("MusikMathe · 0.4.1").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenz: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: endPrivate(); break;
