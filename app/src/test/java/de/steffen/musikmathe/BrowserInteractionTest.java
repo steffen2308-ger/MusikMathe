@@ -47,4 +47,32 @@ public class BrowserInteractionTest {
         assertNull(Shadows.shadowOf(a).getNextStartedActivity());
         assertEquals(Boolean.FALSE,invoke(a,"routeLink",new Class<?>[]{MainActivity.Tab.class,String.class,boolean.class},tab,"https://example.com",false));c.pause().stop().destroy();
     }
+    static final class WebsiteRequest extends android.webkit.PermissionRequest {
+        boolean denied; String[] granted;
+        private final String site;
+        WebsiteRequest(String site){this.site=site;}
+        @Override public Uri getOrigin(){return Uri.parse(site);}
+        @Override public String[] getResources(){return new String[]{RESOURCE_AUDIO_CAPTURE};}
+        @Override public void grant(String[] resources){granted=resources;}
+        @Override public void deny(){denied=true;}
+    }
+    @Test public void websiteOnlyReceivesRequestedPermissions()throws Exception{
+        clear();ActivityController<MainActivity> c=Robolectric.buildActivity(MainActivity.class).setup();MainActivity a=c.get();
+        invoke(a,"navigate",new Class<?>[]{String.class},"https://example.com/page");
+        WebsiteRequest request=new WebsiteRequest("https://example.com/");
+        Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(android.Manifest.permission.CAMERA,android.Manifest.permission.RECORD_AUDIO);
+        invoke(a,"requestWebsitePermission",new Class<?>[]{MainActivity.Tab.class,android.webkit.PermissionRequest.class},tabs(a).get(0),request);
+        org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog().getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();
+        a.onRequestPermissionsResult(11,new String[]{android.Manifest.permission.RECORD_AUDIO},new int[]{android.content.pm.PackageManager.PERMISSION_GRANTED});
+        assertArrayEquals(new String[]{android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE},request.granted);assertFalse(request.denied);c.pause().stop().destroy();
+    }
+    @Test public void switchingTabsCancelsWebsitePermissionAndHttpIsRejected()throws Exception{
+        clear();ActivityController<MainActivity> c=Robolectric.buildActivity(MainActivity.class).setup();MainActivity a=c.get();
+        invoke(a,"navigate",new Class<?>[]{String.class},"https://example.com");WebsiteRequest request=new WebsiteRequest("https://example.com");
+        invoke(a,"requestWebsitePermission",new Class<?>[]{MainActivity.Tab.class,android.webkit.PermissionRequest.class},tabs(a).get(0),request);
+        invoke(a,"newTab",new Class<?>[]{String.class,boolean.class},Address.HOME,true);assertTrue(request.denied);assertNull(request.granted);
+        WebsiteRequest insecure=new WebsiteRequest("http://example.com");
+        invoke(a,"requestWebsitePermission",new Class<?>[]{MainActivity.Tab.class,android.webkit.PermissionRequest.class},tabs(a).get(1),insecure);
+        assertTrue(insecure.denied);assertNull(insecure.granted);c.pause().stop().destroy();
+    }
 }

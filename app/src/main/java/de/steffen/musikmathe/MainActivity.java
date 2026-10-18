@@ -83,6 +83,7 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
         store = new BrowserStore(this); buildInterface();
+        if (Build.VERSION.SDK_INT >= 33) getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::goBack);
         for (BrowserStore.Entry row : store.read("tabs")) tabs.add(new Tab(row.url, row.title, row.desktop));
         if (tabs.isEmpty()) tabs.add(new Tab(Address.HOME, "Neuer Tab", false));
         selected = Math.max(0, Math.min(store.selected(), tabs.size() - 1));
