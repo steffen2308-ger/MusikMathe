@@ -96,7 +96,7 @@ public class VideoDownloadService extends Service {
     private void finish(boolean success,String message){
         if(finished)return;finished=true;status=message;if(!success)deleteDocument(destination);
         if(temporary!=null)temporary.delete();if(current==this)current=null;
-        if(destination!=null)try{getContentResolver().releasePersistableUriPermission(destination,Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);}catch(Exception ignored){}
+        if(destination!=null)try{getContentResolver().releasePersistableUriPermission(destination,Intent.FLAG_GRANT_WRITE_URI_PERMISSION);}catch(Exception ignored){}
         stopForeground(true);Toast.makeText(this,message,Toast.LENGTH_LONG).show();stopSelf();
     }
     private void deleteDocument(Uri uri){if(uri==null)return;try{DocumentsContract.deleteDocument(getContentResolver(),uri);}catch(Exception ignored){try{getContentResolver().delete(uri,null,null);}catch(Exception ignoredAgain){}}}

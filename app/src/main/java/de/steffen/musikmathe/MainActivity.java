@@ -220,6 +220,7 @@ public class MainActivity extends Activity {
         web.setWebViewClient(new WebViewClient() {
             @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 if (request.isForMainFrame() && WikiTop.URL.equals(request.getUrl().toString())) return WikiTop.response();
+                if ("GET".equals(request.getMethod())) tab.videos.observe(request.getUrl().toString(),request.getRequestHeaders());
                 if ("GET".equals(request.getMethod())) recordVideo(tab,tab.videoPage,request.getUrl().toString(),"",request.getRequestHeaders());
                 return null;
             }
@@ -234,6 +235,7 @@ public class MainActivity extends Activity {
             @Override public void onPageFinished(WebView view,String url) {
                 tab.url=url; tab.title=view.getTitle()==null?url:view.getTitle();
                 store.visit(url,tab.title); if(active()==tab)updateToolbar(); persist();
+                view.evaluateJavascript(VideoCatalog.HOOKS,null);
                 int page=tab.videoPage;view.postDelayed(() -> {if(!destroyed && tab.videoPage==page && tab.view==view)scanVideos(tab,()->{});},1000);
             }
             @Override public void onReceivedError(WebView view,WebResourceRequest request,WebResourceError error) {
@@ -475,7 +477,7 @@ public class MainActivity extends Activity {
             Uri destination=data.getData();
             if(item==null || !"content".equals(destination.getScheme())){try{android.provider.DocumentsContract.deleteDocument(getContentResolver(),destination);}catch(Exception ignored){}return;}
             try{
-                if((data.getFlags()&Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)!=0)getContentResolver().takePersistableUriPermission(destination,data.getFlags()&(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION));
+                if((data.getFlags()&Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)!=0 && (data.getFlags()&Intent.FLAG_GRANT_WRITE_URI_PERMISSION)!=0)getContentResolver().takePersistableUriPermission(destination,Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                 Intent download=new Intent(this,isPrivateMode()?PrivateVideoDownloadService.class:VideoDownloadService.class).putExtra("url",item.url).putExtra("type",item.type).putExtra("headers",new org.json.JSONObject(item.headers).toString()).putExtra("destination",destination.toString()).putExtra("original",pendingVideoOriginal).putExtra("clip",pendingVideoClip);
                 if(Build.VERSION.SDK_INT>=26)startForegroundService(download);else startService(download);
                 if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},21);
@@ -547,7 +549,7 @@ public class MainActivity extends Activity {
     private void scanVideos(Tab tab,Runnable completed){
         if(tab==null || tab.view==null){completed.run();return;}
         int page=tab.videoPage;String referer=tab.url,userAgent=tab.view.getSettings().getUserAgentString();
-        String script="(function(){var a=[],seen={};function add(u,t){if(u&&!seen[u]&&a.length<180){seen[u]=1;a.push({url:u,type:t||''});}}function scan(w,depth){try{var d=w.document;d.querySelectorAll('video,video source').forEach(function(v){add(v.currentSrc||v.src,v.type||'video/unknown');});w.performance.getEntriesByType('resource').slice(-400).forEach(function(e){add(e.name,'');});if(depth<2)for(var i=0;i<Math.min(w.frames.length,8);i++)scan(w.frames[i],depth+1);}catch(e){}}scan(window,0);return JSON.stringify(a);})()";
+        String script="(function(){var a=[],seen={};function add(u,t){if(u&&!seen[u]&&a.length<180){seen[u]=1;a.push({url:u,type:t||''});}}function scan(w,depth){try{var d=w.document;(w.__mmVideos||[]).forEach(function(e){add(e.url,e.type);});d.querySelectorAll('video,video source').forEach(function(v){add(v.currentSrc||v.src,v.type||'video/unknown');});w.performance.getEntriesByType('resource').slice(-400).forEach(function(e){add(e.name,'');});if(depth<2)for(var i=0;i<Math.min(w.frames.length,8);i++)scan(w.frames[i],depth+1);}catch(e){}}scan(window,0);return JSON.stringify(a);})()";
         tab.view.evaluateJavascript(script,value->{
             if(destroyed || !tabs.contains(tab) || page!=tab.videoPage)return;
             try{Object decoded=new org.json.JSONTokener(value).nextValue();org.json.JSONArray rows=new org.json.JSONArray(String.valueOf(decoded));
@@ -588,8 +590,9 @@ public class MainActivity extends Activity {
         pendingVideo=item;pendingVideoOriginal=original;pendingVideoClip=clip;
         String guessed=URLUtil.guessFileName(item.url,null,null);String name=active().title==null?"Video":active().title;
         name=name.replaceAll("[\\\\/\\p{Cntrl}:*?\"<>|]","_");if(name.length()>80)name=name.substring(0,80);
-        if(original)name=guessed;else name+=".mp4";
-        Intent create=new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(original&&"WebM".equals(item.type)?"video/webm":"video/mp4").putExtra(Intent.EXTRA_TITLE,name);
+        if(original){name=guessed;if(name.endsWith(".bin")){if("MP4".equals(item.type))name="Video.mp4";else if("WebM".equals(item.type))name="Video.webm";}}else name+=".mp4";
+        String originalMime=android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(android.webkit.MimeTypeMap.getFileExtensionFromUrl(name).toLowerCase(java.util.Locale.ROOT));
+        Intent create=new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(original?(originalMime==null?"application/octet-stream":originalMime):"video/mp4").putExtra(Intent.EXTRA_TITLE,name);
         try{startActivityForResult(create,SAVE_VIDEO);}catch(ActivityNotFoundException error){pendingVideo=null;toast("Keine Dateiauswahl verfügbar.");}
     }
 }

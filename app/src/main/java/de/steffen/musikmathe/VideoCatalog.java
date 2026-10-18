@@ -15,11 +15,15 @@ final class VideoCatalog {
         Item(String url,String type,Map<String,String> headers){this.url=url;this.type=type;this.headers=new LinkedHashMap<>(headers);}
         String label(){String path=Uri.parse(url).getLastPathSegment();return type+" · "+Address.host(url)+"\n"+(path==null?"Videostream":path);}
     }
+    static final String HOOKS="(function(){try{if(window.__mmVideoHook)return;window.__mmVideoHook=true;window.__mmVideos=[];function put(u,t){if(u&&t&&(/video\\/|mpegurl|dash\\+xml/i).test(t)){var a=window.__mmVideos;if(a.length<80)a.push({url:u,type:t});}}if(window.fetch){var f=window.fetch;window.fetch=function(){return f.apply(this,arguments).then(function(r){try{put(r.url,r.headers.get('content-type'));}catch(e){}return r;});};}var x=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(){this.addEventListener('load',function(){try{put(this.responseURL,this.getResponseHeader('Content-Type'));}catch(e){}},{once:true});return x.apply(this,arguments);};}catch(e){}})()";
+    private final LinkedHashMap<String,Map<String,String>> requests=new LinkedHashMap<>();
+    synchronized void observe(String url,Map<String,String> headers){if(!Address.isWeb(url))return;if(requests.size()>=220)requests.remove(requests.keySet().iterator().next());requests.put(url,safeHeaders(headers));}
     private final LinkedHashMap<String,Item> items=new LinkedHashMap<>();
-    synchronized void clear(){items.clear();}
+    synchronized void clear(){items.clear();requests.clear();}
     synchronized List<Item> list(){return new ArrayList<>(items.values());}
     synchronized boolean add(String url,String mime,Map<String,String> headers){
         String type=classify(url,mime,headers);if(type==null)return false;
+        Map<String,String> combined=safeHeaders(headers);Map<String,String> actual=requests.get(url);if(actual!=null)combined.putAll(actual);headers=combined;
         if(items.containsKey(url)){Item old=items.get(url);Map<String,String> merged=new LinkedHashMap<>(old.headers);merged.putAll(safeHeaders(headers));items.put(url,new Item(url,type,merged));return false;}
         if(items.size()>=60)return false;items.put(url,new Item(url,type,safeHeaders(headers)));return true;
     }
@@ -41,7 +45,8 @@ final class VideoCatalog {
             if(path.matches(".*(?:init|segment|chunk|frag)[-_0-9]*\\.(mp4|m4v)$"))return null;
             return path.endsWith(".webm")?"WebM":path.endsWith(".mp4")||path.endsWith(".m4v")?"MP4":"Video";
         }
-        String hint=uri.getQueryParameter("mime");if(hint!=null && hint.toLowerCase(Locale.ROOT).startsWith("video/"))return "Video";
+        String hint=uri.getQueryParameter("mime");if(hint!=null && hint.toLowerCase(Locale.ROOT).startsWith("video/"))type=hint.toLowerCase(Locale.ROOT);
+        if(type.contains("video/webm"))return "WebM";if(type.contains("video/mp4"))return "MP4";
         if(type.startsWith("video/"))return "Video";
         if(headers!=null)for(Map.Entry<String,String> row:headers.entrySet())if("Sec-Fetch-Dest".equalsIgnoreCase(row.getKey()) && "video".equalsIgnoreCase(row.getValue()))return "Video";
         return null;
