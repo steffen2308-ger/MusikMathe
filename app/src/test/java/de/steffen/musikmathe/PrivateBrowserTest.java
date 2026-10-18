@@ -36,6 +36,7 @@ public class PrivateBrowserTest {
         BrowserApplication.privateReady=true;
         ActivityController<PrivateActivity> controller=Robolectric.buildActivity(PrivateActivity.class).setup();
         try {
+            java.lang.reflect.Field passwords=MainActivity.class.getDeclaredField("passwords");passwords.setAccessible(true);assertNull(passwords.get(controller.get()));
             assertTrue((controller.get().getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE)!=0);
             Method navigate=MainActivity.class.getDeclaredMethod("navigateTyped",String.class);navigate.setAccessible(true);navigate.invoke(controller.get(),"secret.example");
             controller.pause().stop();assertEquals("https://normal.example",new BrowserStore(c).read("tabs").get(0).url);

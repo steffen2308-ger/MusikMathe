@@ -36,7 +36,9 @@ jobs:
           gradle-version: '8.11.1'
 
       - name: Test YouTube player extraction
-        run: node scripts/test-youtube.js
+        run: |
+          node scripts/test-youtube.js
+          node --check app/src/main/assets/passwords.js
 
       - name: Build and lint
         run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
@@ -94,6 +96,41 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: private-isolation-device-reports
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+          if-no-files-found: ignore
+
+  passwords:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Enable KVM
+        run: sudo chmod 666 /dev/kvm
+      - name: Verify password storage and autofill on modern Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: default
+          disable-animations: true
+          script: gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest
+      - name: Upload password test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: password-device-reports
           path: |
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/

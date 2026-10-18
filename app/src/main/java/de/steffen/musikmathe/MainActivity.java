@@ -64,6 +64,7 @@ public class MainActivity extends Activity {
     private final List<Tab> tabs = new ArrayList<>();
     private int selected;
     private BrowserStore store;
+    private PasswordManager passwords;
     private LinearLayout shell, top, bottom;
     private FrameLayout root, pages;
     private EditText address;
@@ -97,7 +98,9 @@ public class MainActivity extends Activity {
             return;
         }
         if (isPrivateMode()) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-        store = new BrowserStore(this, isPrivateMode()); buildInterface();
+        store = new BrowserStore(this, isPrivateMode());
+        if(!isPrivateMode())passwords=new PasswordManager(this,this::activeView);
+        buildInterface();
         if (!isPrivateMode()) PrivateSession.cleanIfStopped(this);
         if (Build.VERSION.SDK_INT >= 33) getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::goBack);
         for (BrowserStore.Entry row : store.read("tabs")) tabs.add(new Tab(row.url, row.title, row.desktop));
@@ -187,7 +190,7 @@ public class MainActivity extends Activity {
     }
     private void switchTab(int index) {
         if(index<0 || index>=tabs.size()) return;
-        cancelPermission(); cancelUpload();
+        cancelPermission(); cancelUpload();if(passwords!=null)passwords.tabChanged();
         WebView old=activeView(); if(old!=null) { old.onPause(); pages.removeView(old); }
         hideFullscreen(); selected=index; Tab tab=active();
         if(tab.view==null) tab.view=createWebView(tab);
@@ -198,7 +201,7 @@ public class MainActivity extends Activity {
     private void closeTab(int index) {
         if(index<0 || index>=tabs.size()) return;
         if(isPrivateMode() && tabs.size()==1 && VideoDownloadService.busy()){endPrivate();return;}
-        cancelPermission(); cancelUpload(); hideFullscreen();
+        cancelPermission(); cancelUpload(); hideFullscreen();if(passwords!=null)passwords.tabChanged();
         Tab removed=tabs.remove(index); if(removed.view!=null) { pages.removeView(removed.view); removed.view.stopLoading(); removed.view.destroy(); }
         if(tabs.isEmpty() && isPrivateMode()) { endPrivate(); return; }
         if(tabs.isEmpty()) tabs.add(new Tab(Address.HOME,"Neuer Tab",false));
@@ -207,12 +210,16 @@ public class MainActivity extends Activity {
     @SuppressWarnings("SetJavaScriptEnabled")
     private WebView createWebView(Tab tab) {
         WebView web=new WebView(this);
+        web.setSaveEnabled(false);
+        if(Build.VERSION.SDK_INT>=26)web.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
+        if(passwords!=null)passwords.attach(web);
         if (isPrivateMode()) {
             web.setSaveEnabled(false);
             if (Build.VERSION.SDK_INT >= 26) web.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
         }
         WebSettings settings=web.getSettings();
-        if (isPrivateMode()) { settings.setCacheMode(WebSettings.LOAD_NO_CACHE); settings.setSaveFormData(false); settings.setSavePassword(false); } settings.setJavaScriptEnabled(true); settings.setDomStorageEnabled(true);
+        settings.setSaveFormData(false);settings.setSavePassword(false);
+        if (isPrivateMode()) { settings.setCacheMode(WebSettings.LOAD_NO_CACHE); } settings.setJavaScriptEnabled(true); settings.setDomStorageEnabled(true);
         settings.setLoadWithOverviewMode(true); settings.setUseWideViewPort(true); settings.setSupportZoom(true);
         settings.setBuiltInZoomControls(true); settings.setDisplayZoomControls(false); settings.setMediaPlaybackRequiresUserGesture(true);
         settings.setAllowFileAccess(false); settings.setAllowContentAccess(false); settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
@@ -239,11 +246,13 @@ public class MainActivity extends Activity {
                 tab.url=url;if(active()==tab)updateToolbar();
             }
             @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap favicon) {
+                if(passwords!=null)passwords.pageStarted(view);
                 tab.videoPage++;tab.videos.clear();tab.url=url; cancelPermissionFor(tab); if(active()==tab)updateToolbar();
             }
             @Override public void onPageFinished(WebView view,String url) {
                 tab.url=url; tab.title=view.getTitle()==null?url:view.getTitle();
                 store.visit(url,tab.title); if(active()==tab)updateToolbar(); persist();
+                if(passwords!=null)passwords.pageFinished(view);
                 view.evaluateJavascript(VideoCatalog.HOOKS,null);
                 if(YouTubeSources.originAllowed(url))view.evaluateJavascript(YouTubeSources.script(MainActivity.this),null);
                 int page=tab.videoPage;view.postDelayed(() -> {if(!destroyed && tab.videoPage==page && tab.view==view)scanVideos(tab,()->{});},1000);
@@ -334,6 +343,7 @@ public class MainActivity extends Activity {
         String[] actions={"Neuer Tab",store.bookmarked(active().url)?"Lesezeichen entfernen":"Lesezeichen hinzufügen","Lesezeichen","Verlauf","Downloads","Seite teilen","Link kopieren","Auf Seite suchen",active().desktop?"Mobile Ansicht":"Desktopansicht","Suchmaschine","Browserdaten löschen","Über MusikMathe"};
         for(int i=0;i<actions.length;i++)popup.getMenu().add(0,i,i,actions[i]);
         popup.getMenu().add(0,15,0,"Videos erkennen und speichern");
+        if(passwords!=null)popup.getMenu().add(0,16,0,"Passwörter");
         popup.getMenu().add(0,12,0,"Neuer privater Tab");
         popup.getMenu().add(0,13,1,isPrivateMode()?"Zu normalen Tabs":"Zu privaten Tabs");
         if (isPrivateMode()) {
@@ -354,11 +364,12 @@ public class MainActivity extends Activity {
                 case 8: tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: new AlertDialog.Builder(this).setTitle("MusikMathe · 0.3.2").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenz: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: new AlertDialog.Builder(this).setTitle("MusikMathe · 0.4.0").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenz: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: endPrivate(); break;
                 case 15: showVideos(); break;
+                case 16: if(passwords!=null)passwords.menu(); break;
             } return true;
         }); popup.show();
     }
@@ -535,8 +546,8 @@ public class MainActivity extends Activity {
         closingPrivate=true;openNormal();finish();
     }
     @Override protected void onSaveInstanceState(Bundle state){persist();super.onSaveInstanceState(state);}
-    @Override protected void onPause(){persist();if(store!=null)CookieManager.getInstance().flush();if(activeView()!=null)activeView().onPause();super.onPause();}
-    @Override protected void onResume(){super.onResume();if(store==null)return;if(activeView()!=null)activeView().onResume();if(!isPrivateMode()){
+    @Override protected void onPause(){if(passwords!=null)passwords.pause();persist();if(store!=null)CookieManager.getInstance().flush();if(activeView()!=null)activeView().onPause();super.onPause();}
+    @Override protected void onResume(){super.onResume();if(passwords!=null)passwords.resume();if(store==null)return;if(activeView()!=null)activeView().onResume();if(!isPrivateMode()){
         PrivateSession.cleanIfStopped(this);
         root.postDelayed(() -> { if(!destroyed)PrivateSession.cleanIfStopped(this); },1000);
     }}
@@ -544,7 +555,7 @@ public class MainActivity extends Activity {
         super.onTrimMemory(level);if(level>=TRIM_MEMORY_RUNNING_LOW){for(Tab tab:tabs)if(tab!=active() && tab.view!=null){tab.state=new Bundle();tab.view.saveState(tab.state);tab.view.destroy();tab.view=null;}}
     }
     @Override protected void onDestroy(){
-        destroyed=true;if(videoResolver!=null)videoResolver.cancel();if(videoSearch!=null)videoSearch.dismiss();videoWorker.shutdownNow();cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs)if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}super.onDestroy();
+        destroyed=true;if(passwords!=null)passwords.destroy();if(videoResolver!=null)videoResolver.cancel();if(videoSearch!=null)videoSearch.dismiss();videoWorker.shutdownNow();cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs)if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}super.onDestroy();
         if (isPrivateMode() && !isChangingConfigurations()) {
             VideoDownloadService.cancelCurrent();
             try { if(Build.VERSION.SDK_INT>=28)PrivateSession.wipe(this); } catch(java.io.IOException ignored) { }
