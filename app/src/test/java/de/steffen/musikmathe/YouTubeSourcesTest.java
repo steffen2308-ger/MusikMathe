@@ -37,4 +37,12 @@ public class YouTubeSourcesTest {
         catalog.add(first.items.get(0).url,"video/mp4",Collections.emptyMap());assertTrue(catalog.list().get(0).audioUrl.contains("itag=140"));
         JSONObject next=data(new JSONArray()).put("videoId","jNQXAC9IVRw");catalog.youtube(YouTubeSources.parse(next,Collections.emptyMap(),Collections.emptyList()));assertTrue(catalog.list().isEmpty());
     }
+    @Test public void verifiedDownloadSurvivesPlayerRefreshButNotNavigation()throws Exception{
+        VideoCatalog catalog=new VideoCatalog();
+        VideoCatalog.Item item=new VideoCatalog.Item("https://r1.googlevideo.com/master.m3u8","HLS",Collections.emptyMap(),"",ID,"Verified");
+        catalog.resolved(new YouTubeDownloadResolver.Result(ID,"Testfilm",Collections.singletonList(item)));
+        catalog.youtube(YouTubeSources.parse(data(new JSONArray()),Collections.emptyMap(),Collections.emptyList()));
+        assertTrue(catalog.hasResolved(ID));assertEquals("Verified",catalog.list().get(0).label());
+        catalog.clear();assertFalse(catalog.hasResolved(ID));assertTrue(catalog.list().isEmpty());
+    }
 }

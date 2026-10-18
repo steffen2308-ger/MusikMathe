@@ -21,16 +21,22 @@ final class VideoCatalog {
     synchronized void observe(String url,Map<String,String> headers){if(!Address.isWeb(url))return;if(requests.size()>=220)requests.remove(requests.keySet().iterator().next());requests.put(url,safeHeaders(headers));}
     private final LinkedHashMap<String,Item> items=new LinkedHashMap<>();
     private YouTubeSources.Result youtube;
+    private String resolvedId="";
+    private long resolvedAt;
+    private final List<Item> resolvedItems=new ArrayList<>();
+    synchronized void resolved(YouTubeDownloadResolver.Result result){resolvedId=result.id;resolvedAt=android.os.SystemClock.elapsedRealtime();resolvedItems.clear();resolvedItems.addAll(result.items);}
+    synchronized void clearResolved(){resolvedItems.clear();resolvedId="";}
+    synchronized boolean hasResolved(String id){return id.equals(resolvedId)&&!resolvedItems.isEmpty()&&android.os.SystemClock.elapsedRealtime()-resolvedAt<10*60*1000;}
     synchronized YouTubeSources.Result youtube(){return youtube;}
     synchronized List<String> observed(){return new ArrayList<>(requests.keySet());}
     synchronized void youtube(YouTubeSources.Result result){
-        if(youtube!=null&&!youtube.videoId.equals(result.videoId))items.clear();
+        if(youtube!=null&&!youtube.videoId.equals(result.videoId)){items.clear();clearResolved();}
         youtube=result;java.util.Iterator<Map.Entry<String,Item>> it=items.entrySet().iterator();while(it.hasNext())if(!it.next().getValue().youtubeId.isEmpty())it.remove();
         for(Item item:result.items){items.put(item.url,item);}
     }
-    synchronized void clear(){items.clear();requests.clear();youtube=null;}
-    synchronized List<Item> list(){ArrayList<Item> result=new ArrayList<>();boolean paired=youtube!=null;
-        for(Item item:items.values())if(!paired||!item.youtubeId.isEmpty()||!isGoogleVideo(item.url))result.add(item);
+    synchronized void clear(){items.clear();requests.clear();youtube=null;resolvedItems.clear();resolvedId="";}
+    synchronized List<Item> list(){ArrayList<Item> result=new ArrayList<>(resolvedItems);boolean paired=youtube!=null||!resolvedItems.isEmpty();
+        for(Item item:items.values())if((resolvedItems.isEmpty()||item.youtubeId.isEmpty())&&(!paired||!item.youtubeId.isEmpty()||!isGoogleVideo(item.url)))result.add(item);
         return result;}
     synchronized boolean add(String url,String mime,Map<String,String> headers){
         String type=classify(url,mime,headers);if(type==null)return false;

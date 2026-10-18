@@ -81,6 +81,9 @@ public class MainActivity extends Activity {
     private AlertDialog permissionDialog;
     private String[] pendingDownload;
     private boolean destroyed;
+    private final java.util.concurrent.ExecutorService videoWorker=java.util.concurrent.Executors.newSingleThreadExecutor();
+    private YouTubeDownloadResolver videoResolver;
+    private AlertDialog videoSearch;
     private boolean closingPrivate;
     private VideoCatalog.Item pendingVideo;
     private boolean pendingVideoOriginal;
@@ -351,7 +354,7 @@ public class MainActivity extends Activity {
                 case 8: tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: new AlertDialog.Builder(this).setTitle("MusikMathe · 0.3.1").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Keine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: new AlertDialog.Builder(this).setTitle("MusikMathe · 0.3.2").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenz: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: endPrivate(); break;
@@ -541,7 +544,7 @@ public class MainActivity extends Activity {
         super.onTrimMemory(level);if(level>=TRIM_MEMORY_RUNNING_LOW){for(Tab tab:tabs)if(tab!=active() && tab.view!=null){tab.state=new Bundle();tab.view.saveState(tab.state);tab.view.destroy();tab.view=null;}}
     }
     @Override protected void onDestroy(){
-        destroyed=true;cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs)if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}super.onDestroy();
+        destroyed=true;if(videoResolver!=null)videoResolver.cancel();if(videoSearch!=null)videoSearch.dismiss();videoWorker.shutdownNow();cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs)if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}super.onDestroy();
         if (isPrivateMode() && !isChangingConfigurations()) {
             VideoDownloadService.cancelCurrent();
             try { if(Build.VERSION.SDK_INT>=28)PrivateSession.wipe(this); } catch(java.io.IOException ignored) { }
@@ -568,24 +571,42 @@ public class MainActivity extends Activity {
         });
     }
     private void showVideos(){
-        Tab tab=active();scanYouTube(tab,()->scanVideos(tab,()->{
-            if(active()!=tab || destroyed)return;
-            java.util.List<VideoCatalog.Item> videos=tab.videos.list();
-            if(videos.isEmpty()&&!YouTubeSources.videoId(tab.url).isEmpty()){
-                YouTubeSources.Result yt=tab.videos.youtube();String title=yt==null?tab.title:yt.title;
-                String reason=yt==null||yt.reason.isEmpty()?"Der Player hat noch keine direkt speicherbare Videoquelle bereitgestellt. Starte das Video und wähle danach erneut Suchen.":yt.reason;
-                new AlertDialog.Builder(this).setTitle("YouTube-Video erkannt").setMessage(title+"\n\n"+reason).setPositiveButton("Erneut suchen",(d,w)->showVideos()).setNegativeButton("Schließen",null).show();return;
-            }
-            if(videos.isEmpty()){
-                AlertDialog.Builder empty=new AlertDialog.Builder(this).setTitle("Videos auf dieser Seite").setMessage("Noch kein speicherbarer Stream erkannt. Starte das Video auf der Webseite und öffne diese Liste erneut.\n\nDirekte Videodateien sowie HLS-/DASH-Adressen werden erkannt. Manche Player verbergen die Quelle oder verwenden Kopierschutz."+(VideoDownloadService.status.isEmpty()?"":"\n\n"+VideoDownloadService.status)).setPositiveButton("OK",null).setNegativeButton("Erneut suchen",(d,w)->showVideos());
-                if(VideoDownloadService.busy())empty.setNeutralButton("Export abbrechen",(d,w)->VideoDownloadService.cancelCurrent());empty.show();return;
-            }
-            String[] labels=new String[videos.size()];for(int i=0;i<labels.length;i++)labels[i]=videos.get(i).label();
-            AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("Videos · "+videos.size()).setItems(labels,(d,i)->videoOptions(videos.get(i))).setNegativeButton("Schließen",null).setPositiveButton("Neu suchen",(d,w)->showVideos());
-            if(VideoDownloadService.busy())dialog.setNeutralButton("Export abbrechen",(d,w)->VideoDownloadService.cancelCurrent());
-            else if(!VideoDownloadService.status.isEmpty())dialog.setNeutralButton("Letzter Export",(d,w)->new AlertDialog.Builder(this).setMessage(VideoDownloadService.status).setPositiveButton("OK",null).show());
-            dialog.show();
+        Tab tab=active();if(tab==null||videoResolver!=null)return;
+        scanYouTube(tab,()->scanVideos(tab,()->{
+            if(active()!=tab||destroyed)return;
+            String id=YouTubeSources.videoId(tab.url);
+            if(!id.isEmpty()&&!tab.videos.hasResolved(id))resolveYouTube(tab,id);
+            else showVideoList(tab,"");
         }));
+    }
+    private void resolveYouTube(Tab tab,String id){
+        YouTubeDownloadResolver resolver=new YouTubeDownloadResolver();videoResolver=resolver;int page=tab.videoPage;
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("YouTube herunterladen").setMessage("Downloadquelle wird gesucht und geprüft …").setNegativeButton("Abbrechen",(d,w)->{resolver.cancel();if(videoResolver==resolver)videoResolver=null;}).create();
+        videoSearch=dialog;dialog.setOnCancelListener(d->{resolver.cancel();if(videoResolver==resolver)videoResolver=null;});dialog.show();
+        videoWorker.execute(()->{
+            YouTubeDownloadResolver.Result result=null;String error="";
+            try{result=resolver.resolve("https://www.youtube.com/watch?v="+id);}catch(Exception failure){error=YouTubeDownloadResolver.errorMessage(failure);}
+            final YouTubeDownloadResolver.Result found=result;final String message=error;
+            runOnUiThread(()->{
+                if(videoResolver!=resolver)return;videoResolver=null;videoSearch=null;dialog.dismiss();
+                if(destroyed||active()!=tab||page!=tab.videoPage||!id.equals(YouTubeSources.videoId(tab.url)))return;
+                if(found!=null){tab.videos.resolved(found);updateToolbar();}showVideoList(tab,message);
+            });
+        });
+    }
+    private void showVideoList(Tab tab,String error){
+        if(destroyed||active()!=tab)return;
+        java.util.List<VideoCatalog.Item> videos=tab.videos.list();
+        if(videos.isEmpty()){
+            boolean youtube=!YouTubeSources.videoId(tab.url).isEmpty();
+            String message=youtube?(error.isEmpty()?"Für dieses YouTube-Video wurde keine erreichbare Downloadquelle gefunden.":error):"Noch kein speicherbarer Stream erkannt. Starte das Video und suche erneut.";
+            AlertDialog.Builder empty=new AlertDialog.Builder(this).setTitle(youtube?"YouTube-Download nicht verfügbar":"Videos auf dieser Seite").setMessage(message).setNegativeButton("Schließen",null).setPositiveButton("Erneut suchen",(d,w)->showVideos());
+            if(VideoDownloadService.busy())empty.setNeutralButton("Export abbrechen",(d,w)->VideoDownloadService.cancelCurrent());empty.show();return;
+        }
+        String[] labels=new String[videos.size()];for(int i=0;i<labels.length;i++)labels[i]=videos.get(i).label();
+        AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("Videos · "+videos.size()).setItems(labels,(d,i)->videoOptions(videos.get(i))).setNegativeButton("Schließen",null).setPositiveButton("Neu suchen",(d,w)->{tab.videos.clearResolved();showVideos();});
+        if(VideoDownloadService.busy())dialog.setNeutralButton("Export abbrechen",(d,w)->VideoDownloadService.cancelCurrent());
+        else if(!VideoDownloadService.status.isEmpty())dialog.setNeutralButton("Letzter Export",(d,w)->new AlertDialog.Builder(this).setMessage(VideoDownloadService.status).setPositiveButton("OK",null).show());dialog.show();
     }
     private void videoOptions(VideoCatalog.Item item){
         if(VideoDownloadService.busy()){new AlertDialog.Builder(this).setMessage(VideoDownloadService.status+"\n\nEs läuft bereits ein Videoexport.").setNegativeButton("Weiter speichern",null).setPositiveButton("Export abbrechen",(d,w)->VideoDownloadService.cancelCurrent()).show();return;}

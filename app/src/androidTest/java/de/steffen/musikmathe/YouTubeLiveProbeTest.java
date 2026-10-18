@@ -1,13 +1,14 @@
 package de.steffen.musikmathe;
-
+import android.app.Activity;
 import android.content.Context;
-import android.os.Handler;
-import android.os.Looper;
+import android.content.Intent;
+import android.net.Uri;
+import android.view.View;
+import android.view.ViewGroup;
 import android.webkit.WebView;
-import android.webkit.WebViewClient;
-import android.webkit.WebResourceRequest;
+import android.media.MediaExtractor;
+import android.media.MediaFormat;
 import org.json.JSONObject;
-import org.json.JSONTokener;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import org.junit.Test;
@@ -17,43 +18,36 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
+import java.io.File;
 import static org.junit.Assert.*;
-
-/** Live-site diagnostic: network/consent/bot blocks are recorded as inconclusive, not parser success. */
+/** Exercises the visible browser and real resolver. CI network blocks are reported separately. */
 @RunWith(AndroidJUnit4.class)
 public class YouTubeLiveProbeTest {
+    private static WebView findWebView(View v){if(v instanceof WebView)return (WebView)v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=g.getChildCount()-1;i>=0;i--){WebView found=findWebView(g.getChildAt(i));if(found!=null)return found;}}return null;}
     @Test public void probeReportedVideoOnLiveYouTube()throws Exception{
         Context app=InstrumentationRegistry.getInstrumentation().getTargetContext();
-        CountDownLatch done=new CountDownLatch(1);AtomicReference<WebView> view=new AtomicReference<>();
-        AtomicReference<JSONObject> snapshot=new AtomicReference<>();AtomicReference<Throwable> failure=new AtomicReference<>();
-        VideoCatalog network=new VideoCatalog();
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
-            WebView web=new WebView(app);view.set(web);web.getSettings().setJavaScriptEnabled(true);web.getSettings().setDomStorageEnabled(true);web.getSettings().setMediaPlaybackRequiresUserGesture(false);
-            YouTubeBridge.attach(app,web,snapshot::set);
-            web.setWebViewClient(new WebViewClient(){
-                @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView v,WebResourceRequest r){if("GET".equals(r.getMethod()))network.observe(r.getUrl().toString(),Collections.emptyMap());return null;}
-                @Override public void onPageFinished(WebView v,String url){if(YouTubeSources.originAllowed(url))v.evaluateJavascript(YouTubeSources.script(app),null);}
-            });
-            web.loadUrl("https://m.youtube.com/watch?v=qiaOQ0RWmKw");
-            new Handler(Looper.getMainLooper()).postDelayed(()->{
-                web.evaluateJavascript(YouTubeSources.script(app),value->{
-                    try{
-                        JSONObject report=new JSONObject().put("requestedVideoId","qiaOQ0RWmKw").put("pageOrigin",VideoCatalog.origin(web.getUrl()==null?"about:blank":web.getUrl()));
-                        JSONObject data=snapshot.get();try{data=new JSONObject(String.valueOf(new JSONTokener(value).nextValue()));}catch(Exception ignored){}
-                        if(data!=null){
-                            report.put("detectedVideoId",data.optString("videoId")).put("title",data.optString("title")).put("playerData",data.optBoolean("playerData")).put("status",data.optString("status")).put("reason",data.optString("reason"));
-                            report.put("formatCount",data.optJSONArray("formats")==null?0:data.optJSONArray("formats").length());
-                            int count=0;try{count=YouTubeSources.parse(data,Collections.emptyMap(),network.observed()).items.size();}catch(Exception ignored){}
-                            report.put("downloadableSources",count).put("outcome",data.optBoolean("playerData")?"player response received":"inconclusive: no player response");snapshot.set(data);
-                        }else report.put("outcome","inconclusive: no page data");
-                        try(java.io.FileOutputStream out=app.openFileOutput("youtube-probe.json",Context.MODE_PRIVATE)){out.write(report.toString(2).getBytes(StandardCharsets.UTF_8));}
-                    }catch(Throwable e){failure.set(e);}finally{done.countDown();}
-                });
-            },25000);
-        });
-        try{assertTrue("Probe timed out",done.await(40,TimeUnit.SECONDS));if(failure.get()!=null)throw new AssertionError(failure.get());
-            JSONObject data=snapshot.get();Assume.assumeTrue("Live YouTube unavailable from CI; see youtube-probe.json",data!=null&&data.optBoolean("playerData"));assertEquals("qiaOQ0RWmKw",data.optString("videoId"));
-        }finally{InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{if(view.get()!=null){view.get().stopLoading();view.get().destroy();}});}
+        String id="qiaOQ0RWmKw",url="https://m.youtube.com/watch?v="+id;
+        Activity activity=InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(app,MainActivity.class).setAction(Intent.ACTION_VIEW).setData(Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));
+        JSONObject report=new JSONObject().put("requestedVideoId",id);File output=new File(app.getCacheDir(),"live-youtube.mp4");
+        AtomicReference<VideoExporter> exporter=new AtomicReference<>();
+        try{
+            Thread.sleep(7000);
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{WebView web=findWebView(activity.getWindow().getDecorView());if(web!=null){web.getSettings().setMediaPlaybackRequiresUserGesture(false);web.evaluateJavascript("(function(){var v=document.querySelector('video');if(v)v.play().catch(function(){});var p=document.getElementById('movie_player');if(p&&p.playVideo)p.playVideo();})()",null);}});
+            YouTubeDownloadResolver.Result sources;
+            try{sources=new YouTubeDownloadResolver().resolve(url);report.put("title",sources.title).put("downloadableSources",sources.items.size());}
+            catch(Exception error){report.put("outcome","inconclusive: live extraction unavailable").put("errorType",error.getClass().getSimpleName()).put("message",YouTubeDownloadResolver.errorMessage(error));Assume.assumeNoException("Live YouTube request not available from CI",error);return;}
+            assertFalse(sources.items.isEmpty());VideoCatalog.Item source=sources.items.get(0);report.put("sourceType",source.type);
+            CountDownLatch done=new CountDownLatch(1);AtomicReference<String> failure=new AtomicReference<>();output.delete();
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{VideoExporter job=new VideoExporter();exporter.set(job);job.start(app,source.url,source.type,source.headers,output,2500,source.audioUrl,new VideoExporter.Listener(){public void completed(){done.countDown();}public void failed(String text){failure.set(text);done.countDown();}public void progress(int n){}});});
+            assertTrue("Live export timed out",done.await(90,TimeUnit.SECONDS));assertNull(failure.get(),failure.get());
+            MediaExtractor media=new MediaExtractor();boolean video=false,audio=false;
+            try{media.setDataSource(output.getAbsolutePath());for(int i=0;i<media.getTrackCount();i++){String mime=media.getTrackFormat(i).getString(MediaFormat.KEY_MIME);video|=mime.startsWith("video/");audio|=mime.startsWith("audio/");}}finally{media.release();}
+            assertTrue("Export must contain video",video);assertTrue("Export must contain audio",audio);assertTrue(output.length()>1000);
+            report.put("outcome","verified: YouTube clip exported with audio and video").put("mp4Bytes",output.length());
+        }finally{
+            if(!report.has("outcome"))report.put("outcome","failed: see Android test results");
+            try(java.io.FileOutputStream out=app.openFileOutput("youtube-probe.json",Context.MODE_PRIVATE)){out.write(report.toString(2).getBytes(StandardCharsets.UTF_8));}
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{if(exporter.get()!=null)exporter.get().cancel();activity.finish();});output.delete();
+        }
     }
 }
