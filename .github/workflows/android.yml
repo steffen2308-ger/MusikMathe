@@ -85,6 +85,9 @@ jobs:
           disable-animations: true
           script: |
             gradle --no-daemon :app:connectedDebugAndroidTest
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb shell am instrument -w -e class de.steffen.musikmathe.YouTubeLiveProbeTest de.steffen.musikmathe.test/androidx.test.runner.AndroidJUnitRunner
             adb shell run-as de.steffen.musikmathe cat files/youtube-probe.json
       - name: Upload device test results
         if: always()
