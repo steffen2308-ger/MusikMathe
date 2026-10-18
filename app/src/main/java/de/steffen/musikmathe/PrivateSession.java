@@ -12,6 +12,7 @@ final class PrivateSession {
     static final String SUFFIX = "private";
     static void wipe(Context context) throws IOException {
         File data = context.getDataDir();
+        remove(new File(context.getCacheDir(), "video-private"));
         remove(new File(data, "app_webview_" + SUFFIX));
         remove(new File(context.getCacheDir(), "WebView_" + SUFFIX));
         remove(new File(context.getCacheDir(), "webview_" + SUFFIX));

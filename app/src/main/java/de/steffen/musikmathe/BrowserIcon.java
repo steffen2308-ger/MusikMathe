@@ -33,6 +33,10 @@ final class BrowserIcon extends View {
             case "stop": canvas.drawLine(17,17,31,31,paint); canvas.drawLine(31,17,17,31,paint); break;
             case "home":
                 Path home = new Path(); home.moveTo(13,23); home.lineTo(24,13); home.lineTo(35,23); home.moveTo(16,21); home.lineTo(16,35); home.lineTo(32,35); home.lineTo(32,21); home.moveTo(21,35); home.lineTo(21,27); home.lineTo(27,27); home.lineTo(27,35); canvas.drawPath(home,paint); break;
+            case "video":
+                canvas.drawRoundRect(new RectF(11,14,37,34),4,4,paint);
+                Path triangle=new Path();triangle.moveTo(21,19);triangle.lineTo(29,24);triangle.lineTo(21,29);triangle.close();canvas.drawPath(triangle,paint);
+                if(count>0){paint.setStyle(Paint.Style.FILL);paint.setColor(0xff17685f);canvas.drawCircle(36,13,8,paint);paint.setColor(0xffffffff);paint.setTextSize(10);paint.setTextAlign(Paint.Align.CENTER);canvas.drawText(String.valueOf(count),36,17,paint);}break;
             case "tabs":
                 canvas.drawRoundRect(new RectF(13,13,35,35),5,5,paint); paint.setStyle(Paint.Style.FILL); paint.setTextSize(13); paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD); paint.setTextAlign(Paint.Align.CENTER); canvas.drawText(String.valueOf(count),24,29,paint); break;
             case "plus": canvas.drawLine(15,24,33,24,paint); canvas.drawLine(24,15,24,33,paint); break;

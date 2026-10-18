@@ -29,7 +29,7 @@ Ungültige TLS-Zertifikate werden von WebView abgelehnt; die App bietet keinen Z
 
 ## Entwicklung und Prüfungen
 
-Java 17, Android SDK 35, Android Gradle Plugin 8.9.2, Gradle 8.11.1. Keine Laufzeitbibliotheken außerhalb der Android-Plattform. GitHub Actions richtet SDK und Gradle ein und führt aus:
+Java 17, Android SDK 35, Android Gradle Plugin 8.9.2, Gradle 8.11.1. Für Videoexporte wird AndroidX Media3 1.8.0 (Transformer, HLS und DASH) verwendet. GitHub Actions richtet SDK und Gradle ein und führt aus:
 
 ```sh
 gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
@@ -54,3 +54,15 @@ Auf der Startseite gibt es drei neue Zugänge für Deutschland:
 Die Wikipedia-Ansicht basiert auf dem offiziellen [Country-Ranking-Endpunkt](https://doc.wikimedia.org/generated-data-platform/aqs/analytics-api/reference/page-views.html). Sie verwendet weder Standortfreigabe noch Browsercookies.
 
 Zusätzlich führt GitHub Actions einen Android-9-Emulator-Test mit echter WebView aus. Ein lokaler HTTP-Testserver setzt unterschiedliche Cookies und localStorage-Werte in normalen und privaten Tabs. Der Test prüft die Trennung beim Wechseln und das Zurücksetzen nach Ende der privaten Sitzung; er benötigt keine externe Website.
+
+## Videos erkennen und speichern (0.3)
+
+Video auf einer Webseite starten, dann die **Videotaste** in der unteren Leiste oder **Menü → Videos erkennen und speichern** öffnen. Die Zahl an der Taste zeigt gefundene Quellen des aktuellen Tabs. Die Liste sammelt direkte MP4-/WebM-/andere Videoadressen, HLS-Manifeste (`m3u8`) und DASH-Manifeste (`mpd`) aus WebView-Anfragen, HTML5-Videoelementen und den Ressourcen der Seite. Gleichnamige Adressen werden zusammengefasst, Segmentdateien möglichst ausgefiltert. Die Kandidaten stehen nur im Arbeitsspeicher und werden bei einem Seitenwechsel gelöscht. Einige Player verbergen ihre Quellen, insbesondere hinter Service Workern oder individuellen POST-Anfragen. Eine universelle Erkennung ist nicht möglich.
+
+Eine Quelle antippen und **Als MP4 speichern** wählen; direkte Dateien lassen sich alternativ unverändert im Originalformat speichern. Die Android-Dateiauswahl bestimmt Dateiname und Ordner. Media3 führt bei unterstützten Quellen Ton und Bild in einer MP4-Datei zusammen; falls nötig werden kompatible H.264-/AAC-Spuren erzeugt. Adaptive Quellen verwenden standardmäßig die höchste unterstützte Variante. Für lange oder Live-Quellen gibt es zusätzlich zeitlich begrenzte Ausschnitte. Je nach Live-Zeitleiste funktioniert ein Export nicht oder enthält den verfügbaren Ausschnitt des Streamfensters; keine universelle Live-Aufnahme-Zusage. DRM-/Lizenzschutz, abgelaufene Quellen, fehlende Berechtigungen und nicht unterstützte Codecs werden nicht umgangen. Kopiergeschützte Streams können erkannt werden, der Export schlägt dann jedoch fehl.
+
+Der Export läuft als Android-Vordergrunddienst mit Fortschritt und **Abbrechen**. Es ist ein Export je Browserbereich gleichzeitig möglich. Der Fortschritt steht auch in der Systembenachrichtigung; Android kann deren Anzeige abhängig von den Benachrichtigungseinstellungen begrenzen. HLS/DASH-Exporte benötigen vorübergehend freien internen Speicher für die MP4-Datei, bevor sie zum gewählten Ziel kopiert wird. Abbruch oder Fehler entfernen die temporäre Datei und versuchen die neu erzeugte Zieldatei zu löschen.
+
+Normale und private Exporte verwenden Dienste im jeweiligen Browserprozess. Cookies werden für jede Zieladresse neu aus dem jeweiligen Cookie-Speicher gelesen. Autorisierungs- und Origin-Header bleiben an den ursprünglichen Ursprung gebunden, auch bei Weiterleitungen. Es gibt keine deaktivierte TLS-Prüfung. Private Tabs dürfen für einen laufenden Export geöffnet bleiben; beim Schließen des privaten Bereichs fragt die App, ob der Export abgebrochen werden soll. Heruntergeladene Dateien bleiben als bewusst gespeicherte Dateien bestehen. Video-Adressen und Zugangsheader werden nicht in einer Download-Datenbank gespeichert.
+
+Tests umfassen Erkennung, Zusammenführen und Zurücksetzen von Quellen, HTTP-Weiterleitungen mit erneuter Cookie-Auswahl und Entfernen fremder Autorisierung sowie MP4-/HLS-/DASH-Exporte auf einem Android-Emulator. Die kleinen Testvideos sind selbst erzeugte Testmuster mit Sinuston; der Gerätetest prüft beide Ton-/Videospuren und deren Dauer in den exportierten MP4-Dateien.

@@ -6,8 +6,8 @@ android {
         applicationId 'de.steffen.musikmathe'
         minSdk 23
         targetSdk 35
-        versionCode 2
-        versionName '0.2.0'
+        versionCode 3
+        versionName '0.3.0'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
     signingConfigs {
@@ -25,6 +25,9 @@ android {
     testOptions { unitTests.includeAndroidResources = true }
 }
 dependencies {
+    implementation 'androidx.media3:media3-transformer:1.8.0'
+    implementation 'androidx.media3:media3-exoplayer-hls:1.8.0'
+    implementation 'androidx.media3:media3-exoplayer-dash:1.8.0'
     androidTestImplementation 'androidx.test:runner:1.6.2'
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
     androidTestImplementation 'androidx.test.uiautomator:uiautomator:2.3.0'
