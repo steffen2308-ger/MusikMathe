@@ -38,6 +38,11 @@ public class PasswordFeatureTest {
     }
     private void click(String text){UiDevice device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());UiObject2 item=device.wait(Until.findObject(By.text(java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(text),java.util.regex.Pattern.CASE_INSENSITIVE|java.util.regex.Pattern.UNICODE_CASE))),6000);java.util.List<String> buttons=new java.util.ArrayList<>();if(item==null)for(UiObject2 button:device.findObjects(By.clazz("android.widget.Button")))buttons.add(button.getText());assertNotNull("Expected control: "+text+"; visible buttons: "+buttons,item);item.click();device.waitForIdle();}
     private void option(String action){UiDevice device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());UiObject2 menu=device.wait(Until.findObject(By.desc("Menü")),6000);assertNotNull(menu);menu.click();click("Passwörter");click(action);}
+    private void awaitSaved(Activity activity,PasswordVault vault)throws Exception{
+        long end=System.currentTimeMillis()+10000;while(vault.all().isEmpty()&&System.currentTimeMillis()<end)Thread.sleep(100);
+        java.lang.reflect.Field field=MainActivity.class.getDeclaredField("passwords");field.setAccessible(true);PasswordManager manager=(PasswordManager)field.get(activity);
+        assertFalse("Saved login missing; error="+manager.lastFailure+"; activity vault rows="+new PasswordVault(activity,false).all().size(),vault.all().isEmpty());
+    }
     @Test public void realKeystorePersistsCiphertextAndRejectsOtherOriginsAndPrivateAccess()throws Exception{
         PasswordVault vault=new PasswordVault(app(),false);vault.clear();
         try{
@@ -55,7 +60,7 @@ public class PasswordFeatureTest {
         PasswordVault vault=new PasswordVault(app(),false);vault.clear();Activity activity=launch();WebView web=view(activity);
         try{
             page(web,"login.example.test");js(web,"document.getElementById('username').value='dummy-user';document.getElementById('password').value='Dummy-42-password';true");
-            option("Anmeldung dieser Seite speichern");click("Speichern");UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).waitForIdle();assertEquals(1,vault.all().size());
+            option("Anmeldung dieser Seite speichern");click("Speichern");UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).waitForIdle();awaitSaved(activity,vault);assertEquals(1,vault.all().size());
             page(web,"login.example.test");option("Zugangsdaten ausfüllen");click("dummy-user");
             assertEquals("\"dummy-user\"",js(web,"document.getElementById('username').value"));assertEquals("\"Dummy-42-password\"",js(web,"document.getElementById('password').value"));
             option("Zugangsdaten ausfüllen");page(web,"other.example.test");click("dummy-user");
@@ -70,7 +75,7 @@ public class PasswordFeatureTest {
             Assume.assumeTrue("Older WebView uses explicit save menu",supported);
             app().getSharedPreferences("password-options",0).edit().putBoolean("ask",true).commit();
             page(web,"automatic.example.test");js(web,"window.musikPasswords.postMessage(JSON.stringify({action:'save',token:'wrong-token',username:'forged',password:'forged'}));true");assertFalse(UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).wait(Until.hasObject(By.text("Passwort merken?")),500));js(web,"document.getElementById('username').value='automatic-user';document.getElementById('password').value='Automatic-dummy-password';document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));true");
-            click("Speichern");UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).waitForIdle();assertEquals("Automatic-dummy-password",vault.forSite("https://automatic.example.test").get(0).password);
+            click("Speichern");UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).waitForIdle();awaitSaved(activity,vault);assertEquals("Automatic-dummy-password",vault.forSite("https://automatic.example.test").get(0).password);
         }finally{main(activity::finish);vault.clear();}
     }
 }

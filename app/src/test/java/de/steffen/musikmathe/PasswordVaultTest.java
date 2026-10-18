@@ -27,4 +27,12 @@ public class PasswordVaultTest {
         try{PasswordVault.decrypt(key(),encrypted);fail("Wrong key must fail");}catch(java.security.GeneralSecurityException expected){}
         for(int size:new int[]{0,1,12,28})try{PasswordVault.decrypt(key(),new byte[size]);fail("Truncated vault must fail");}catch(java.security.GeneralSecurityException expected){}
     }
+    @Test public void bridgeRejectsNestedMessagesButAllowsBracesInsidePasswords(){
+        assertTrue(PasswordManager.flatMessage("{\"action\":\"save\",\"password\":\"{[test]}\"}"));
+        assertTrue(PasswordManager.flatMessage("{\"password\":\"quoted\\\"value\"}"));
+        assertFalse(PasswordManager.flatMessage("{\"password\":{\"nested\":\"data\"}}"));
+        assertFalse(PasswordManager.flatMessage("{\"password\":[1,2,3]}"));
+        assertFalse(PasswordManager.flatMessage("{\"password\":\"unterminated}"));
+        assertFalse(PasswordManager.flatMessage("{}{}"));
+    }
 }

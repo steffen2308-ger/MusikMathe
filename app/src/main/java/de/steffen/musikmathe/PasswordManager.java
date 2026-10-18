@@ -26,11 +26,12 @@ final class PasswordManager {
     private final WeakHashMap<WebView,State> states=new WeakHashMap<>();
     private AlertDialog dialog;
     private boolean destroyed,resumed;
+    String lastFailure="";
     private static final class State {String token=UUID.randomUUID().toString();long touch=-10000,prompt=-100000;boolean bridge;}
     PasswordManager(Activity activity,java.util.function.Supplier<WebView> active){this.activity=activity;this.active=active;vault=new PasswordVault(activity,false);}
     private boolean automatic(){return activity.getSharedPreferences("password-options",0).getBoolean("ask",true);}
     private void notice(String text){if(!destroyed)Toast.makeText(activity,text,Toast.LENGTH_LONG).show();}
-    private void problem(){notice("Der Passwortspeicher konnte nicht geöffnet oder geändert werden. Bestehende Einträge wurden nicht überschrieben.");}
+    private void problem(Exception error){lastFailure=error.getClass().getSimpleName();notice("Der Passwortspeicher konnte nicht geöffnet oder geändert werden. Bestehende Einträge wurden nicht überschrieben.");}
     private void show(AlertDialog next){if(destroyed)return;if(dialog!=null)dialog.dismiss();dialog=next;next.setOnDismissListener(d->{if(dialog==next)dialog=null;});next.show();if(next.getWindow()!=null)next.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);}
     void attach(WebView web){
         State state=new State();states.put(web,state);
@@ -41,7 +42,7 @@ final class PasswordManager {
                 if(!main||message.getType()!=WebMessageCompat.TYPE_STRING||view!=active.get()||destroyed||!resumed)return;
                 String origin=PasswordVault.origin(source.toString());
                 if(origin.isEmpty()||!origin.equals(PasswordVault.origin(view.getUrl())))return;
-                String value=message.getData();if(value==null||value.length()>15000)return;
+                String value=message.getData();if(value==null||value.length()>15000||!flatMessage(value))return;
                 try{JSONObject data=new JSONObject(value);if(!state.token.equals(data.optString("token")))return;
                     if("save".equals(data.optString("action"))&&automatic())offerSave(origin,data,false,state);
                     else if("focus".equals(data.optString("action"))&&SystemClock.elapsedRealtime()-state.touch<4000&&dialog==null)chooseFill(view,false);
@@ -58,6 +59,19 @@ final class PasswordManager {
         }catch(Exception ignored){}
     }
     private static String quote(String value){return JSONObject.quote(value).replace("\u2028","\\u2028").replace("\u2029","\\u2029");}
+    // Reject nested data before Android's recursive JSON parser sees an untrusted message.
+    static boolean flatMessage(String value){
+        value=value.trim();if(!value.startsWith("{")||!value.endsWith("}"))return false;
+        int depth=0;boolean string=false,escape=false;
+        for(int i=0;i<value.length();i++){char c=value.charAt(i);
+            if(string){if(escape)escape=false;else if(c=='\\')escape=true;else if(c=='"')string=false;}
+            else if(c=='"')string=true;
+            else if(c=='{'&&++depth>1)return false;
+            else if(c=='}'){if(--depth!=0||i!=value.length()-1)return false;}
+            else if(c=='['||c==']')return false;
+        }
+        return depth==0&&!string;
+    }
     private void offerSave(String origin,JSONObject data,boolean manual,State state){
         String username=data.optString("username"),password=data.optString("password");
         if(password.isEmpty()||password.length()>4096||username.length()>320){if(manual)notice("Bitte zuerst Benutzername und Passwort auf der Seite eingeben.");return;}
@@ -68,9 +82,9 @@ final class PasswordManager {
             }
             state.prompt=SystemClock.elapsedRealtime();
             show(new AlertDialog.Builder(activity).setTitle(update?"Passwort aktualisieren?":"Passwort merken?").setMessage(origin+"\n\n"+(username.isEmpty()?"Ohne Benutzername":username)+"\nPasswort: ••••••••").setNegativeButton("Nicht jetzt",null).setPositiveButton(update?"Aktualisieren":"Speichern",(d,w)->{
-                try{vault.save(origin,username,password);notice("Zugangsdaten verschlüsselt gespeichert.");}catch(Exception e){problem();}
+                try{vault.save(origin,username,password);notice("Zugangsdaten verschlüsselt gespeichert.");}catch(Exception e){problem(e);}
             }).create());
-        }catch(Exception e){problem();}
+        }catch(Exception e){problem(e);}
     }
     private void capture(WebView web){
         if(web==null)return;String origin=PasswordVault.origin(web.getUrl());State state=states.get(web);
@@ -90,7 +104,7 @@ final class PasswordManager {
             String[] labels=new String[rows.size()];for(int i=0;i<labels.length;i++)labels[i]=rows.get(i).username.isEmpty()?"Ohne Benutzername":rows.get(i).username;
             String token=state.token;pageFinished(web);
             show(new AlertDialog.Builder(activity).setTitle("Ausfüllen für\n"+origin).setItems(labels,(d,i)->fill(web,origin,token,rows.get(i))).setNegativeButton("Abbrechen",null).create());
-        }catch(Exception e){problem();}
+        }catch(Exception e){problem(e);}
     }
     private void fill(WebView web,String origin,String token,PasswordVault.Login row){
         State state=states.get(web);
@@ -101,7 +115,7 @@ final class PasswordManager {
     void menu(){
         show(new AlertDialog.Builder(activity).setTitle("Passwörter").setItems(new String[]{"Zugangsdaten ausfüllen","Anmeldung dieser Seite speichern","Gespeicherte Logins verwalten","Alle Passwörter löschen","Automatisch nach Speichern fragen: "+(automatic()?"an":"aus")},(d,i)->{
             if(i==0)chooseFill(active.get(),true);else if(i==1)capture(active.get());else if(i==2)manage();
-            else if(i==3)show(new AlertDialog.Builder(activity).setTitle("Alle Passwörter löschen?").setMessage("Alle gespeicherten Logins werden von diesem Gerät entfernt.").setNegativeButton("Abbrechen",null).setPositiveButton("Alle löschen",(a,w)->{try{vault.clear();notice("Alle Passwörter gelöscht.");}catch(Exception e){problem();}}).create());
+            else if(i==3)show(new AlertDialog.Builder(activity).setTitle("Alle Passwörter löschen?").setMessage("Alle gespeicherten Logins werden von diesem Gerät entfernt.").setNegativeButton("Abbrechen",null).setPositiveButton("Alle löschen",(a,w)->{try{vault.clear();notice("Alle Passwörter gelöscht.");}catch(Exception e){problem(e);}}).create());
             else{activity.getSharedPreferences("password-options",0).edit().putBoolean("ask",!automatic()).apply();notice(automatic()?"Speichern wird angeboten.":"Automatische Speichernachfrage ausgeschaltet.");}
         }).setNegativeButton("Schließen",null).create());
     }
@@ -110,9 +124,9 @@ final class PasswordManager {
             List<PasswordVault.Login> rows=vault.all();if(rows.isEmpty()){notice("Noch keine Zugangsdaten gespeichert.");return;}
             rows.sort((a,b)->(a.origin+"\n"+a.username).compareTo(b.origin+"\n"+b.username));String[] labels=new String[rows.size()];for(int i=0;i<labels.length;i++)labels[i]=rows.get(i).origin+"\n"+(rows.get(i).username.isEmpty()?"Ohne Benutzername":rows.get(i).username);
             show(new AlertDialog.Builder(activity).setTitle("Gespeicherte Logins").setItems(labels,(d,i)->{
-                PasswordVault.Login row=rows.get(i);show(new AlertDialog.Builder(activity).setTitle("Gespeicherter Login").setMessage(row.origin+"\n\n"+(row.username.isEmpty()?"Ohne Benutzername":row.username)+"\nPasswort: ••••••••").setNegativeButton("Schließen",null).setPositiveButton("Login löschen",(a,w)->{try{vault.remove(row.id);notice("Login gelöscht.");}catch(Exception e){problem();}}).create());
+                PasswordVault.Login row=rows.get(i);show(new AlertDialog.Builder(activity).setTitle("Gespeicherter Login").setMessage(row.origin+"\n\n"+(row.username.isEmpty()?"Ohne Benutzername":row.username)+"\nPasswort: ••••••••").setNegativeButton("Schließen",null).setPositiveButton("Login löschen",(a,w)->{try{vault.remove(row.id);notice("Login gelöscht.");}catch(Exception e){problem(e);}}).create());
             }).setNegativeButton("Schließen",null).create());
-        }catch(Exception e){problem();}
+        }catch(Exception e){problem(e);}
     }
     void resume(){resumed=true;}
     void pause(){resumed=false;tabChanged();}
