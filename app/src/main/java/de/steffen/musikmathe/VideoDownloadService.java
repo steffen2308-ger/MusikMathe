@@ -64,7 +64,7 @@ public class VideoDownloadService extends Service {
                     }finally{source.close();}copyResult();}catch(Exception error){main.post(()->finish(false,cancelled?"Videospeicherung abgebrochen.":"Videodownload fehlgeschlagen: "+error.getMessage()));}
                 });
             }else{
-                exporter=new VideoExporter();exporter.start(this,url,type,headers,temporary,intent.getLongExtra("clip",0),new VideoExporter.Listener(){
+                exporter=new VideoExporter();exporter.start(this,url,type,headers,temporary,intent.getLongExtra("clip",0),intent.getStringExtra("audio")==null?"":intent.getStringExtra("audio"),new VideoExporter.Listener(){
                     public void completed(){worker.execute(()->{try{copyResult();}catch(Exception error){main.post(()->finish(false,"Speichern fehlgeschlagen: "+error.getMessage()));}});}
                     public void failed(String message){finish(false,"MP4-Export nicht möglich. "+message);}
                     public void progress(int value){update(value,"MP4 mit Bild und Ton wird erstellt …");}

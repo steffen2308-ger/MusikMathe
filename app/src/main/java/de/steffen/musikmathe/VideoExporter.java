@@ -8,6 +8,8 @@ import androidx.media3.common.MimeTypes;
 import androidx.media3.common.util.Clock;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.transformer.Composition;
+import androidx.media3.transformer.EditedMediaItem;
+import androidx.media3.transformer.EditedMediaItemSequence;
 import androidx.media3.transformer.DefaultDecoderFactory;
 import androidx.media3.transformer.ExoPlayerAssetLoader;
 import androidx.media3.transformer.ExportException;
@@ -27,6 +29,9 @@ final class VideoExporter {
     private final Runnable tick=new Runnable(){public void run(){if(transformer==null)return;int state=transformer.getProgress(progress);if(listener!=null)listener.progress(state==Transformer.PROGRESS_STATE_AVAILABLE?progress.progress:-1);handler.postDelayed(this,1000);}};
     private Listener listener;
     void start(Context context,String url,String type,Map<String,String> headers,File output,long clipMs,Listener listener){
+        start(context,url,type,headers,output,clipMs,"",listener);
+    }
+    void start(Context context,String url,String type,Map<String,String> headers,File output,long clipMs,String audioUrl,Listener listener){
         this.listener=listener;
         try{
             DefaultMediaSourceFactory sources=new DefaultMediaSourceFactory(()->new VideoHttpSource(url,headers));
@@ -39,7 +44,13 @@ final class VideoExporter {
             MediaItem.Builder item=new MediaItem.Builder().setUri(url);
             if("HLS".equals(type))item.setMimeType(MimeTypes.APPLICATION_M3U8);if("DASH".equals(type))item.setMimeType(MimeTypes.APPLICATION_MPD);
             if(clipMs>0)item.setClippingConfiguration(new MediaItem.ClippingConfiguration.Builder().setEndPositionMs(clipMs).build());
-            transformer.start(item.build(),output.getAbsolutePath());handler.post(tick);
+            if(Address.isWeb(audioUrl)){
+                MediaItem.Builder audio=new MediaItem.Builder().setUri(audioUrl);if(clipMs>0)audio.setClippingConfiguration(new MediaItem.ClippingConfiguration.Builder().setEndPositionMs(clipMs).build());
+                EditedMediaItem videoItem=new EditedMediaItem.Builder(item.build()).setRemoveAudio(true).build();
+                EditedMediaItem audioItem=new EditedMediaItem.Builder(audio.build()).setRemoveVideo(true).build();
+                Composition composition=new Composition.Builder(new EditedMediaItemSequence.Builder(videoItem).build(),new EditedMediaItemSequence.Builder(audioItem).build()).build();
+                transformer.start(composition,output.getAbsolutePath());
+            }else transformer.start(item.build(),output.getAbsolutePath());handler.post(tick);
         }catch(Exception error){cancel();listener.failed(error.getMessage()==null?"Videoexport konnte nicht gestartet werden.":error.getMessage());}
     }
     void cancel(){handler.removeCallbacks(tick);if(transformer!=null){transformer.cancel();transformer=null;}listener=null;}

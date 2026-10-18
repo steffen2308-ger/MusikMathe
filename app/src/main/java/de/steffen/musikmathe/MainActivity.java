@@ -216,6 +216,7 @@ public class MainActivity extends Activity {
         settings.setSupportMultipleWindows(true); settings.setJavaScriptCanOpenWindowsAutomatically(false);
         if(Build.VERSION.SDK_INT>=26)settings.setSafeBrowsingEnabled(true);
         applyDesktop(web, tab.desktop);
+        YouTubeBridge.attach(this,web,data -> acceptYouTube(tab,data));
         CookieManager.getInstance().setAcceptCookie(true); CookieManager.getInstance().setAcceptThirdPartyCookies(web,true);
         web.setWebViewClient(new WebViewClient() {
             @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
@@ -229,6 +230,11 @@ public class MainActivity extends Activity {
                 return routeLink(tab,request.getUrl().toString(),request.hasGesture());
             }
             @SuppressWarnings("deprecation") @Override public boolean shouldOverrideUrlLoading(WebView view,String url) { return routeLink(tab,url,false); }
+            @Override public void doUpdateVisitedHistory(WebView view,String url,boolean reload){
+                String old=YouTubeSources.videoId(tab.url),next=YouTubeSources.videoId(url);
+                if(!next.isEmpty()&&!next.equals(old))tab.videos.clear();
+                tab.url=url;if(active()==tab)updateToolbar();
+            }
             @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap favicon) {
                 tab.videoPage++;tab.videos.clear();tab.url=url; cancelPermissionFor(tab); if(active()==tab)updateToolbar();
             }
@@ -236,6 +242,7 @@ public class MainActivity extends Activity {
                 tab.url=url; tab.title=view.getTitle()==null?url:view.getTitle();
                 store.visit(url,tab.title); if(active()==tab)updateToolbar(); persist();
                 view.evaluateJavascript(VideoCatalog.HOOKS,null);
+                if(YouTubeSources.originAllowed(url))view.evaluateJavascript(YouTubeSources.script(MainActivity.this),null);
                 int page=tab.videoPage;view.postDelayed(() -> {if(!destroyed && tab.videoPage==page && tab.view==view)scanVideos(tab,()->{});},1000);
             }
             @Override public void onReceivedError(WebView view,WebResourceRequest request,WebResourceError error) {
@@ -315,7 +322,7 @@ public class MainActivity extends Activity {
         siteState.setContentDescription(isPrivateMode()?"Privater Tab. Seiteninformationen":secure?"HTTPS-Verbindung. Seiteninformationen":"Seiteninformationen");
         address.setHint(isPrivateMode()?"Privat · Adresse oder Suche":"Adresse oder Suche");
         back.setEnabled(tab.view!=null && tab.view.canGoBack()); forward.setEnabled(tab.view!=null && tab.view.canGoForward());
-        videoButton.count=tab.videos.list().size();videoButton.setContentDescription("Videos auf dieser Seite · "+videoButton.count+" erkannt");videoButton.invalidate();
+        videoButton.count=tab.videos.list().size();if(videoButton.count==0&&(!YouTubeSources.videoId(tab.url).isEmpty()||tab.videos.youtube()!=null))videoButton.count=1;videoButton.setContentDescription("Videos auf dieser Seite · "+videoButton.count+" erkannt");videoButton.invalidate();
         tabButton.count=tabs.size(); tabButton.setContentDescription(tabs.size()+" Tabs. Tabs anzeigen"); tabButton.invalidate();
         int value=tab.view==null?100:tab.view.getProgress(); progress.setProgress(value); progress.setVisibility(value<100?View.VISIBLE:View.INVISIBLE);
     }
@@ -344,7 +351,7 @@ public class MainActivity extends Activity {
                 case 8: tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: new AlertDialog.Builder(this).setTitle("MusikMathe · 0.3.0").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Keine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: new AlertDialog.Builder(this).setTitle("MusikMathe · 0.3.1").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Keine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: endPrivate(); break;
@@ -478,7 +485,7 @@ public class MainActivity extends Activity {
             if(item==null || !"content".equals(destination.getScheme())){try{android.provider.DocumentsContract.deleteDocument(getContentResolver(),destination);}catch(Exception ignored){}return;}
             try{
                 if((data.getFlags()&Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)!=0 && (data.getFlags()&Intent.FLAG_GRANT_WRITE_URI_PERMISSION)!=0)getContentResolver().takePersistableUriPermission(destination,Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                Intent download=new Intent(this,isPrivateMode()?PrivateVideoDownloadService.class:VideoDownloadService.class).putExtra("url",item.url).putExtra("type",item.type).putExtra("headers",new org.json.JSONObject(item.headers).toString()).putExtra("destination",destination.toString()).putExtra("original",pendingVideoOriginal).putExtra("clip",pendingVideoClip);
+                Intent download=new Intent(this,isPrivateMode()?PrivateVideoDownloadService.class:VideoDownloadService.class).putExtra("url",item.url).putExtra("type",item.type).putExtra("audio",item.audioUrl).putExtra("headers",new org.json.JSONObject(item.headers).toString()).putExtra("destination",destination.toString()).putExtra("original",pendingVideoOriginal).putExtra("clip",pendingVideoClip);
                 if(Build.VERSION.SDK_INT>=26)startForegroundService(download);else startService(download);
                 if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},21);
                 toast("Video wird gespeichert. Fortschritt und Abbruch unter Videos oder in der Benachrichtigung.");
@@ -561,9 +568,14 @@ public class MainActivity extends Activity {
         });
     }
     private void showVideos(){
-        Tab tab=active();scanVideos(tab,()->{
+        Tab tab=active();scanYouTube(tab,()->scanVideos(tab,()->{
             if(active()!=tab || destroyed)return;
             java.util.List<VideoCatalog.Item> videos=tab.videos.list();
+            if(videos.isEmpty()&&!YouTubeSources.videoId(tab.url).isEmpty()){
+                YouTubeSources.Result yt=tab.videos.youtube();String title=yt==null?tab.title:yt.title;
+                String reason=yt==null||yt.reason.isEmpty()?"Der Player hat noch keine direkt speicherbare Videoquelle bereitgestellt. Starte das Video und wähle danach erneut Suchen.":yt.reason;
+                new AlertDialog.Builder(this).setTitle("YouTube-Video erkannt").setMessage(title+"\n\n"+reason).setPositiveButton("Erneut suchen",(d,w)->showVideos()).setNegativeButton("Schließen",null).show();return;
+            }
             if(videos.isEmpty()){
                 AlertDialog.Builder empty=new AlertDialog.Builder(this).setTitle("Videos auf dieser Seite").setMessage("Noch kein speicherbarer Stream erkannt. Starte das Video auf der Webseite und öffne diese Liste erneut.\n\nDirekte Videodateien sowie HLS-/DASH-Adressen werden erkannt. Manche Player verbergen die Quelle oder verwenden Kopierschutz."+(VideoDownloadService.status.isEmpty()?"":"\n\n"+VideoDownloadService.status)).setPositiveButton("OK",null).setNegativeButton("Erneut suchen",(d,w)->showVideos());
                 if(VideoDownloadService.busy())empty.setNeutralButton("Export abbrechen",(d,w)->VideoDownloadService.cancelCurrent());empty.show();return;
@@ -573,11 +585,11 @@ public class MainActivity extends Activity {
             if(VideoDownloadService.busy())dialog.setNeutralButton("Export abbrechen",(d,w)->VideoDownloadService.cancelCurrent());
             else if(!VideoDownloadService.status.isEmpty())dialog.setNeutralButton("Letzter Export",(d,w)->new AlertDialog.Builder(this).setMessage(VideoDownloadService.status).setPositiveButton("OK",null).show());
             dialog.show();
-        });
+        }));
     }
     private void videoOptions(VideoCatalog.Item item){
         if(VideoDownloadService.busy()){new AlertDialog.Builder(this).setMessage(VideoDownloadService.status+"\n\nEs läuft bereits ein Videoexport.").setNegativeButton("Weiter speichern",null).setPositiveButton("Export abbrechen",(d,w)->VideoDownloadService.cancelCurrent()).show();return;}
-        boolean stream="HLS".equals(item.type)||"DASH".equals(item.type);
+        boolean stream="HLS".equals(item.type)||"DASH".equals(item.type)||!item.audioUrl.isEmpty();
         String[] choices=stream?new String[]{"Als MP4 speichern","MP4-Ausschnitt: 1 Minute","MP4-Ausschnitt: 5 Minuten","MP4-Ausschnitt: 10 Minuten"}:new String[]{"Als MP4 speichern","Originaldatei speichern"};
         new AlertDialog.Builder(this).setTitle(item.type+" speichern").setItems(choices,(d,i)->{
             boolean original=!stream && i==1;long clip=stream&&i>0?new long[]{0,60000,300000,600000}[i]:0;
@@ -594,5 +606,24 @@ public class MainActivity extends Activity {
         String originalMime=android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(android.webkit.MimeTypeMap.getFileExtensionFromUrl(name).toLowerCase(java.util.Locale.ROOT));
         Intent create=new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(original?(originalMime==null?"application/octet-stream":originalMime):"video/mp4").putExtra(Intent.EXTRA_TITLE,name);
         try{startActivityForResult(create,SAVE_VIDEO);}catch(ActivityNotFoundException error){pendingVideo=null;toast("Keine Dateiauswahl verfügbar.");}
+    }
+    private void acceptYouTube(Tab tab,org.json.JSONObject data){
+        if(destroyed||!tabs.contains(tab))return;
+        String current=YouTubeSources.videoId(tab.url),reported=data.optString("videoId");
+        if(!current.isEmpty()&&!current.equals(reported))return;
+        try{
+            YouTubeSources.Result before=tab.videos.youtube();if(before!=null&&!before.videoId.equals(reported))tab.videos.clear();
+            java.util.Map<String,String> headers=new java.util.LinkedHashMap<>();
+            headers.put("User-Agent",tab.view.getSettings().getUserAgentString());headers.put("Referer","https://www.youtube.com/");
+            YouTubeSources.Result result=YouTubeSources.parse(data,headers,tab.videos.observed());tab.videos.youtube(result);
+            if(active()==tab)updateToolbar();
+        }catch(Exception ignored){}
+    }
+    private void scanYouTube(Tab tab,Runnable complete){
+        if(tab==null||tab.view==null||!YouTubeSources.originAllowed(tab.url)){complete.run();return;}
+        int page=tab.videoPage;tab.view.evaluateJavascript(YouTubeSources.script(this),value->{
+            if(!destroyed&&page==tab.videoPage&&tabs.contains(tab))try{Object decoded=new org.json.JSONTokener(value).nextValue();acceptYouTube(tab,new org.json.JSONObject(String.valueOf(decoded)));}catch(Exception ignored){}
+            complete.run();
+        });
     }
 }
