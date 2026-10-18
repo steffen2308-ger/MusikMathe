@@ -17,6 +17,7 @@ final class PrivateSession {
         remove(new File(context.getCacheDir(), "webview_" + SUFFIX));
     }
     static void remove(File file) throws IOException {
+        if (java.nio.file.Files.isSymbolicLink(file.toPath())) { java.nio.file.Files.deleteIfExists(file.toPath()); return; }
         if (!file.exists()) return;
         if (file.isDirectory()) {
             File[] children = file.listFiles();

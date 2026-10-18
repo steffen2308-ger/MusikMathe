@@ -299,7 +299,7 @@ public class MainActivity extends Activity {
     private void updateToolbar() {
         Tab tab=active(); if(tab==null)return;
         if(!address.hasFocus()) address.setText(Address.display(tab.url));
-        boolean secure=tab.url!=null && tab.url.startsWith("https://");
+        boolean secure=tab.url!=null && tab.url.startsWith("https://") && !WikiTop.URL.equals(tab.url);
         siteState.setText(isPrivateMode()?"P":Address.HOME.equals(tab.url)?"⊕":secure?"≡":"!");
         siteState.setContentDescription(isPrivateMode()?"Privater Tab. Seiteninformationen":secure?"HTTPS-Verbindung. Seiteninformationen":"Seiteninformationen");
         address.setHint(isPrivateMode()?"Privat · Adresse oder Suche":"Adresse oder Suche");
@@ -387,7 +387,7 @@ public class MainActivity extends Activity {
             }).show();
     }
     private void siteInfo() {
-        String url=active().url;String info=Address.HOME.equals(url)?"Lokale Startseite":url.startsWith("https://")?"Diese Adresse nutzt HTTPS. Die Zertifikatsprüfung übernimmt Android WebView.":"Diese Seite verwendet keine verschlüsselte HTTPS-Verbindung.";
+        String url=active().url;String info=WikiTop.URL.equals(url)?"Lokale Wikipedia-Rangliste. Die Daten werden verschlüsselt von Wikimedia Analytics geladen.":Address.HOME.equals(url)?"Lokale Startseite":url.startsWith("https://")?"Diese Adresse nutzt HTTPS. Die Zertifikatsprüfung übernimmt Android WebView.":"Diese Seite verwendet keine verschlüsselte HTTPS-Verbindung.";
         new AlertDialog.Builder(this).setTitle("Seiteninformationen").setMessage(info+"\n\n"+Address.display(url)).setPositiveButton("OK",null).show();
     }
     private void confirmDownload(String url,String ua,String disposition,String mime) {

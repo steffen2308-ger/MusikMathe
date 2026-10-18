@@ -52,3 +52,5 @@ Auf der Startseite gibt es drei neue Zugänge für Deutschland:
 - **Google Trends**: [Aktuelle Suchtrends für Deutschland, deutsche Oberfläche](https://trends.google.com/trending?geo=DE&hl=de).
 
 Die Wikipedia-Ansicht basiert auf dem offiziellen [Country-Ranking-Endpunkt](https://doc.wikimedia.org/generated-data-platform/aqs/analytics-api/reference/page-views.html). Sie verwendet weder Standortfreigabe noch Browsercookies.
+
+Zusätzlich führt GitHub Actions einen Android-9-Emulator-Test mit echter WebView aus. Ein lokaler HTTP-Testserver setzt unterschiedliche Cookies und localStorage-Werte in normalen und privaten Tabs. Der Test prüft die Trennung beim Wechseln und das Zurücksetzen nach Ende der privaten Sitzung; er benötigt keine externe Website.
