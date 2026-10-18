@@ -83,10 +83,9 @@ jobs:
           arch: x86_64
           target: default
           disable-animations: true
-          script: gradle --no-daemon :app:connectedDebugAndroidTest
-      - name: Report live YouTube probe
-        if: always()
-        run: adb shell run-as de.steffen.musikmathe cat files/youtube-probe.json || true
+          script: |
+            gradle --no-daemon :app:connectedDebugAndroidTest
+            adb shell run-as de.steffen.musikmathe cat files/youtube-probe.json
       - name: Upload device test results
         if: always()
         uses: actions/upload-artifact@v4
