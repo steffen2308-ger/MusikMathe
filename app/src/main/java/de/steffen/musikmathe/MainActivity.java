@@ -49,7 +49,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public final class MainActivity extends Activity {
+public class MainActivity extends Activity {
     private static final int FILE_PICK = 10, WEB_PERMISSION = 11, DOWNLOAD_PERMISSION = 12;
     private static final int INK = 0xff234a43, PAPER = 0xfff5f7f8;
     static final class Tab {
@@ -79,10 +79,18 @@ public final class MainActivity extends Activity {
     private AlertDialog permissionDialog;
     private String[] pendingDownload;
     private boolean destroyed;
+    private boolean closingPrivate;
+    private boolean isPrivateMode() { return this instanceof PrivateActivity; }
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
-        store = new BrowserStore(this); buildInterface();
+        if (isPrivateMode() && !BrowserApplication.privateReady) {
+            new AlertDialog.Builder(this).setMessage("Der getrennte private Browser konnte nicht gestartet werden.").setCancelable(false).setPositiveButton("Schließen", (d,w) -> finish()).show();
+            return;
+        }
+        if (isPrivateMode()) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        store = new BrowserStore(this, isPrivateMode()); buildInterface();
+        if (!isPrivateMode()) PrivateSession.cleanIfStopped(this);
         if (Build.VERSION.SDK_INT >= 33) getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::goBack);
         for (BrowserStore.Entry row : store.read("tabs")) tabs.add(new Tab(row.url, row.title, row.desktop));
         if (tabs.isEmpty()) tabs.add(new Tab(Address.HOME, "Neuer Tab", false));
@@ -102,7 +110,7 @@ public final class MainActivity extends Activity {
         row.addView(icon, new LinearLayout.LayoutParams(dp(48), dp(48))); icon.setOnClickListener(v -> action.run()); return icon;
     }
     private void buildInterface() {
-        root = new FrameLayout(this); root.setBackgroundColor(PAPER);
+        root = new FrameLayout(this); root.setBackgroundColor(isPrivateMode() ? 0xffede5f4 : PAPER);
         shell = new LinearLayout(this); shell.setOrientation(LinearLayout.VERTICAL);
         root.addView(shell, new FrameLayout.LayoutParams(-1, -1)); setContentView(root);
         if (Build.VERSION.SDK_INT >= 30) {
@@ -121,8 +129,13 @@ public final class MainActivity extends Activity {
         omnibox.addView(siteState, new LinearLayout.LayoutParams(dp(44), -1)); siteState.setOnClickListener(v -> siteInfo());
         address = new EditText(this); address.setSingleLine(true); address.setSelectAllOnFocus(true); address.setTextSize(16); address.setTextColor(INK);
         address.setHint("Adresse oder Suche"); address.setHintTextColor(0xff647e75); address.setContentDescription("Adresse oder Suchbegriff"); address.setBackgroundColor(Color.TRANSPARENT);
-        address.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI); address.setImeOptions(EditorInfo.IME_ACTION_GO | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+        address.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI); address.setImeOptions(EditorInfo.IME_ACTION_GO | EditorInfo.IME_FLAG_NO_EXTRACT_UI | (isPrivateMode() && Build.VERSION.SDK_INT >= 26 ? EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING : 0));
         address.setPadding(0,0,dp(8),0); omnibox.addView(address, new LinearLayout.LayoutParams(0,-1,1));
+        address.setOnKeyListener((v,key,event) -> {
+            if (key != KeyEvent.KEYCODE_ENTER) return false;
+            if (event.getAction() == KeyEvent.ACTION_UP) navigateTyped(address.getText().toString());
+            return true;
+        });
         address.setOnEditorActionListener((v, action, event) -> {
             if (action == EditorInfo.IME_ACTION_GO || action == EditorInfo.IME_ACTION_SEARCH || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER && event.getAction() == KeyEvent.ACTION_UP)) {
                 navigateTyped(address.getText().toString()); return true;
@@ -177,13 +190,19 @@ public final class MainActivity extends Activity {
         if(index<0 || index>=tabs.size()) return;
         cancelPermission(); cancelUpload(); hideFullscreen();
         Tab removed=tabs.remove(index); if(removed.view!=null) { pages.removeView(removed.view); removed.view.stopLoading(); removed.view.destroy(); }
+        if(tabs.isEmpty() && isPrivateMode()) { endPrivate(); return; }
         if(tabs.isEmpty()) tabs.add(new Tab(Address.HOME,"Neuer Tab",false));
         if(index<selected)selected--; selected=Math.min(selected,tabs.size()-1); switchTab(selected);
     }
     @SuppressWarnings("SetJavaScriptEnabled")
     private WebView createWebView(Tab tab) {
         WebView web=new WebView(this);
-        WebSettings settings=web.getSettings(); settings.setJavaScriptEnabled(true); settings.setDomStorageEnabled(true);
+        if (isPrivateMode()) {
+            web.setSaveEnabled(false);
+            if (Build.VERSION.SDK_INT >= 26) web.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
+        }
+        WebSettings settings=web.getSettings();
+        if (isPrivateMode()) { settings.setCacheMode(WebSettings.LOAD_NO_CACHE); settings.setSaveFormData(false); settings.setSavePassword(false); } settings.setJavaScriptEnabled(true); settings.setDomStorageEnabled(true);
         settings.setLoadWithOverviewMode(true); settings.setUseWideViewPort(true); settings.setSupportZoom(true);
         settings.setBuiltInZoomControls(true); settings.setDisplayZoomControls(false); settings.setMediaPlaybackRequiresUserGesture(true);
         settings.setAllowFileAccess(false); settings.setAllowContentAccess(false); settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
@@ -192,6 +211,10 @@ public final class MainActivity extends Activity {
         applyDesktop(web, tab.desktop);
         CookieManager.getInstance().setAcceptCookie(true); CookieManager.getInstance().setAcceptThirdPartyCookies(web,true);
         web.setWebViewClient(new WebViewClient() {
+            @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                if (request.isForMainFrame() && WikiTop.URL.equals(request.getUrl().toString())) return WikiTop.response();
+                return null;
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 if(!request.isForMainFrame())return false;
                 return routeLink(tab,request.getUrl().toString(),request.hasGesture());
@@ -277,8 +300,9 @@ public final class MainActivity extends Activity {
         Tab tab=active(); if(tab==null)return;
         if(!address.hasFocus()) address.setText(Address.display(tab.url));
         boolean secure=tab.url!=null && tab.url.startsWith("https://");
-        siteState.setText(Address.HOME.equals(tab.url)?"⊕":secure?"≡":"!");
-        siteState.setContentDescription(secure?"HTTPS-Verbindung. Seiteninformationen":"Seiteninformationen");
+        siteState.setText(isPrivateMode()?"P":Address.HOME.equals(tab.url)?"⊕":secure?"≡":"!");
+        siteState.setContentDescription(isPrivateMode()?"Privater Tab. Seiteninformationen":secure?"HTTPS-Verbindung. Seiteninformationen":"Seiteninformationen");
+        address.setHint(isPrivateMode()?"Privat · Adresse oder Suche":"Adresse oder Suche");
         back.setEnabled(tab.view!=null && tab.view.canGoBack()); forward.setEnabled(tab.view!=null && tab.view.canGoForward());
         tabButton.count=tabs.size(); tabButton.setContentDescription(tabs.size()+" Tabs. Tabs anzeigen"); tabButton.invalidate();
         int value=tab.view==null?100:tab.view.getProgress(); progress.setProgress(value); progress.setVisibility(value<100?View.VISIBLE:View.INVISIBLE);
@@ -287,6 +311,12 @@ public final class MainActivity extends Activity {
         PopupMenu popup=new PopupMenu(this,bottom.getChildAt(bottom.getChildCount()-1));
         String[] actions={"Neuer Tab",store.bookmarked(active().url)?"Lesezeichen entfernen":"Lesezeichen hinzufügen","Lesezeichen","Verlauf","Downloads","Seite teilen","Link kopieren","Auf Seite suchen",active().desktop?"Mobile Ansicht":"Desktopansicht","Suchmaschine","Browserdaten löschen","Über MusikMathe"};
         for(int i=0;i<actions.length;i++)popup.getMenu().add(0,i,i,actions[i]);
+        popup.getMenu().add(0,12,0,"Neuer privater Tab");
+        popup.getMenu().add(0,13,1,isPrivateMode()?"Zu normalen Tabs":"Zu privaten Tabs");
+        if (isPrivateMode()) {
+            popup.getMenu().add(0,14,2,"Alle privaten Tabs schließen");
+            popup.getMenu().findItem(1).setEnabled(false);
+        }
         popup.setOnMenuItemClickListener(item -> {
             Tab tab=active();
             switch(item.getItemId()) {
@@ -301,20 +331,23 @@ public final class MainActivity extends Activity {
                 case 8: tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: new AlertDialog.Builder(this).setTitle("MusikMathe · 0.1.0").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Browserdaten bleiben auf diesem Gerät.\n\nKeine Chrome-Synchronisierung, Erweiterungen oder isolierten privaten Tabs. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: new AlertDialog.Builder(this).setTitle("MusikMathe · 0.2.0").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Keine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
+                case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
+                case 14: endPrivate(); break;
             } return true;
         }); popup.show();
     }
     private void showTabs() {
         hideKeyboard(); LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);list.setPadding(dp(8),dp(8),dp(8),dp(8));
         ScrollView scroll=new ScrollView(this);scroll.addView(list);
-        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Tabs · "+tabs.size()).setView(scroll).setPositiveButton("Neuer Tab",(d,w)->newTab(Address.HOME,true)).setNegativeButton("Fertig",null).create();
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle((isPrivateMode()?"Private Tabs · ":"Tabs · ")+tabs.size()).setView(scroll).setPositiveButton("Neuer Tab",(d,w)->newTab(Address.HOME,true)).setNegativeButton("Fertig",null).create();
         for(int i=0;i<tabs.size();i++) {
             final int index=i; Tab tab=tabs.get(i); LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(12),dp(8),0,dp(8));
             if(i==selected)row.setBackground(rounded(0xffe5eeea,12));
             TextView label=text((i==selected?"●  ":"")+tab.title+"\n"+(Address.HOME.equals(tab.url)?"Startseite":Address.host(tab.url)),15);label.setMaxLines(3);
             row.addView(label,new LinearLayout.LayoutParams(0,dp(66),1));label.setOnClickListener(v->{dialog.dismiss();switchTab(index);});
-            icon(row,"stop","Tab schließen",()->{dialog.dismiss();closeTab(index);showTabs();});list.addView(row);
+            icon(row,"stop","Tab schließen",()->{dialog.dismiss();closeTab(index);if(!closingPrivate)showTabs();});list.addView(row);
         } dialog.show();
     }
     private void showLibrary(String key,String title) {
@@ -359,6 +392,7 @@ public final class MainActivity extends Activity {
     }
     private void confirmDownload(String url,String ua,String disposition,String mime) {
         String name=URLUtil.guessFileName(url,disposition,mime);
+        if (isPrivateMode()) name += "\n\nHeruntergeladene Dateien bleiben nach dem Schließen privater Tabs erhalten.";
         new AlertDialog.Builder(this).setTitle("Datei herunterladen?").setMessage(name+"\n\n"+Address.host(url)).setNegativeButton("Abbrechen",null).setPositiveButton("Herunterladen",(d,w)->{
             pendingDownload=new String[]{url,ua,disposition,mime};
             if(Build.VERSION.SDK_INT<=28 && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},DOWNLOAD_PERMISSION);else download();
@@ -439,23 +473,41 @@ public final class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(Build.VERSION.SDK_INT>=26?View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR:0);
         WebChromeClient.CustomViewCallback callback=customCallback;customCallback=null;if(callback!=null)callback.onCustomViewHidden();
     }
-    private void goBack(){if(customView!=null){hideFullscreen();return;}WebView web=activeView();if(web!=null && web.canGoBack())web.goBack();else if(tabs.size()>1)closeTab(selected);else moveTaskToBack(true);}
+    private void goBack(){if(customView!=null){hideFullscreen();return;}WebView web=activeView();if(web!=null && web.canGoBack())web.goBack();else if(tabs.size()>1)closeTab(selected);else if(isPrivateMode())endPrivate();else moveTaskToBack(true);}
     @Override public void onBackPressed(){goBack();}
     private void share(String url){try{startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,url),"Seite teilen"));}catch(ActivityNotFoundException e){toast("Keine passende App verfügbar.");}}
     private void copy(String url){((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Webadresse",url));toast("Link kopiert.");}
     private void toast(String message){if(!destroyed)Toast.makeText(this,message,Toast.LENGTH_SHORT).show();}
     private void persist(){
-        if(store==null)return;ArrayList<BrowserStore.Entry> rows=new ArrayList<>();for(Tab tab:tabs)rows.add(new BrowserStore.Entry("about:blank".equals(tab.url)?Address.HOME:tab.url,tab.title,0,tab.desktop));store.write("tabs",rows);store.selected(selected);
+        if(store==null || isPrivateMode())return;ArrayList<BrowserStore.Entry> rows=new ArrayList<>();for(Tab tab:tabs)rows.add(new BrowserStore.Entry("about:blank".equals(tab.url)?Address.HOME:tab.url,tab.title,0,tab.desktop));store.write("tabs",rows);store.selected(selected);
     }
     private void acceptIntent(Intent intent){if(intent!=null && Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData()!=null){String url=intent.getData().toString();if(Address.isWeb(url))newTab(url,true);}}
-    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);acceptIntent(intent);}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);acceptIntent(intent);if(isPrivateMode() && intent.getBooleanExtra("new_private_tab",false))newTab(Address.HOME,true);}
+    private void openPrivate(boolean newTab) {
+        if (Build.VERSION.SDK_INT < 28) { toast("Private Tabs benötigen Android 9 oder neuer."); return; }
+        startActivity(new Intent(this,PrivateActivity.class).putExtra("new_private_tab",newTab).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_SINGLE_TOP));
+    }
+    private void openNormal() {
+        startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_SINGLE_TOP));
+    }
+    private void endPrivate() {
+        if (!isPrivateMode()) return;
+        closingPrivate=true;openNormal();finish();
+    }
     @Override protected void onSaveInstanceState(Bundle state){persist();super.onSaveInstanceState(state);}
-    @Override protected void onPause(){persist();CookieManager.getInstance().flush();if(activeView()!=null)activeView().onPause();super.onPause();}
-    @Override protected void onResume(){super.onResume();if(activeView()!=null)activeView().onResume();}
+    @Override protected void onPause(){persist();if(store!=null)CookieManager.getInstance().flush();if(activeView()!=null)activeView().onPause();super.onPause();}
+    @Override protected void onResume(){super.onResume();if(store==null)return;if(activeView()!=null)activeView().onResume();if(!isPrivateMode()){
+        PrivateSession.cleanIfStopped(this);
+        root.postDelayed(() -> { if(!destroyed)PrivateSession.cleanIfStopped(this); },1000);
+    }}
     @Override public void onTrimMemory(int level){
         super.onTrimMemory(level);if(level>=TRIM_MEMORY_RUNNING_LOW){for(Tab tab:tabs)if(tab!=active() && tab.view!=null){tab.state=new Bundle();tab.view.saveState(tab.state);tab.view.destroy();tab.view=null;}}
     }
     @Override protected void onDestroy(){
-        destroyed=true;cancelPermission();cancelUpload();hideFullscreen();pages.removeAllViews();for(Tab tab:tabs)if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}super.onDestroy();
+        destroyed=true;cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs)if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}super.onDestroy();
+        if (isPrivateMode() && !isChangingConfigurations()) {
+            try { if(Build.VERSION.SDK_INT>=28)PrivateSession.wipe(this); } catch(java.io.IOException ignored) { }
+            android.os.Process.killProcess(android.os.Process.myPid());
+        }
     }
 }

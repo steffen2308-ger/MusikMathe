@@ -1,6 +1,6 @@
 # MusikMathe
 
-Ein eigenständiger Android-Browser als Grundlage für spätere Spezialfunktionen. Die erste Version verwendet die Chromium-WebView des Geräts. Mindestversion: Android 6. Die App heißt vorerst wie dieses Repository.
+Ein eigenständiger Android-Browser als Grundlage für spätere Spezialfunktionen. Die erste Version verwendet die Chromium-WebView des Geräts. Mindestversion: Android 6; private Tabs ab Android 9. Die App heißt vorerst wie dieses Repository.
 
 ## APK installieren
 
@@ -23,7 +23,7 @@ Spätere Testversionen können als Update installiert werden. Dafür wird ein fe
 
 ## Grenzen der ersten Version
 
-WebView ist keine vollständige Chrome-Distribution. Chrome-Kontosynchronisierung, Passwörter-/Passkey-Manager, Chrome-Erweiterungen, Übersetzungsdienst, isolierte private Tabs und Offline-Seiten sind nicht implementiert. Manche Login-Anbieter akzeptieren eingebettete WebViews nicht. DRM, Streaming, WebAuthn und einige Geräteschnittstellen hängen von Website, Android und installierter WebView-Version ab. Downloads aus `blob:`-/`data:`-Adressen und direkte Kameraaufnahme aus einem Datei-Uploadfeld sind noch nicht implementiert. Die Startseiten-Suchbox verwendet Google; die Suchmaschinenwahl gilt für die Adressleiste.
+WebView ist keine vollständige Chrome-Distribution. Chrome-Kontosynchronisierung, Passwörter-/Passkey-Manager, Chrome-Erweiterungen, Übersetzungsdienst, Offline-Seiten sind nicht implementiert. Manche Login-Anbieter akzeptieren eingebettete WebViews nicht. DRM, Streaming, WebAuthn und einige Geräteschnittstellen hängen von Website, Android und installierter WebView-Version ab. Downloads aus `blob:`-/`data:`-Adressen und direkte Kameraaufnahme aus einem Datei-Uploadfeld sind noch nicht implementiert. Die Startseiten-Suchbox verwendet Google; die Suchmaschinenwahl gilt für die Adressleiste.
 
 Ungültige TLS-Zertifikate werden von WebView abgelehnt; die App bietet keinen Zertifikats-Bypass. HTTPS-Seiten dürfen keine unsicheren gemischten Inhalte laden. Automatisch ausgelöste externe App-Links sind blockiert. Normale HTTP-Seiten bleiben wie in einem allgemeinen Browser erreichbar. Es gibt keine JavaScript-Schnittstelle zu Android und keine Freigabe beliebiger lokaler Dateien.
 
@@ -36,3 +36,19 @@ gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
 ```
 
 Die Tests prüfen Adress-/Sucheingaben, blockierte lokale und ausführbare URL-Schemata, Tab-Wiederherstellung, Lesezeichen, Verlauf, Einstellungen und WebView-Konfiguration. Robolectric führt keine echten Netzwerkseiten aus. Website-Logins, Videowiedergabe und die gerätespezifische WebView sollten zusätzlich auf einem echten Android-Gerät geprüft werden. Die installierte Android System WebView beziehungsweise Chrome sollte aktuell sein.
+
+## Private Tabs und Deutschland-Startseite (0.2)
+
+**Menü → Neuer privater Tab** öffnet den getrennten privaten Bereich. Mit **Zu normalen Tabs / Zu privaten Tabs** wechselt man zwischen den Bereichen. Ein P in der Adressleiste und eine violette Umrandung kennzeichnen private Tabs. Beim letzten privaten Tab oder **Alle privaten Tabs schließen** endet die Sitzung. Normale Tabs und Anmeldungen bleiben erhalten.
+
+Private Tabs laufen ab Android 9 in einem nicht exportierten eigenen Prozess mit eigenem WebView-Datenverzeichnis. Vor dem ersten WebView-/CookieManager-Zugriff wird ein eventuell verbliebenes privates Profil gelöscht; schlägt dies fehl, startet der private Browser nicht. Private Adressen, Verlauf und Auswahl werden nicht gespeichert oder wiederhergestellt. Formularspeicherung und Autofill sind dort deaktiviert; Android wird um eine Tastatur ohne personalisiertes Lernen gebeten. FLAG_SECURE verhindert Screenshots der privaten Ansicht. Beim Beenden werden die WebViews zerstört, das private Verzeichnis bereinigt und der private Prozess beendet; der normale Prozess bereinigt verbliebene Dateien zusätzlich, sobald der private Prozess gestoppt ist. Bei einem erzwungenen Prozessende kann die Bereinigung erst beim nächsten Start erfolgen.
+
+Private Tabs verbergen weder die IP-Adresse noch Aktivitäten vor Websites oder Internetanbietern. Bewusst heruntergeladene Dateien und geteilte/kopierte Inhalte bleiben erhalten. Lesezeichen sind im privaten Bereich lesbar; neue Lesezeichen werden dort nicht gespeichert. Unter Android 6–8 bleibt der normale Browser nutzbar, statt eine nur scheinbare Trennung anzubieten.
+
+Auf der Startseite gibt es drei neue Zugänge für Deutschland:
+
+- **Wikipedia · meistgelesen**: lokale Ansicht mit den 50 meistgelesenen Artikeln aus Deutschland (Wikimedia Analytics API, DE, alle Wikipedia-Sprachen). Das aktuelle verfügbare Tagesdatum wird angezeigt; bei fehlenden Tagesdaten werden bis zu sieben vergangene Tage geprüft. Wikipedia veröffentlicht gerundete Artikelaufrufe, keine Suchanfragen. Keine Umdeutung einer Sprachrangliste in ein Länderranking. Die Liste wird erst beim Öffnen geladen; Netzwerkfehler liefern eine Wiederholen-Ansicht, keine erfundenen Zahlen.
+- **Meistbesuchte Webseiten**: [Similarweb Deutschland-Ranking](https://www.similarweb.com/top-websites/germany/).
+- **Google Trends**: [Aktuelle Suchtrends für Deutschland, deutsche Oberfläche](https://trends.google.com/trending?geo=DE&hl=de).
+
+Die Wikipedia-Ansicht basiert auf dem offiziellen [Country-Ranking-Endpunkt](https://doc.wikimedia.org/generated-data-platform/aqs/analytics-api/reference/page-views.html). Sie verwendet weder Standortfreigabe noch Browsercookies.

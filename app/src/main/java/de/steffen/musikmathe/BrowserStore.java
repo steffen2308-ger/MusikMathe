@@ -19,9 +19,17 @@ final class BrowserStore {
         }
     }
     private final SharedPreferences prefs;
-    BrowserStore(Context context) { prefs = context.getSharedPreferences("browser", Context.MODE_PRIVATE); }
+    private final boolean privateMode;
+    private String privateEngine;
+    BrowserStore(Context context) { this(context, false); }
+    BrowserStore(Context context, boolean privateMode) {
+        prefs = context.getSharedPreferences("browser", Context.MODE_PRIVATE);
+        this.privateMode = privateMode;
+        privateEngine = prefs.getString("engine", "google");
+    }
     List<Entry> read(String key) {
         ArrayList<Entry> result = new ArrayList<>();
+        if (privateMode && !"bookmarks".equals(key)) return result;
         try {
             JSONArray array = new JSONArray(prefs.getString(key, "[]"));
             int limit = "tabs".equals(key) ? MAX_TABS : 500;
@@ -36,6 +44,7 @@ final class BrowserStore {
         return result;
     }
     void write(String key, List<Entry> rows) {
+        if (privateMode) return;
         JSONArray array = new JSONArray();
         for (Entry row : rows) {
             try { array.put(new JSONObject().put("url", row.url).put("title", row.title).put("time", row.time).put("desktop", row.desktop)); }
@@ -44,7 +53,7 @@ final class BrowserStore {
         prefs.edit().putString(key, array.toString()).apply();
     }
     void visit(String url, String title) {
-        if (!Address.isWeb(url)) return;
+        if (privateMode || !Address.isWeb(url)) return;
         List<Entry> history = read("history");
         for (int i = history.size() - 1; i >= 0; i--) if (history.get(i).url.equals(url)) history.remove(i);
         history.add(0, new Entry(url, title, System.currentTimeMillis()));
@@ -53,15 +62,15 @@ final class BrowserStore {
     }
     boolean bookmarked(String url) { for (Entry row : read("bookmarks")) if (row.url.equals(url)) return true; return false; }
     boolean toggleBookmark(String url, String title) {
-        if (!Address.isWeb(url)) return false;
+        if (privateMode || !Address.isWeb(url)) return false;
         List<Entry> rows = read("bookmarks");
         boolean removed = false;
         for (int i = rows.size() - 1; i >= 0; i--) if (rows.get(i).url.equals(url)) { rows.remove(i); removed = true; }
         if (!removed) rows.add(0, new Entry(url, title, System.currentTimeMillis()));
         write("bookmarks", rows); return !removed;
     }
-    int selected() { return prefs.getInt("selected", 0); }
-    void selected(int index) { prefs.edit().putInt("selected", index).apply(); }
-    String engine() { return prefs.getString("engine", "google"); }
-    void engine(String engine) { prefs.edit().putString("engine", engine).apply(); }
+    int selected() { return privateMode ? 0 : prefs.getInt("selected", 0); }
+    void selected(int index) { if (!privateMode) prefs.edit().putInt("selected", index).apply(); }
+    String engine() { return privateMode ? privateEngine : prefs.getString("engine", "google"); }
+    void engine(String engine) { if (privateMode) privateEngine = engine; else prefs.edit().putString("engine", engine).apply(); }
 }
