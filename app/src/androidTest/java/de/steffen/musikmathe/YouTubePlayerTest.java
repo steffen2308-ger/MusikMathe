@@ -22,7 +22,7 @@ public class YouTubePlayerTest {
             String html="<html><title>YouTube Test</title><script>window.ytInitialPlayerResponse={videoDetails:{videoId:'aqz-KE-bpKQ',title:'Testfilm'},streamingData:{adaptiveFormats:[{itag:137,mimeType:'video/mp4',height:1080,url:'https://r1.googlevideo.com/videoplayback?id=A&itag=137'},{itag:140,mimeType:'audio/mp4',audioQuality:'AUDIO_QUALITY_MEDIUM',url:'https://r1.googlevideo.com/videoplayback?id=A&itag=140'}]}};</script></html>";
             web.loadDataWithBaseURL("https://www.youtube.com/shorts/aqz-KE-bpKQ",html,"text/html","UTF-8",null);
         });
-        try{assertTrue(done.await(15,TimeUnit.SECONDS));assertNotNull(result.get());assertEquals("aqz-KE-bpKQ",result.get().getString("videoId"));assertTrue(result.get().getBoolean("playerData"));assertEquals(2,result.get().getJSONArray("formats").length);assertEquals(1,YouTubeSources.parse(result.get(),java.util.Collections.emptyMap(),java.util.Collections.emptyList()).items.size());}
+        try{assertTrue(done.await(15,TimeUnit.SECONDS));assertNotNull(result.get());assertEquals("aqz-KE-bpKQ",result.get().getString("videoId"));assertTrue(result.get().getBoolean("playerData"));assertEquals(2,result.get().getJSONArray("formats").length());assertEquals(1,YouTubeSources.parse(result.get(),java.util.Collections.emptyMap(),java.util.Collections.emptyList()).items.size());}
         finally{InstrumentationRegistry.getInstrumentation().runOnMainSync(()->view.get().destroy());}
     }
 }
