@@ -32,9 +32,24 @@ public class PasswordFeatureTest {
     private Activity launch()throws Exception{UiDevice device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());device.wakeUp();device.executeShellCommand("wm dismiss-keyguard");return InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(app(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));}
     private WebView view(Activity a){AtomicReference<WebView> web=new AtomicReference<>();main(()->web.set(find(a.getWindow().getDecorView())));assertNotNull(web.get());return web.get();}
     private void page(WebView web,String host)throws Exception{
-        String stamp=java.util.UUID.randomUUID().toString();
-        main(()->web.loadDataWithBaseURL("https://"+host+"/login","<html><title>"+stamp+"</title><meta name='viewport' content='width=device-width, initial-scale=1'><h1>Login fixture</h1><form onsubmit='event.preventDefault()'><input id='username' name='username' autocomplete='username'><input id='password' type='password' autocomplete='current-password'><button type='submit'>Anmelden</button></form></html>","text/html","UTF-8","https://"+host+"/login"));
-        long deadline=System.currentTimeMillis()+10000;boolean ready=false;while(System.currentTimeMillis()<deadline){if("true".equals(js(web,"!!window.__mmPasswords && document.title === "+org.json.JSONObject.quote(stamp)))){ready=true;break;}Thread.sleep(150);}AtomicReference<String> nativeUrl=new AtomicReference<>();main(()->nativeUrl.set(web.getUrl()));assertTrue("Password form hooks missing; native URL="+nativeUrl.get()+"; "+js(web,"JSON.stringify({url:location.href,origin:location.origin,title:document.title,hook:typeof window.__mmPasswords,ready:document.readyState})"),ready);
+        String stamp=java.util.UUID.randomUUID().toString(),url="https://"+host+"/login?fixture="+stamp;
+        String html="<html><title>"+stamp+"</title><meta name='viewport' content='width=device-width, initial-scale=1'><h1>Login fixture</h1><form onsubmit='event.preventDefault()'><input id='username' name='username' autocomplete='username'><input id='password' type='password' autocomplete='current-password'><button type='submit'>Anmelden</button></form></html>";
+        main(()->{
+            android.webkit.WebViewClient original=web.getWebViewClient();
+            web.setWebViewClient(new android.webkit.WebViewClient(){
+                @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view,android.webkit.WebResourceRequest request){
+                    if(request.isForMainFrame()&&url.equals(request.getUrl().toString()))return new android.webkit.WebResourceResponse("text/html","UTF-8",new java.io.ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8)));
+                    return original.shouldInterceptRequest(view,request);
+                }
+                @Override public void onPageStarted(WebView view,String target,android.graphics.Bitmap icon){original.onPageStarted(view,target,icon);}
+                @Override public void onPageFinished(WebView view,String target){original.onPageFinished(view,target);}
+                @Override public void doUpdateVisitedHistory(WebView view,String target,boolean reload){original.doUpdateVisitedHistory(view,target,reload);}
+                @Override public boolean shouldOverrideUrlLoading(WebView view,android.webkit.WebResourceRequest request){return original.shouldOverrideUrlLoading(view,request);}
+            });
+            web.loadUrl(url);
+        });
+        long deadline=System.currentTimeMillis()+10000;boolean ready=false;while(System.currentTimeMillis()<deadline){if("true".equals(js(web,"!!window.__mmPasswords && document.title === "+org.json.JSONObject.quote(stamp)))){ready=true;break;}Thread.sleep(150);}
+        AtomicReference<String> nativeUrl=new AtomicReference<>();main(()->nativeUrl.set(web.getUrl()));assertTrue("Password form hooks missing; native URL="+nativeUrl.get()+"; "+js(web,"JSON.stringify({url:location.href,origin:location.origin,title:document.title,hook:typeof window.__mmPasswords,ready:document.readyState})"),ready);
     }
     private void click(String text){UiDevice device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());UiObject2 item=device.wait(Until.findObject(By.text(java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(text),java.util.regex.Pattern.CASE_INSENSITIVE|java.util.regex.Pattern.UNICODE_CASE))),6000);java.util.List<String> buttons=new java.util.ArrayList<>();if(item==null)for(UiObject2 button:device.findObjects(By.clazz("android.widget.Button")))buttons.add(button.getText());assertNotNull("Expected control: "+text+"; visible buttons: "+buttons,item);item.click();device.waitForIdle();}
     private void option(String action){UiDevice device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());UiObject2 menu=device.wait(Until.findObject(By.desc("Menü")),6000);assertNotNull(menu);menu.click();click("Passwörter");click(action);}
