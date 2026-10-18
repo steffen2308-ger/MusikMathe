@@ -81,7 +81,7 @@ public class VideoDownloadService extends Service {
         }
         main.post(()->finish(!cancelled,cancelled?"Videospeicherung abgebrochen.":"Video gespeichert."));
     }
-    private void update(int value,String message){if(finished||cancelled)return;if(percent==value&&status.equals(message))return;percent=value;status=message;notifyProgress(false);}
+    private void update(int value,String message){if(finished||cancelled)return;String text=message+(value<0?"":" · "+value+" %");if(percent==value&&status.equals(text))return;percent=value;status=text;notifyProgress(false);}
     private void notifyProgress(boolean start){
         NotificationManager manager=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
         if(Build.VERSION.SDK_INT>=26)manager.createNotificationChannel(new NotificationChannel("video-downloads","Videos speichern",NotificationManager.IMPORTANCE_LOW));
@@ -91,7 +91,7 @@ public class VideoDownloadService extends Service {
         PendingIntent openAction=PendingIntent.getActivity(this,32,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         Notification.Builder builder=Build.VERSION.SDK_INT>=26?new Notification.Builder(this,"video-downloads"):new Notification.Builder(this);
         Notification notification=builder.setSmallIcon(android.R.drawable.stat_sys_download).setContentTitle(privateMode()?"Privates Video speichern":"Video speichern").setContentText(status).setContentIntent(openAction).setOngoing(true).setOnlyAlertOnce(true).setVisibility(privateMode()?Notification.VISIBILITY_SECRET:Notification.VISIBILITY_PRIVATE).setProgress(100,Math.max(0,percent),percent<0).addAction(android.R.drawable.ic_menu_close_clear_cancel,"Abbrechen",cancelAction).build();
-        if(start)startForeground(NOTIFICATION,notification);else manager.notify(NOTIFICATION,notification);
+        if(start)startForeground(NOTIFICATION,notification);else if(Build.VERSION.SDK_INT<33 || checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)==android.content.pm.PackageManager.PERMISSION_GRANTED)manager.notify(NOTIFICATION,notification);
     }
     private void finish(boolean success,String message){
         if(finished)return;finished=true;status=message;if(!success)deleteDocument(destination);

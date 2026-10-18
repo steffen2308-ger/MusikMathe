@@ -33,7 +33,11 @@ final class VideoHttpSource extends BaseDataSource {
                 if(!Address.isWeb(url))throw new IOException("Keine HTTP-Videoquelle.");
                 current=Uri.parse(url);connection=(HttpURLConnection)new URL(url).openConnection();connection.setInstanceFollowRedirects(false);connection.setConnectTimeout(15000);connection.setReadTimeout(20000);
                 connection.setRequestProperty("Accept-Encoding","identity");connection.setRequestProperty("User-Agent","MusikMathe/0.3");
-                for(Map.Entry<String,String> row:headers.entrySet())if(!originBound(row.getKey())||sourceOrigin.equals(VideoCatalog.origin(url)))connection.setRequestProperty(row.getKey(),row.getValue());
+                for(Map.Entry<String,String> row:headers.entrySet())if(!originBound(row.getKey())||sourceOrigin.equals(VideoCatalog.origin(url))){
+                    String value=row.getValue();
+                    if("Referer".equalsIgnoreCase(row.getKey())&&!sourceOrigin.equals(VideoCatalog.origin(url))&&Address.isWeb(value))value=Uri.parse(value).buildUpon().path("/").clearQuery().fragment(null).build().toString();
+                    connection.setRequestProperty(row.getKey(),value);
+                }
                 String cookie=CookieManager.getInstance().getCookie(url);if(cookie!=null)connection.setRequestProperty("Cookie",cookie);
                 if(spec.position>0||spec.length!=C.LENGTH_UNSET)connection.setRequestProperty("Range","bytes="+spec.position+"-"+(spec.length==C.LENGTH_UNSET?"":spec.position+spec.length-1));
                 int status=connection.getResponseCode();

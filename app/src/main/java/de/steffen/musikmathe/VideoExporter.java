@@ -33,7 +33,8 @@ final class VideoExporter {
             ExoPlayerAssetLoader.Factory assets=new ExoPlayerAssetLoader.Factory(context,new DefaultDecoderFactory.Builder(context).build(),Clock.DEFAULT,sources);
             transformer=new Transformer.Builder(context).setAssetLoaderFactory(assets).setVideoMimeType(MimeTypes.VIDEO_H264).setAudioMimeType(MimeTypes.AUDIO_AAC).addListener(new Transformer.Listener(){
                 @Override public void onCompleted(Composition composition,ExportResult result){transformer=null;handler.removeCallbacks(tick);listener.completed();}
-                @Override public void onError(Composition composition,ExportResult result,ExportException error){transformer=null;handler.removeCallbacks(tick);listener.failed(error.getErrorCodeName()+": "+(error.getCause()==null?error.getMessage():error.getCause().getMessage()));}
+                @Override public void onError(Composition composition,ExportResult result,ExportException error){transformer=null;handler.removeCallbacks(tick);String code=error.getErrorCodeName();
+                    listener.failed(code.contains("DRM")?"Die Quelle ist kopiergeschützt.":code.contains("ENCOD")||code.contains("DECOD")?"Dieses Videoformat wird auf dem Gerät nicht unterstützt.":code.contains("IO")?"Die Videoquelle ist nicht erreichbar, abgelaufen oder verlangt zusätzliche Anmeldung.":"Diese Streamingquelle kann nicht als MP4 exportiert werden. Versuche einen begrenzten Ausschnitt oder eine andere gefundene Quelle.");}
             }).build();
             MediaItem.Builder item=new MediaItem.Builder().setUri(url);
             if("HLS".equals(type))item.setMimeType(MimeTypes.APPLICATION_M3U8);if("DASH".equals(type))item.setMimeType(MimeTypes.APPLICATION_MPD);

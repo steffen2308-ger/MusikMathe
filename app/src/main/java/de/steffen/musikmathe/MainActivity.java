@@ -194,6 +194,7 @@ public class MainActivity extends Activity {
     }
     private void closeTab(int index) {
         if(index<0 || index>=tabs.size()) return;
+        if(isPrivateMode() && tabs.size()==1 && VideoDownloadService.busy()){endPrivate();return;}
         cancelPermission(); cancelUpload(); hideFullscreen();
         Tab removed=tabs.remove(index); if(removed.view!=null) { pages.removeView(removed.view); removed.view.stopLoading(); removed.view.destroy(); }
         if(tabs.isEmpty() && isPrivateMode()) { endPrivate(); return; }
@@ -477,6 +478,7 @@ public class MainActivity extends Activity {
                 if((data.getFlags()&Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)!=0)getContentResolver().takePersistableUriPermission(destination,data.getFlags()&(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION));
                 Intent download=new Intent(this,isPrivateMode()?PrivateVideoDownloadService.class:VideoDownloadService.class).putExtra("url",item.url).putExtra("type",item.type).putExtra("headers",new org.json.JSONObject(item.headers).toString()).putExtra("destination",destination.toString()).putExtra("original",pendingVideoOriginal).putExtra("clip",pendingVideoClip);
                 if(Build.VERSION.SDK_INT>=26)startForegroundService(download);else startService(download);
+                if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},21);
                 toast("Video wird gespeichert. Fortschritt und Abbruch unter Videos oder in der Benachrichtigung.");
             }catch(Exception error){try{android.provider.DocumentsContract.deleteDocument(getContentResolver(),destination);}catch(Exception ignored){}toast("Videospeicherung konnte nicht gestartet werden.");}
         }
@@ -550,7 +552,9 @@ public class MainActivity extends Activity {
             if(destroyed || !tabs.contains(tab) || page!=tab.videoPage)return;
             try{Object decoded=new org.json.JSONTokener(value).nextValue();org.json.JSONArray rows=new org.json.JSONArray(String.valueOf(decoded));
                 java.util.Map<String,String> headers=new java.util.LinkedHashMap<>();if(Address.isWeb(referer))headers.put("Referer",referer);if(userAgent!=null)headers.put("User-Agent",userAgent);
-                for(int i=0;i<rows.length();i++){org.json.JSONObject row=rows.getJSONObject(i);recordVideo(tab,page,row.optString("url"),row.optString("type"),headers);}
+                for(int i=0;i<rows.length();i++){org.json.JSONObject row=rows.getJSONObject(i);String url=row.optString("url");java.util.Map<String,String> scoped=new java.util.LinkedHashMap<>(headers);
+                    if(Address.isWeb(referer)&&Address.isWeb(url)&&!VideoCatalog.origin(referer).equals(VideoCatalog.origin(url)))scoped.put("Referer",Uri.parse(referer).buildUpon().path("/").clearQuery().fragment(null).build().toString());
+                    recordVideo(tab,page,url,row.optString("type"),scoped);}
             }catch(Exception ignored){}completed.run();
         });
     }
@@ -559,7 +563,8 @@ public class MainActivity extends Activity {
             if(active()!=tab || destroyed)return;
             java.util.List<VideoCatalog.Item> videos=tab.videos.list();
             if(videos.isEmpty()){
-                new AlertDialog.Builder(this).setTitle("Videos auf dieser Seite").setMessage("Noch kein speicherbarer Stream erkannt. Starte das Video auf der Webseite und öffne diese Liste erneut.\n\nDirekte Videodateien sowie HLS-/DASH-Adressen werden erkannt. Manche Player verbergen die Quelle oder verwenden Kopierschutz."+(VideoDownloadService.status.isEmpty()?"":"\n\n"+VideoDownloadService.status)).setPositiveButton("OK",null).setNeutralButton("Erneut suchen",(d,w)->showVideos()).show();return;
+                AlertDialog.Builder empty=new AlertDialog.Builder(this).setTitle("Videos auf dieser Seite").setMessage("Noch kein speicherbarer Stream erkannt. Starte das Video auf der Webseite und öffne diese Liste erneut.\n\nDirekte Videodateien sowie HLS-/DASH-Adressen werden erkannt. Manche Player verbergen die Quelle oder verwenden Kopierschutz."+(VideoDownloadService.status.isEmpty()?"":"\n\n"+VideoDownloadService.status)).setPositiveButton("OK",null).setNegativeButton("Erneut suchen",(d,w)->showVideos());
+                if(VideoDownloadService.busy())empty.setNeutralButton("Export abbrechen",(d,w)->VideoDownloadService.cancelCurrent());empty.show();return;
             }
             String[] labels=new String[videos.size()];for(int i=0;i<labels.length;i++)labels[i]=videos.get(i).label();
             AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("Videos · "+videos.size()).setItems(labels,(d,i)->videoOptions(videos.get(i))).setNegativeButton("Schließen",null).setPositiveButton("Neu suchen",(d,w)->showVideos());
