@@ -37,7 +37,7 @@ final class YouTubeDownloadResolver {
     void cancel(){cancelled=true;http.dispatcher().cancelAll();}
     static String errorMessage(Throwable error){
         String name=error.getClass().getSimpleName();
-        if(name.contains("NotBot")||name.contains("ReCaptcha"))return "YouTube blockiert die Quellenabfrage mit einer Sicherheitsprüfung. Versuche es später erneut oder über eine andere Internetverbindung.";
+        if(name.contains("NotBot")||name.contains("ReCaptcha")||String.valueOf(error.getMessage()).contains("HTTP 429"))return "YouTube blockiert die Quellenabfrage mit einer Sicherheitsprüfung. Versuche es später erneut oder über eine andere Internetverbindung.";
         if(name.contains("AgeRestricted")||name.contains("PrivateContent")||name.contains("PaidContent"))return "Dieses Video verlangt eine Anmeldung, Altersfreigabe oder Bezahlung. Der anonyme Download ist nicht verfügbar.";
         if(name.contains("Geographic"))return "Dieses Video ist für die aktuelle Internetverbindung regional gesperrt.";
         if(name.contains("ContentNotAvailable"))return "YouTube stellt dieses Video derzeit nicht für den Download bereit.";
@@ -92,6 +92,7 @@ final class YouTubeDownloadResolver {
             check();if(!request.url().startsWith("https://"))throw new IOException("Nur HTTPS-Quellen");
             okhttp3.Request.Builder builder=new okhttp3.Request.Builder().url(request.url()).header("User-Agent",AGENT);
             for(Map.Entry<String,List<String>> header:request.headers().entrySet()){
+                if(header.getKey().equalsIgnoreCase("Accept-Encoding"))continue;
                 builder.removeHeader(header.getKey());for(String value:header.getValue())builder.addHeader(header.getKey(),value);
             }
             byte[] bytes=request.dataToSend();RequestBody body=bytes==null?null:RequestBody.create(null,bytes);

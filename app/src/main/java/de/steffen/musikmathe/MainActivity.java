@@ -325,7 +325,7 @@ public class MainActivity extends Activity {
         siteState.setContentDescription(isPrivateMode()?"Privater Tab. Seiteninformationen":secure?"HTTPS-Verbindung. Seiteninformationen":"Seiteninformationen");
         address.setHint(isPrivateMode()?"Privat · Adresse oder Suche":"Adresse oder Suche");
         back.setEnabled(tab.view!=null && tab.view.canGoBack()); forward.setEnabled(tab.view!=null && tab.view.canGoForward());
-        videoButton.count=tab.videos.list().size();if(videoButton.count==0&&(!YouTubeSources.videoId(tab.url).isEmpty()||tab.videos.youtube()!=null))videoButton.count=1;videoButton.setContentDescription("Videos auf dieser Seite · "+videoButton.count+" erkannt");videoButton.invalidate();
+        videoButton.count=tab.videos.list().size();videoButton.setContentDescription("Videos auf dieser Seite · "+videoButton.count+" erkannt");videoButton.invalidate();
         tabButton.count=tabs.size(); tabButton.setContentDescription(tabs.size()+" Tabs. Tabs anzeigen"); tabButton.invalidate();
         int value=tab.view==null?100:tab.view.getProgress(); progress.setProgress(value); progress.setVisibility(value<100?View.VISIBLE:View.INVISIBLE);
     }
