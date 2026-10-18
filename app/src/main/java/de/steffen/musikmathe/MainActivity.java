@@ -212,7 +212,6 @@ public class MainActivity extends Activity {
         WebView web=new WebView(this);
         web.setSaveEnabled(false);
         if(Build.VERSION.SDK_INT>=26)web.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
-        if(passwords!=null)passwords.attach(web);
         if (isPrivateMode()) {
             web.setSaveEnabled(false);
             if (Build.VERSION.SDK_INT >= 26) web.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
@@ -226,6 +225,7 @@ public class MainActivity extends Activity {
         settings.setSupportMultipleWindows(true); settings.setJavaScriptCanOpenWindowsAutomatically(false);
         if(Build.VERSION.SDK_INT>=26)settings.setSafeBrowsingEnabled(true);
         applyDesktop(web, tab.desktop);
+        if(passwords!=null)passwords.attach(web);
         YouTubeBridge.attach(this,web,data -> acceptYouTube(tab,data));
         CookieManager.getInstance().setAcceptCookie(true); CookieManager.getInstance().setAcceptThirdPartyCookies(web,true);
         web.setWebViewClient(new WebViewClient() {

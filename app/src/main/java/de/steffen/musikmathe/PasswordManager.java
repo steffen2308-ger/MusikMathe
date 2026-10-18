@@ -88,7 +88,7 @@ final class PasswordManager {
         try{
             List<PasswordVault.Login> rows=vault.forSite(origin);if(rows.isEmpty()){if(manual)notice("Für diese Website sind noch keine Zugangsdaten gespeichert.");return;}
             String[] labels=new String[rows.size()];for(int i=0;i<labels.length;i++)labels[i]=rows.get(i).username.isEmpty()?"Ohne Benutzername":rows.get(i).username;
-            String token=state.token;
+            String token=state.token;pageFinished(web);
             show(new AlertDialog.Builder(activity).setTitle("Ausfüllen für\n"+origin).setItems(labels,(d,i)->fill(web,origin,token,rows.get(i))).setNegativeButton("Abbrechen",null).create());
         }catch(Exception e){problem();}
     }
