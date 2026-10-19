@@ -109,7 +109,11 @@ final class FreeSpaceGesture {
                 if(!gesture.multiple)web.evaluateJavascript(scriptFor(gesture),value->{if(ticket==gesture.generation&&gesture.samePage())gesture.firstFree="true".equals(value);});
             }
             if(action==MotionEvent.ACTION_CANCEL){gesture.generation++;gesture.firstFree=false;gesture.interceptSecond=false;}
-            return gesture.interceptSecond;
+            // Keep the complete gesture stream even when Chromium declines a blank-area DOWN
+            // after its viewport resizes. Forward ordinary events exactly once; returning false
+            // would let the parent drop the remaining UP and second tap on some WebView versions.
+            if(!gesture.interceptSecond)web.onTouchEvent(event);
+            return true;
         });
     }
     private static String scriptFor(FreeSpaceGesture gesture){return gesture.check+"([["+gesture.firstX+","+gesture.firstY+"]])";}
