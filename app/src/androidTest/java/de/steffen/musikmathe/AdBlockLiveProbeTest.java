@@ -14,6 +14,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.Assume;
@@ -50,7 +52,13 @@ public class AdBlockLiveProbeTest {
         long deadline=System.currentTimeMillis()+90000;JSONObject result;
         do{
             Thread.sleep(250);result=snapshot(activity,web);
-            if(url.equals(result.optString("url"))&&result.optString("result").contains("not blocked"))return result;
+            if(url.equals(result.optString("url"))&&result.optString("result").contains("not blocked")){
+                Matcher total=Pattern.compile("Total\\s*:\\s*(\\d+)").matcher(result.getString("result"));
+                Matcher blocked=Pattern.compile("(\\d+)\\s+blocked\\b").matcher(result.getString("result"));
+                assertTrue("Missing live total: "+result,total.find());
+                assertTrue("Missing live score: "+result,blocked.find());
+                return result.put("total",Integer.parseInt(total.group(1))).put("blocked",Integer.parseInt(blocked.group(1)));
+            }
         }while(System.currentTimeMillis()<deadline);
         throw new AssertionError("Live page did not finish: "+result);
     }
@@ -68,6 +76,8 @@ public class AdBlockLiveProbeTest {
             JSONObject disabled=runPage(activity,web);report.put("disabled",disabled);
             assertTrue("Bundled list missing: "+report,enabled.getInt("serverRules")>60000);
             assertTrue("Native blocking did not run on the live page: "+report,enabled.getInt("nativeBlocked")>=100);
+            assertTrue("Live site did not recognize the blocking: "+report,enabled.getInt("blocked")>=100);
+            assertTrue("Live result did not improve with the blocker: "+report,enabled.getInt("blocked")>disabled.getInt("blocked"));
             assertEquals("Toggle did not disable native blocking: "+report,0,disabled.getInt("nativeBlocked"));
             assertEquals("Live ad script should be blocked: "+report,"undefined",enabled.getString("adsScript"));
             assertEquals("Live pagead script should be blocked: "+report,"undefined",enabled.getString("pageadScript"));
@@ -76,7 +86,10 @@ public class AdBlockLiveProbeTest {
             report.put("outcome","verified");
         }finally{
             if(!report.has("outcome"))report.put("outcome","failed; see test assertions");
-            android.util.Log.i("AdBlockLiveProbe",report.toString());
+            JSONObject compact=new JSONObject(report.toString());
+            if(compact.has("enabled"))compact.getJSONObject("enabled").remove("log");
+            if(compact.has("disabled"))compact.getJSONObject("disabled").remove("log");
+            android.util.Log.i("AdBlockLiveProbe",compact.toString());
             try(FileOutputStream out=app.openFileOutput("adblock-live-probe.json",Context.MODE_PRIVATE)){out.write(report.toString(2).getBytes(StandardCharsets.UTF_8));}
             instrumentation.runOnMainSync(activity::finish);
         }

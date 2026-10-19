@@ -122,7 +122,7 @@ jobs:
           gradle-version: '8.11.1'
       - name: Enable KVM
         run: sudo chmod 666 /dev/kvm
-      - name: Verify password storage and autofill on modern Android
+      - name: Verify passwords and live ad blocking on modern Android
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -130,8 +130,9 @@ jobs:
           target: default
           disable-animations: true
           script: |
+            adb logcat -G 16M
             gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest -Pandroid.testInstrumentationRunnerArguments.adblockLive=true
-            adb shell run-as de.steffen.musikmathe cat files/adblock-live-probe.json
+            adb logcat -d -s AdBlockLiveProbe:I '*:S'
       - name: Upload password test results
         if: always()
         uses: actions/upload-artifact@v4
