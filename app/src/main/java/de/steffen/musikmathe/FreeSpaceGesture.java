@@ -26,6 +26,7 @@ final class FreeSpaceGesture {
     private final int slop;
     private boolean secondTap, moved, multiple, firstTap, firstFree, interceptSecond;
     private String lastCheck="none";
+    private int toggleCount;
     private float firstX, firstY, secondX, secondY;
     private int firstWidth, firstHeight, firstScrollX, firstScrollY, firstPage, generation;
     private String firstUrl;
@@ -53,8 +54,9 @@ final class FreeSpaceGesture {
                     final int ticket=generation;final String url=web.getUrl();
                     String points="[["+firstX+","+firstY+"],["+(event.getX()/Math.max(1,web.getWidth()))+","+(event.getY()/Math.max(1,web.getHeight()))+"]]";
                     web.evaluateJavascript(check+"("+points+")",value->{
-                        lastCheck+="; DOM free="+value+", current="+(ticket==generation)+", samePage="+samePage();
-                        if(active.getAsBoolean()&&"true".equals(value)&&ticket==generation&&Objects.equals(url,web.getUrl())&&samePage())toggle.run();
+                        boolean usable=active.getAsBoolean();
+                        lastCheck+="; DOM free="+value+", current="+(ticket==generation)+", samePage="+samePage()+", active="+usable;
+                        if(usable&&"true".equals(value)&&ticket==generation&&Objects.equals(url,web.getUrl())&&samePage()){toggle.run();lastCheck+="; toggled #"+(++toggleCount);}
                     });
                 }
                 return true;

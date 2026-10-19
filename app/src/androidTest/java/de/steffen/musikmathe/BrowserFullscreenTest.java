@@ -32,6 +32,7 @@ import static org.junit.Assert.*;
 public class BrowserFullscreenTest {
     private final Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();
     private String stage="initial";
+    private int doubleTaps;
     private Object field(MainActivity activity,String name)throws Exception{
         Field field=MainActivity.class.getDeclaredField(name);field.setAccessible(true);return field.get(activity);
     }
@@ -83,7 +84,7 @@ public class BrowserFullscreenTest {
         try{assertTrue("Touch injection at "+x+","+y,instrumentation.getUiAutomation().injectInputEvent(event,true));}finally{event.recycle();}
     }
     private void doubleTap(WebView web,String id)throws Exception{
-        stage="double tap on "+id;
+        stage="double tap #"+(++doubleTaps)+" on "+id;
         Thread.sleep(400);float[] p=point(web,id);
         for(int i=0;i<2;i++){long down=SystemClock.uptimeMillis();touch(down,MotionEvent.ACTION_DOWN,p[0],p[1]);Thread.sleep(25);touch(down,MotionEvent.ACTION_UP,p[0],p[1]);if(i==0)Thread.sleep(100);}
     }
@@ -93,7 +94,7 @@ public class BrowserFullscreenTest {
     private void expectFullscreen(MainActivity activity,boolean expected)throws Exception{
         long deadline=SystemClock.uptimeMillis()+10000;
         while(fullscreen(activity)!=expected&&SystemClock.uptimeMillis()<deadline)Thread.sleep(50);
-        String[] details={""};instrumentation.runOnMainSync(()->{try{details[0]=FreeSpaceGesture.diagnostics((WebView)invoke(activity,"activeView",new Class<?>[0]));}catch(Exception error){throw new RuntimeException(error);}});
+        String[] details={""};instrumentation.runOnMainSync(()->{try{details[0]=FreeSpaceGesture.diagnostics((WebView)invoke(activity,"activeView",new Class<?>[0]))+"; custom="+(field(activity,"customView")!=null)+", destroyed="+field(activity,"destroyed");}catch(Exception error){throw new RuntimeException(error);}});
         assertEquals("Browser fullscreen after "+stage+"; "+details[0],expected,fullscreen(activity));
         instrumentation.runOnMainSync(()->{try{
             assertEquals(expected?View.GONE:View.VISIBLE,((View)field(activity,"top")).getVisibility());
@@ -119,11 +120,12 @@ public class BrowserFullscreenTest {
                 web.getWebChromeClient().onShowCustomView(new FrameLayout(activity),()->hidden[0]++);
                 web.getWebChromeClient().onHideCustomView();
             });
+            stage="return from video fullscreen";
             assertEquals(1,hidden[0]);expectFullscreen(activity,true);
             js(web,"history.pushState({},'', '#keep-history');location.href");
             expect(web,"location.hash","#keep-history");
             String url=js(web,"location.href");
-            instrumentation.runOnMainSync(activity::onBackPressed);expectFullscreen(activity,false);
+            stage="back after video fullscreen";instrumentation.runOnMainSync(activity::onBackPressed);expectFullscreen(activity,false);
             assertEquals("Back exits fullscreen before navigating",url,js(web,"location.href"));
             Thread.sleep(350);
             instrumentation.runOnMainSync(()->{
