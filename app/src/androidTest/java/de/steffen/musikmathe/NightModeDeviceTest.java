@@ -60,6 +60,19 @@ public class NightModeDeviceTest {
         if(small!=full)small.recycle();full.recycle();
     }
     private int pixel(WebView web,double x,double y){int[] point={0,0};main(()->{web.getLocationOnScreen(point);point[0]+=(int)(web.getWidth()*x);point[1]+=(int)(web.getHeight()*y);});Bitmap image=instrumentation.getUiAutomation().takeScreenshot();assertNotNull("Rendered screenshot",image);try{return image.getPixel(point[0],point[1]);}finally{image.recycle();}}
+    private void darkPagePainted(WebView web)throws Exception{
+        // JavaScript/configuration callbacks can finish before the compositor paints.
+        CountDownLatch ready=new CountDownLatch(1);
+        main(()->web.postVisualStateCallback(1,new WebView.VisualStateCallback(){@Override public void onComplete(long id){web.postInvalidateOnAnimation();ready.countDown();}}));
+        assertTrue("WebView visual state ready",ready.await(8,TimeUnit.SECONDS));
+        long until=SystemClock.uptimeMillis()+8000;int background;
+        do{
+            background=pixel(web,.5,.6);
+            if(Color.red(background)<150&&Color.green(background)<150&&Color.blue(background)<150)return;
+            Thread.sleep(80);
+        }while(SystemClock.uptimeMillis()<until);
+        fail("Rendered page is dark: "+Integer.toHexString(background));
+    }
     @Test public void nightModeKeepsFormsAndMediaAndPersistsAcrossPrivateAndNormalActivities()throws Exception{
         device.wakeUp();device.executeShellCommand("wm dismiss-keyguard");main(()->{BrowserAppearance.saveNight(instrumentation.getTargetContext(),false);BrowserAppearance.sync(instrumentation.getTargetContext());});
         instrumentation.getTargetContext().getSharedPreferences("browser",0).edit().clear().commit();activity=launch();boolean privateOpen=false;
@@ -80,8 +93,10 @@ public class NightModeDeviceTest {
             toggle();night(true);assertSame("No WebView recreation",original,web());expect(original,"document.getElementById('kept').value","\"keep-this\"");assertEquals("No reload",1,requests.get());assertTrue("Scroll position kept",Integer.parseInt(js(original,"Math.round(scrollY)"))>400);
             if(WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)){
                 expect(original,"matchMedia('(prefers-color-scheme:dark)').matches","true");main(()->assertTrue(WebSettingsCompat.isAlgorithmicDarkeningAllowed(original.getSettings())));
+            }else if(!WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)){
+                expect(original,"getComputedStyle(document.body).backgroundColor","\"rgb(20, 41, 37)\"");
             }
-            Thread.sleep(500);int background=pixel(original,.5,.6);assertTrue("Rendered page is dark: "+Integer.toHexString(background),Color.red(background)<150&&Color.green(background)<150&&Color.blue(background)<150);
+            darkPagePainted(original);
             JSONArray centre=new JSONArray(new JSONArray("["+js(original,"JSON.stringify((function(){var r=document.getElementById('media').getBoundingClientRect();return [(r.left+r.width/2)/innerWidth,(r.top+r.height/2)/innerHeight];})())")+"]").getString(0));
             int red=pixel(original,centre.getDouble(0),centre.getDouble(1));assertTrue("Canvas/media colours stay red: "+Integer.toHexString(red),Color.red(red)>200&&Color.green(red)<60&&Color.blue(red)<60);
             open();scroll("Nachtmodus");assertNotNull("Night checkmark",device.findObject(By.desc("Nachtmodus").checked(true)));device.pressBack();closed();
