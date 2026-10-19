@@ -1,0 +1,5 @@
+<resources>
+    <style name="AppTheme" parent="BaseBrowserTheme">
+        <item name="android:windowLightNavigationBar">@bool/browser_light_bars</item>
+    </style>
+</resources>
