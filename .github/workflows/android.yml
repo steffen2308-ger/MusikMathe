@@ -132,8 +132,8 @@ jobs:
           disable-animations: true
           script: |
             adb logcat -G 16M
-            gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest,de.steffen.musikmathe.BrowserFullscreenTest,de.steffen.musikmathe.VideoDownloadProgressTest,de.steffen.musikmathe.AddressSuggestionsDeviceTest -Pandroid.testInstrumentationRunnerArguments.adblockLive=true
-            adb logcat -d -s AdBlockLiveProbe:I '*:S'
+            gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest,de.steffen.musikmathe.BrowserFullscreenTest,de.steffen.musikmathe.BrowserMenuDeviceTest,de.steffen.musikmathe.VideoDownloadProgressTest,de.steffen.musikmathe.AddressSuggestionsDeviceTest -Pandroid.testInstrumentationRunnerArguments.adblockLive=true
+            adb logcat -d -s AdBlockLiveProbe:I MenuPreview:I '*:S'
       - name: Upload password test results
         if: always()
         uses: actions/upload-artifact@v4

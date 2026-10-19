@@ -161,3 +161,8 @@ Die lokale Startseite zeigt das vorhandene Browser-Icon als großes, blasses Hin
 ## Vollbild bis zum Bildschirmrand (0.4.10)
 
 Browser- und Video-Vollbild nutzen auch die Bildschirmfläche um den Kameraausschnitt. Dafür wird Android ab Version 9 das Zeichnen in diesem Bereich erlaubt; ab Android 11 gilt dies für alle Bildschirmränder. Im Vollbild fügt die App keinen Abstand für den Kameraausschnitt hinzu. Der Abstand für eine eingeblendete Bildschirmtastatur bleibt erhalten. Nach dem Verlassen des Vollbilds werden Browserleisten und ihre Schutzabstände wiederhergestellt.
+
+
+## Übersichtliches Browsermenü (0.4.11)
+
+Das Menü orientiert sich an Chrome: Eine obere Icon-Leiste bietet Vorwärts, Lesezeichen setzen/entfernen, Teilen und Neuladen/Stoppen. Die beschrifteten Einträge darunter erhalten passende Vektor-Icons und werden durch Trennlinien in Tabs, Bibliothek, Seitenwerkzeuge und Schutzfunktionen gegliedert. Desktopwebsite zeigt einen Haken; der Werbeblocker zeigt seinen Ein-/Aus-Status. Einstellungen bleiben am unteren Rand sichtbar, während die Liste auf kleinen Bildschirmen scrollt. Suchmaschine, Browserdaten löschen und die Versionsinformation sind unter Einstellungen erreichbar. Icons besitzen gesprochene Beschriftungen, die Menüzeilen passen sich größerer Schrift an.

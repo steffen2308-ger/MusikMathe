@@ -40,7 +40,6 @@ import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.widget.PopupMenu;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.Switch;
@@ -76,6 +75,7 @@ public class MainActivity extends Activity {
     private FrameLayout root, pages;
     private EditText address;
     private AddressSuggestions addressSuggestions;
+    private BrowserMenu browserMenu;
     private TextView siteState;
     private ProgressBar progress;
     private BrowserIcon back, forward, tabButton, videoButton;
@@ -373,25 +373,29 @@ public class MainActivity extends Activity {
         int value=tab.view==null?100:tab.view.getProgress(); progress.setProgress(value); progress.setVisibility(browserFullscreen?View.GONE:value<100?View.VISIBLE:View.INVISIBLE);
     }
     private void menu() {
-        addressSuggestions.dismiss();
-        PopupMenu popup=new PopupMenu(this,bottom.getChildAt(bottom.getChildCount()-1));
-        String[] actions={"Neuer Tab",store.bookmarked(active().url)?"Lesezeichen entfernen":"Lesezeichen hinzufügen","Lesezeichen","Verlauf","Downloads","Seite teilen","Link kopieren","Auf Seite suchen",active().desktop?"Mobile Ansicht":"Desktopansicht","Suchmaschine","Browserdaten löschen","Über BestBrowser"};
-        for(int i=0;i<actions.length;i++)popup.getMenu().add(0,i,i,actions[i]);
-        popup.getMenu().add(0,15,0,"Videos erkennen und speichern");
-        if(passwords!=null)popup.getMenu().add(0,16,0,"Passwörter");
-        popup.getMenu().add(0,17,0,"Einstellungen");
-        popup.getMenu().add(0,18,0,"Werbeblocker").setCheckable(true).setChecked(adBlockingEnabled);
-        popup.getMenu().add(0,19,0,"VPN");
-        popup.getMenu().add(0,20,0,"Vollbild");
-        popup.getMenu().add(0,12,0,"Neuer privater Tab");
-        popup.getMenu().add(0,13,1,isPrivateMode()?"Zu normalen Tabs":"Zu privaten Tabs");
-        if (isPrivateMode()) {
-            popup.getMenu().add(0,14,2,"Alle privaten Tabs schließen");
-            popup.getMenu().findItem(1).setEnabled(false);
-        }
-        popup.setOnMenuItemClickListener(item -> {
-            Tab tab=active();
-            switch(item.getItemId()) {
+        hideKeyboard();if(browserMenu!=null)browserMenu.dismiss();
+        Tab tab=active();if(tab==null)return;
+        WebView web=tab.view;boolean webpage=Address.isWeb(tab.url),bookmarked=store.bookmarked(tab.url);
+        browserMenu=new BrowserMenu(this,bottom.getChildAt(bottom.getChildCount()-1),this::menuAction)
+            .quick(21,"forward","Vorwärts",web!=null&&web.canGoForward())
+            .quick(1,bookmarked?"star-filled":"star",bookmarked?"Lesezeichen entfernen":"Lesezeichen hinzufügen",webpage&&!isPrivateMode())
+            .quick(5,"share","Seite teilen",webpage)
+            .quick(22,web!=null&&web.getProgress()<100?"stop":"reload",web!=null&&web.getProgress()<100?"Laden stoppen":"Neu laden",web!=null)
+            .item(0,"plus","Neuer Tab")
+            .item(12,"private","Neuer privater Tab")
+            .item(13,"tabs",isPrivateMode()?"Zu normalen Tabs":"Zu privaten Tabs");
+        if(isPrivateMode())browserMenu.item(14,"close","Alle privaten Tabs schließen");
+        browserMenu.divider().item(2,"bookmarks","Lesezeichen").item(3,"history","Verlauf").item(4,"download","Downloads");
+        if(passwords!=null)browserMenu.item(16,"key","Passwörter");
+        browserMenu.item(15,"video","Videos erkennen und speichern")
+            .divider().item(7,"find","Auf Seite suchen").item(6,"copy","Link kopieren")
+            .checked(8,"desktop","Desktopwebsite",tab.desktop).item(20,"fullscreen","Vollbild")
+            .divider().status(18,"shield","Werbeblocker",adBlockingEnabled?"Ein":"Aus").item(19,"vpn","VPN");
+        browserMenu.show();
+    }
+    private void menuAction(int action) {
+        Tab tab=active();if(tab==null)return;
+        switch(action) {
                 case 0: newTab(Address.HOME,true); break;
                 case 1: if(Address.isWeb(tab.url))toast(store.toggleBookmark(tab.url,tab.title)?"Lesezeichen gespeichert":"Lesezeichen entfernt");else toast("Zuerst eine Webseite öffnen.");break;
                 case 2: showLibrary("bookmarks","Lesezeichen");break;
@@ -403,7 +407,7 @@ public class MainActivity extends Activity {
                 case 8: tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: new AlertDialog.Builder(this).setTitle("BestBrowser · 0.4.10").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: new AlertDialog.Builder(this).setTitle("BestBrowser · 0.4.11").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: endPrivate(); break;
@@ -413,8 +417,9 @@ public class MainActivity extends Activity {
                 case 18: showAdBlockingSettings(); break;
                 case 19: showVpn(); break;
                 case 20: setBrowserFullscreen(true); break;
-            } return true;
-        }); popup.show();
+                case 21: if(tab.view!=null&&tab.view.canGoForward())tab.view.goForward();break;
+                case 22: if(tab.view!=null){if(tab.view.getProgress()<100)tab.view.stopLoading();else tab.view.reload();}break;
+        }
     }
     private void showTabs() {
         hideKeyboard(); LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);list.setPadding(dp(8),dp(8),dp(8),dp(8));
@@ -588,7 +593,7 @@ public class MainActivity extends Activity {
         }
     }
     @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(focused&&(browserFullscreen||customView!=null))applyFullscreenUi();}
-    private void goBack(){if(addressSuggestions!=null&&addressSuggestions.dismissIfShowing())return;if(customView!=null){hideFullscreen();return;}if(browserFullscreen){setBrowserFullscreen(false);return;}WebView web=activeView();if(web!=null && web.canGoBack())web.goBack();else if(tabs.size()>1)closeTab(selected);else if(isPrivateMode())endPrivate();else moveTaskToBack(true);}
+    private void goBack(){if(browserMenu!=null&&browserMenu.dismiss())return;if(addressSuggestions!=null&&addressSuggestions.dismissIfShowing())return;if(customView!=null){hideFullscreen();return;}if(browserFullscreen){setBrowserFullscreen(false);return;}WebView web=activeView();if(web!=null && web.canGoBack())web.goBack();else if(tabs.size()>1)closeTab(selected);else if(isPrivateMode())endPrivate();else moveTaskToBack(true);}
     @Override public void onBackPressed(){goBack();}
     private void share(String url){try{startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,url),"Seite teilen"));}catch(ActivityNotFoundException e){toast("Keine passende App verfügbar.");}}
     private void copy(String url){((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Webadresse",url));toast("Link kopiert.");}
@@ -613,16 +618,17 @@ public class MainActivity extends Activity {
         closingPrivate=true;openNormal();finish();
     }
     @Override protected void onSaveInstanceState(Bundle state){state.putBoolean("browser_fullscreen",browserFullscreen);persist();super.onSaveInstanceState(state);}
-    @Override protected void onPause(){if(addressSuggestions!=null)addressSuggestions.dismiss();if(videoDownloads!=null)videoDownloads.pause();if(passwords!=null)passwords.pause();persist();if(store!=null)CookieManager.getInstance().flush();if(activeView()!=null)activeView().onPause();super.onPause();}
+    @Override protected void onPause(){if(browserMenu!=null)browserMenu.dismiss();if(addressSuggestions!=null)addressSuggestions.dismiss();if(videoDownloads!=null)videoDownloads.pause();if(passwords!=null)passwords.pause();persist();if(store!=null)CookieManager.getInstance().flush();if(activeView()!=null)activeView().onPause();super.onPause();}
     @Override protected void onResume(){super.onResume();if(videoDownloads!=null)videoDownloads.resume();if(passwords!=null)passwords.resume();if(store==null)return;if(activeView()!=null)activeView().onResume();if(!isPrivateMode()){
         PrivateSession.cleanIfStopped(this);
         root.postDelayed(() -> { if(!destroyed)PrivateSession.cleanIfStopped(this); },1000);
     }}
+    @Override public void onConfigurationChanged(android.content.res.Configuration configuration){super.onConfigurationChanged(configuration);if(browserMenu!=null)browserMenu.dismiss();}
     @Override public void onTrimMemory(int level){
         super.onTrimMemory(level);if(level>=TRIM_MEMORY_RUNNING_LOW){for(Tab tab:tabs)if(tab!=active() && tab.view!=null){tab.state=new Bundle();tab.view.saveState(tab.state);clearAdBlockScript(tab);tab.view.destroy();tab.view=null;}}
     }
     @Override protected void onDestroy(){
-        destroyed=true;if(addressSuggestions!=null)addressSuggestions.destroy();if(videoDownloads!=null)videoDownloads.dismiss();if(passwords!=null)passwords.destroy();if(videoResolver!=null)videoResolver.cancel();if(videoSearch!=null)videoSearch.dismiss();videoWorker.shutdownNow();cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs){clearAdBlockScript(tab);if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}}super.onDestroy();
+        destroyed=true;if(browserMenu!=null)browserMenu.dismiss();if(addressSuggestions!=null)addressSuggestions.destroy();if(videoDownloads!=null)videoDownloads.dismiss();if(passwords!=null)passwords.destroy();if(videoResolver!=null)videoResolver.cancel();if(videoSearch!=null)videoSearch.dismiss();videoWorker.shutdownNow();cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs){clearAdBlockScript(tab);if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}}super.onDestroy();
         if (isPrivateMode() && !isChangingConfigurations()) {
             VideoDownloadService.cancelAll();
             try { if(Build.VERSION.SDK_INT>=28)PrivateSession.wipe(this); } catch(java.io.IOException ignored) { }
@@ -697,8 +703,8 @@ public class MainActivity extends Activity {
         }).setNegativeButton("Abbrechen",null).show();
     }
     private void settings(){
-        new AlertDialog.Builder(this).setTitle("Einstellungen").setItems(new String[]{"Video-Downloadordner: "+DownloadFolder.label(this),"Suchmaschine","Werbeblocker: "+(adBlockingEnabled?"Ein":"Aus"),"Video-Downloads · Fortschritt und Warteschlange"},(d,which)->{
-            if(which==0){pendingVideo=null;pickDownloadFolder();}else if(which==1)chooseEngine();else if(which==2)showAdBlockingSettings();else showVideoQueue();
+        new AlertDialog.Builder(this).setTitle("Einstellungen").setItems(new String[]{"Video-Downloadordner: "+DownloadFolder.label(this),"Suchmaschine","Werbeblocker: "+(adBlockingEnabled?"Ein":"Aus"),"Video-Downloads · Fortschritt und Warteschlange","Browserdaten löschen","Über BestBrowser"},(d,which)->{
+            if(which==0){pendingVideo=null;pickDownloadFolder();}else if(which==1)chooseEngine();else if(which==2)showAdBlockingSettings();else if(which==3)showVideoQueue();else if(which==4)clearData();else menuAction(11);
         }).setNegativeButton("Schließen",null).show();
     }
     private void showAdBlockingSettings(){
