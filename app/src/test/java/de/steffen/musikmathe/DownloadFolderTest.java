@@ -98,6 +98,7 @@ public class DownloadFolderTest {
         try{
             choose(activity,item);AlertDialog prompt=ShadowAlertDialog.getLatestAlertDialog();prompt.getButton(AlertDialog.BUTTON_POSITIVE).performClick();shadowOf(Looper.getMainLooper()).idle();
             org.robolectric.shadows.ShadowActivity.IntentForResult pick=shadowOf(activity).getNextStartedActivityForResult();assertNotNull("Folder picker should open after confirming the dialog",pick);assertEquals(Intent.ACTION_OPEN_DOCUMENT_TREE,pick.intent.getAction());
+            assertEquals(Intent.ACTION_OPEN_DOCUMENT_TREE,shadowOf(activity).getNextStartedActivity().getAction());
             activity.onActivityResult(pick.requestCode,Activity.RESULT_OK,new Intent().setData(first).addFlags(FLAGS));Intent firstDownload=downloadIntent();
             controller.pause().stop().destroy();controller=Robolectric.buildActivity(MainActivity.class).setup();activity=controller.get();
             choose(activity,item);Intent secondDownload=downloadIntent();assertNull(shadowOf(activity).getNextStartedActivity());assertNotEquals(firstDownload.getStringExtra("destination"),secondDownload.getStringExtra("destination"));
