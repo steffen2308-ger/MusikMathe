@@ -156,3 +156,8 @@ Die Vorschläge werden ausschließlich lokal ermittelt. Tippen löst keine Webse
 ## Dezentes Icon auf der Startseite (0.4.9)
 
 Die lokale Startseite zeigt das vorhandene Browser-Icon als großes, blasses Hintergrundmotiv. Die Deckkraft beträgt 7 Prozent im hellen und 9 Prozent im dunklen Modus. Das Motiv bleibt hinter dem Inhalt und fängt keine Berührungen ab. Es verwendet die bereits enthaltene Android-Bildressource, ohne zusätzliche Netzwerkabfrage.
+
+
+## Vollbild bis zum Bildschirmrand (0.4.10)
+
+Browser- und Video-Vollbild nutzen auch die Bildschirmfläche um den Kameraausschnitt. Dafür wird Android ab Version 9 das Zeichnen in diesem Bereich erlaubt; ab Android 11 gilt dies für alle Bildschirmränder. Im Vollbild fügt die App keinen Abstand für den Kameraausschnitt hinzu. Der Abstand für eine eingeblendete Bildschirmtastatur bleibt erhalten. Nach dem Verlassen des Vollbilds werden Browserleisten und ihre Schutzabstände wiederhergestellt.

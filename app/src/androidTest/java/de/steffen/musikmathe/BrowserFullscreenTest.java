@@ -2,6 +2,11 @@ package de.steffen.musikmathe;
 
 import android.app.Instrumentation;
 import android.content.Intent;
+import android.graphics.Point;
+import android.graphics.Rect;
+import android.view.DisplayCutout;
+import android.view.WindowManager;
+import androidx.test.uiautomator.UiDevice;
 import android.os.Build;
 import android.os.SystemClock;
 import android.view.MotionEvent;
@@ -166,4 +171,58 @@ public class BrowserFullscreenTest {
             assertTrue("Native page scrolling remains usable",Integer.parseInt(js(web,"String(Math.round(scrollY))"))>0);expectFullscreen(activity,false);
         }finally{instrumentation.runOnMainSync(activity::finish);}
     }
+    private String displayState(MainActivity activity,View content)throws Exception{
+        String[] state={""};instrumentation.runOnMainSync(()->{try{
+            Point screen=new Point();activity.getWindowManager().getDefaultDisplay().getRealSize(screen);int[] position=new int[2];content.getLocationOnScreen(position);
+            View root=(View)field(activity,"root");WindowInsets insets=root.getRootWindowInsets();DisplayCutout cutout=insets==null?null:insets.getDisplayCutout();
+            state[0]="screen="+screen+", content="+new Rect(position[0],position[1],position[0]+content.getWidth(),position[1]+content.getHeight())+", padding="+root.getPaddingLeft()+","+root.getPaddingTop()+","+root.getPaddingRight()+","+root.getPaddingBottom()+", cutout="+cutout+", policy="+activity.getWindow().getAttributes().layoutInDisplayCutoutMode;
+        }catch(Exception error){throw new RuntimeException(error);}});return state[0];
+    }
+    private DisplayCutout expectEntireDisplay(MainActivity activity,View content,boolean landscape)throws Exception{
+        long deadline=SystemClock.uptimeMillis()+12000;DisplayCutout[] result={null};boolean[] fills={false};
+        do{
+            instrumentation.runOnMainSync(()->{try{
+                Point screen=new Point();activity.getWindowManager().getDefaultDisplay().getRealSize(screen);int[] position=new int[2];content.getLocationOnScreen(position);
+                View root=(View)field(activity,"root");WindowInsets insets=root.getRootWindowInsets();DisplayCutout cutout=insets==null?null:insets.getDisplayCutout();
+                boolean present=cutout!=null&&(cutout.getSafeInsetTop()>0||cutout.getSafeInsetLeft()>0||cutout.getSafeInsetRight()>0||cutout.getSafeInsetBottom()>0);
+                fills[0]=present&&(landscape?screen.x>screen.y:screen.y>screen.x)&&position[0]==0&&position[1]==0&&content.getWidth()==screen.x&&content.getHeight()==screen.y&&root.getPaddingLeft()==0&&root.getPaddingTop()==0&&root.getPaddingRight()==0&&root.getPaddingBottom()==0;
+                result[0]=cutout;
+            }catch(Exception error){throw new RuntimeException(error);}});
+            if(fills[0])return result[0];Thread.sleep(100);
+        }while(SystemClock.uptimeMillis()<deadline);
+        fail("Content must fill the display around a real emulated cutout: "+displayState(activity,content));return null;
+    }
+    private void expectProtectedChrome(MainActivity activity,DisplayCutout cutout)throws Exception{
+        long deadline=SystemClock.uptimeMillis()+10000;boolean[] protectedChrome={false};
+        do{
+            instrumentation.runOnMainSync(()->{try{
+                View top=(View)field(activity,"top");int[] position=new int[2];top.getLocationOnScreen(position);Point screen=new Point();activity.getWindowManager().getDefaultDisplay().getRealSize(screen);
+                protectedChrome[0]=top.getVisibility()==View.VISIBLE&&position[0]>=cutout.getSafeInsetLeft()&&position[1]>=cutout.getSafeInsetTop()&&position[0]+top.getWidth()<=screen.x-cutout.getSafeInsetRight()&&activity.getWindow().getAttributes().layoutInDisplayCutoutMode==WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
+            }catch(Exception error){throw new RuntimeException(error);}});
+            if(protectedChrome[0])return;Thread.sleep(100);
+        }while(SystemClock.uptimeMillis()<deadline);
+        fail("Browser controls must avoid the cutout after leaving fullscreen: "+displayState(activity,(View)field(activity,"root")));
+    }
+    @Test @SdkSuppress(minSdkVersion=28) public void cameraCutoutAreaIsUsedInBrowserAndVideoAndChromeIsRestored()throws Exception{
+        UiDevice device=UiDevice.getInstance(instrumentation);String overlay="com.android.internal.display.cutout.emulation.tall";
+        String before=device.executeShellCommand("cmd overlay list --user 0");assertTrue("Emulator must provide a camera-cutout overlay",before.contains(overlay));boolean alreadyEnabled=before.contains("[x] "+overlay);
+        MainActivity activity=null;
+        try{
+            device.setOrientationNatural();device.executeShellCommand("cmd overlay enable --user 0 "+overlay);
+            activity=start();MainActivity browser=activity;WebView web=load(browser);
+            doubleTap(web,"blank");expectFullscreen(browser,true);DisplayCutout portrait=expectEntireDisplay(browser,web,false);
+            assertTrue("Portrait cutout at top",portrait.getSafeInsetTop()>0);
+            stage="back with camera cutout";instrumentation.runOnMainSync(browser::onBackPressed);expectFullscreen(browser,false);expectProtectedChrome(browser,portrait);
+            FrameLayout video=new FrameLayout(browser);instrumentation.runOnMainSync(()->web.getWebChromeClient().onShowCustomView(video,()->{}));expectEntireDisplay(browser,video,false);
+            instrumentation.runOnMainSync(()->web.getWebChromeClient().onHideCustomView());expectProtectedChrome(browser,portrait);
+            doubleTap(web,"blank");expectFullscreen(browser,true);device.setOrientationLeft();DisplayCutout side=expectEntireDisplay(browser,web,true);
+            assertTrue("Rotated cutout at side",side.getSafeInsetLeft()>0||side.getSafeInsetRight()>0);
+            instrumentation.runOnMainSync(browser::onBackPressed);expectFullscreen(browser,false);expectProtectedChrome(browser,side);
+        }finally{
+            if(activity!=null){MainActivity browser=activity;instrumentation.runOnMainSync(browser::finish);}
+            if(!alreadyEnabled)device.executeShellCommand("cmd overlay disable --user 0 "+overlay);
+            device.setOrientationNatural();device.unfreezeRotation();
+        }
+    }
+
 }
