@@ -11,6 +11,8 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.uiautomator.By;
 import androidx.test.uiautomator.UiDevice;
 import androidx.test.uiautomator.UiObject2;
+import androidx.test.uiautomator.UiScrollable;
+import androidx.test.uiautomator.UiSelector;
 import androidx.test.uiautomator.Until;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -43,7 +45,6 @@ public class AddressSuggestionsDeviceTest {
     private static WebView web(View view){if(view instanceof WebView)return (WebView)view;if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++){WebView result=web(group.getChildAt(i));if(result!=null)return result;}}return null;}
     private String url(Activity activity){AtomicReference<String> result=new AtomicReference<>();main(()->result.set(web(activity.getWindow().getDecorView()).getUrl()));return result.get();}
     private void await(String reason,BooleanSupplier condition)throws Exception{long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(12);while(System.nanoTime()<end){if(condition.getAsBoolean())return;Thread.sleep(100);}fail(reason);}
-    private int count(List<String> requests,String route){synchronized(requests){int total=0;for(String path:requests)if(path.equals(route))total++;return total;}}
     private void invoke(Activity activity,String name){main(()->{try{java.lang.reflect.Method method=MainActivity.class.getDeclaredMethod(name);method.setAccessible(true);method.invoke(activity);}catch(Exception error){throw new RuntimeException(error);}});}
     @Test public void filtersWithoutLoadingAndOpensExactUrlByTouchOrKeyboard()throws Exception{
         Activity activity=launch();BrowserStore store=new BrowserStore(app);List<String> requests=Collections.synchronizedList(new ArrayList<>());
@@ -60,7 +61,8 @@ public class AddressSuggestionsDeviceTest {
             type("mathe üb");assertTrue("Multiple search terms",device.wait(Until.hasObject(By.text("Meine Matheübungen")),6000));assertTrue("Typing must not make HTTP requests",requests.isEmpty());assertEquals(Address.HOME,url(activity));
             click("Meine Matheübungen");await("Tapped suggestion must preserve query, path case and fragment",()->target.equals(url(activity))&&requests.contains("/Case/Path?x=1&y=2"));
             assertTrue("Page really loaded",device.wait(Until.hasObject(By.text("Selected history page")),6000));
-            type("Case/Path");assertTrue("URL substring suggestion",device.wait(Until.hasObject(By.text(target)),6000));int opened=count(requests,"/Case/Path?x=1&y=2");device.pressDPadDown();device.pressEnter();await("Keyboard-selected history entry",()->target.equals(url(activity))&&count(requests,"/Case/Path?x=1&y=2")>opened);
+            UiObject2 home=device.wait(Until.findObject(By.desc("Startseite")),6000);assertNotNull(home);home.click();await("Home before keyboard navigation",()->Address.HOME.equals(url(activity)));
+            type("Case/Path");assertTrue("URL substring suggestion",device.wait(Until.hasObject(By.text(target)),6000));device.pressDPadDown();device.pressEnter();await("Keyboard-selected history entry; current="+url(activity),()->target.equals(url(activity)));
             String typed=base+"/Case";type(typed);assertTrue("Prefix suggestion is visible",device.wait(Until.hasObject(By.text(target)),6000));device.pressEnter();await("Enter without explicit selection must use typed URL",()->typed.equals(url(activity))&&requests.contains("/Case"));
             await("Typed page finished recording its visit",()->store.read("history").stream().anyMatch(row->row.url.equals(typed)));
             invoke(activity,"clearData");click("Löschen");await("History must be deleted",()->store.read("history").isEmpty());type("mathe");assertTrue("Deleted history must not reappear",device.wait(Until.gone(By.text("Meine Matheübungen")),6000));
@@ -75,7 +77,7 @@ public class AddressSuggestionsDeviceTest {
             assertTrue("Private process visible",device.wait(Until.hasObject(By.descStartsWith("Privater Tab")),12000));
             type("schutztest");assertTrue("Private tab must not expose normal title",device.wait(Until.gone(By.text("Normaler Verlauf Schutztest")),6000));
             assertFalse("Private tab must not expose normal URL",device.hasObject(By.text("https://normal-history.example/")));
-            UiObject2 menu=device.wait(Until.findObject(By.desc("Menü")),6000);assertNotNull(menu);menu.click();click("Alle privaten Tabs schließen");
+            UiObject2 menu=device.wait(Until.findObject(By.desc("Menü")),6000);assertNotNull(menu);menu.click();new UiScrollable(new UiSelector().classNameMatches(".*ListView")).scrollIntoView(new UiSelector().text("Alle privaten Tabs schließen"));click("Alle privaten Tabs schließen");
             assertTrue("Back in normal process",device.wait(Until.gone(By.descStartsWith("Privater Tab")),10000));assertEquals(1,store.read("history").size());
             type("schutztest");assertTrue("Normal history preserved",device.wait(Until.hasObject(By.text("Normaler Verlauf Schutztest")),6000));
         }finally{main(activity::finish);}
