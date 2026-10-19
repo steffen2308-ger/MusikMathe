@@ -5,6 +5,8 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ProviderInfo;
+import android.content.pm.ActivityInfo;
+import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.net.Uri;
@@ -45,7 +47,10 @@ public class DownloadFolderTest {
     private final Uri first=DocumentsContract.buildTreeDocumentUri("folders.test","first"),second=DocumentsContract.buildTreeDocumentUri("folders.test","second");
     private static final int FLAGS=Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION|Intent.FLAG_GRANT_PREFIX_URI_PERMISSION;
     @Before public void setup()throws Exception{
-        app=RuntimeEnvironment.getApplication();new File(app.getFilesDir(),"video-download-folder.json").delete();
+        app=RuntimeEnvironment.getApplication();
+        ResolveInfo picker=new ResolveInfo();picker.activityInfo=new ActivityInfo();picker.activityInfo.name="PickerActivity";picker.activityInfo.packageName="folders.test";picker.activityInfo.exported=true;
+        shadowOf(app.getPackageManager()).addResolveInfoForIntent(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE),picker);
+        new File(app.getFilesDir(),"video-download-folder.json").delete();
         root=Files.createTempDirectory("remembered-folder").toFile();assertTrue(new File(root,"first").mkdir());assertTrue(new File(root,"second").mkdir());
         provider=new TestDocuments(root);ProviderInfo info=new ProviderInfo();info.authority="folders.test";info.exported=true;info.grantUriPermissions=true;info.readPermission=info.writePermission="android.permission.MANAGE_DOCUMENTS";provider.attachInfo(app,info);ShadowContentResolver.registerProviderInternal(info.authority,provider);
     }

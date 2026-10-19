@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
 import android.provider.DocumentsContract;
 import android.util.AtomicFile;
 import org.json.JSONObject;
@@ -31,7 +33,7 @@ final class DownloadFolder {
         context.getContentResolver().takePersistableUriPermission(tree,access);
         String name=DocumentsContract.getTreeDocumentId(tree);
         Uri document=DocumentsContract.buildDocumentUriUsingTree(tree,name);
-        try(Cursor cursor=context.getContentResolver().query(document,new String[]{DocumentsContract.Document.COLUMN_DISPLAY_NAME},null,null,null)){
+        try(Cursor cursor=query(context,document)){
             if(cursor!=null&&cursor.moveToFirst()&&!cursor.isNull(0))name=cursor.getString(0);
         }catch(Exception ignored){}
         byte[] data=new JSONObject().put("uri",tree.toString()).put("label",name).toString().getBytes(StandardCharsets.UTF_8);
@@ -43,7 +45,7 @@ final class DownloadFolder {
         if(tree==null)throw new IOException("Bitte zuerst einen Downloadordner wählen.");
         String name=safeName(requested);Set<String> existing=new HashSet<>();
         Uri children=DocumentsContract.buildChildDocumentsUriUsingTree(tree,DocumentsContract.getTreeDocumentId(tree));
-        try(Cursor cursor=context.getContentResolver().query(children,new String[]{DocumentsContract.Document.COLUMN_DISPLAY_NAME},null,null,null)){
+        try(Cursor cursor=query(context,children)){
             if(cursor==null)throw new IOException("Downloadordner ist nicht erreichbar.");while(cursor.moveToNext())existing.add(cursor.getString(0));
         }
         String unique=name;int dot=name.lastIndexOf('.');String stem=dot>0?name.substring(0,dot):name,extension=dot>0?name.substring(dot):"";
@@ -51,6 +53,11 @@ final class DownloadFolder {
         Uri parent=DocumentsContract.buildDocumentUriUsingTree(tree,DocumentsContract.getTreeDocumentId(tree));
         Uri result=DocumentsContract.createDocument(context.getContentResolver(),parent,mime,unique);
         if(result==null)throw new IOException("Datei kann im Downloadordner nicht angelegt werden.");return result;
+    }
+    private static Cursor query(Context context,Uri uri){
+        String[] columns={DocumentsContract.Document.COLUMN_DISPLAY_NAME};
+        if(Build.VERSION.SDK_INT>=26)return context.getContentResolver().query(uri,columns,(Bundle)null,null);
+        return context.getContentResolver().query(uri,columns,null,null,null);
     }
     static String safeName(String value){
         String name=value==null?"":value.replaceAll("[\\\\/\\p{Cntrl}:*?\"<>|]","_").trim();
