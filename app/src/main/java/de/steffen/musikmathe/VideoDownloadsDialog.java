@@ -29,7 +29,7 @@ final class VideoDownloadsDialog {
         dialog.setOnDismissListener(ignored->handler.removeCallbacks(refresh));
     }
     private static TextView label(Activity activity,LinearLayout parent,int size){
-        TextView text=new TextView(activity);text.setTextSize(size);text.setTextColor(0xff234a43);text.setPadding(0,8,0,8);parent.addView(text,new LinearLayout.LayoutParams(-1,-2));return text;
+        TextView text=new TextView(activity);text.setTextSize(size);text.setTextColor(activity.getColor(R.color.browser_ink));text.setPadding(0,8,0,8);parent.addView(text,new LinearLayout.LayoutParams(-1,-2));return text;
     }
     void show(){
         dialog.show();

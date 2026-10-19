@@ -20,7 +20,7 @@ import java.util.function.IntConsumer;
 
 /** Chrome-style quick actions and a scrollable icon list with a fixed settings entry. */
 final class BrowserMenu {
-    private static final int INK=0xff3c4043, ACCENT=0xff17685f;
+    private final int INK,ACCENT;
     private final Activity activity;
     private final IntConsumer action;
     private final View anchor;
@@ -32,13 +32,13 @@ final class BrowserMenu {
         Entry(int id,String icon,String label,String state,Boolean checked){this.id=id;this.icon=icon;this.label=label;this.state=state;this.checked=checked;}
     }
     BrowserMenu(Activity activity,View anchor,IntConsumer action){
-        this.activity=activity;this.anchor=anchor;this.action=action;
+        this.activity=activity;this.anchor=anchor;this.action=action;INK=activity.getColor(R.color.browser_menu_ink);ACCENT=activity.getColor(R.color.browser_accent);
         panel=new LinearLayout(activity);panel.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable background=new GradientDrawable();background.setColor(0xffffffff);background.setCornerRadius(dp(18));
+        GradientDrawable background=new GradientDrawable();background.setColor(activity.getColor(R.color.browser_surface));background.setCornerRadius(dp(18));
         panel.setBackground(background);panel.setClipToOutline(true);
         quick=new LinearLayout(activity);quick.setPadding(dp(8),dp(4),dp(8),dp(4));
         panel.addView(quick,new LinearLayout.LayoutParams(-1,dp(56)));
-        View line=new View(activity);line.setBackgroundColor(0xffe8eaed);panel.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));
+        View line=new View(activity);line.setBackgroundColor(activity.getColor(R.color.browser_divider));panel.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));
         popup.setContentView(panel);popup.setBackgroundDrawable(background);popup.setElevation(dp(12));
         popup.setFocusable(true);popup.setOutsideTouchable(true);popup.setInputMethodMode(PopupWindow.INPUT_METHOD_NOT_NEEDED);
     }
@@ -86,12 +86,12 @@ final class BrowserMenu {
                 Entry entry=entries.get(position);if(entry.id>=0)return row(entry);
                 LinearLayout gap=new LinearLayout(activity);gap.setGravity(Gravity.CENTER_VERTICAL);gap.setPadding(dp(16),0,dp(16),0);
                 gap.setLayoutParams(new android.widget.AbsListView.LayoutParams(-1,dp(13)));gap.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-                View line=new View(activity);line.setBackgroundColor(0xffe8eaed);gap.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));return gap;
+                View line=new View(activity);line.setBackgroundColor(activity.getColor(R.color.browser_divider));gap.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));return gap;
             }
         });
         list.setOnItemClickListener((parent,view,position,id)->{Entry entry=entries.get(position);if(entry.id>=0)select(entry.id);});
         panel.addView(list,new LinearLayout.LayoutParams(-1,0,1));
-        View line=new View(activity);line.setBackgroundColor(0xffe8eaed);panel.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));
+        View line=new View(activity);line.setBackgroundColor(activity.getColor(R.color.browser_divider));panel.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));
         View settings=row(new Entry(17,"settings","Einstellungen",null,null));settings.setClickable(true);settings.setFocusable(true);
         android.util.TypedValue feedback=new android.util.TypedValue();activity.getTheme().resolveAttribute(android.R.attr.selectableItemBackground,feedback,true);settings.setBackgroundResource(feedback.resourceId);
         settings.setOnClickListener(v->select(17));panel.addView(settings,new LinearLayout.LayoutParams(-1,-2));

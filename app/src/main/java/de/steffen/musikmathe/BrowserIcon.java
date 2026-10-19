@@ -12,13 +12,13 @@ final class BrowserIcon extends View {
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final boolean compact;
     final String kind;
-    int tint = 0xff234a43;
+    int tint;
     int count = 1;
     BrowserIcon(Context context, String kind, String label) {
         this(context, kind, label, false);
     }
     BrowserIcon(Context context, String kind, String label, boolean compact) {
-        super(context); this.kind = kind; this.compact = compact; setContentDescription(label); setFocusable(true); setClickable(true);
+        super(context); tint=context.getColor(R.color.browser_ink); this.kind = kind; this.compact = compact; setContentDescription(label); setFocusable(true); setClickable(true);
         android.util.TypedValue value = new android.util.TypedValue();
         context.getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, value, true);
         setBackgroundResource(value.resourceId);
@@ -29,7 +29,7 @@ final class BrowserIcon extends View {
         // Compact controls retain readable glyphs; leave room above the video for its badge.
         float centerY = compact && kind.equals("video") && count > 0 ? 20 : 24;
         canvas.save(); canvas.translate(getWidth() / 2f - 24 * unit, getHeight() / 2f - centerY * unit); canvas.scale(unit, unit);
-        paint.setColor(isEnabled() ? tint : 0xffb3c5be); paint.setStrokeWidth(2); paint.setStrokeCap(Paint.Cap.ROUND);
+        paint.setColor(isEnabled() ? tint : getContext().getColor(R.color.browser_disabled)); paint.setStrokeWidth(2); paint.setStrokeCap(Paint.Cap.ROUND);
         paint.setStrokeJoin(Paint.Join.ROUND); paint.setStyle(Paint.Style.STROKE);
         switch (kind) {
             case "back": case "forward":
@@ -74,6 +74,8 @@ final class BrowserIcon extends View {
                 canvas.drawCircle(18,21,7,paint);canvas.drawLine(23,26,35,37,paint);canvas.drawLine(30,32,34,28,paint);canvas.drawLine(33,35,37,31,paint);break;
             case "settings":
                 Path gear=new Path();for(int i=0;i<32;i++){double angle=i*Math.PI/16;float radius=(i%4==0||i%4==3)?13:10;float x=24+(float)Math.cos(angle)*radius,y=24+(float)Math.sin(angle)*radius;if(i==0)gear.moveTo(x,y);else gear.lineTo(x,y);}gear.close();canvas.drawPath(gear,paint);canvas.drawCircle(24,24,4,paint);break;
+            case "night":
+                Path moon=new Path();moon.moveTo(29,12);moon.cubicTo(14,10,9,28,21,35);moon.cubicTo(28,39,36,34,37,27);moon.cubicTo(26,32,19,20,29,12);moon.close();canvas.drawPath(moon,paint);break;
             case "close": canvas.drawLine(16,16,32,32,paint);canvas.drawLine(16,32,32,16,paint);break;
             default: canvas.drawCircle(24,24,9,paint); canvas.drawLine(15,24,33,24,paint); canvas.drawOval(new RectF(20,15,28,33),paint); break;
         }

@@ -1,7 +1,7 @@
 package de.steffen.musikmathe;
 
 import android.Manifest;
-import android.app.Activity;
+import androidx.appcompat.app.AppCompatActivity;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
@@ -49,9 +49,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class MainActivity extends Activity {
+public class MainActivity extends AppCompatActivity {
     private static final int FILE_PICK = 10, WEB_PERMISSION = 11, DOWNLOAD_PERMISSION = 12, PICK_DOWNLOAD_FOLDER = 20;
-    private static final int INK = 0xff234a43, PAPER = 0xfff5f7f8;
+    private int ink(){return getColor(R.color.browser_ink);}
     static final class Tab {
         volatile String url;
         String title;
@@ -103,6 +103,7 @@ public class MainActivity extends Activity {
     private boolean isPrivateMode() { return this instanceof PrivateActivity; }
 
     @Override public void onCreate(Bundle saved) {
+        BrowserAppearance.sync(this);
         super.onCreate(saved);
         if (isPrivateMode() && !BrowserApplication.privateReady) {
             new AlertDialog.Builder(this).setMessage("Der getrennte private Browser konnte nicht gestartet werden.").setCancelable(false).setPositiveButton("Schließen", (d,w) -> finish()).show();
@@ -127,7 +128,7 @@ public class MainActivity extends Activity {
     }
     private int dp(float n) { return Math.round(n * getResources().getDisplayMetrics().density); }
     private TextView text(String value, float size) {
-        TextView view = new TextView(this); view.setText(value); view.setTextSize(size); view.setTextColor(INK); return view;
+        TextView view = new TextView(this); view.setText(value); view.setTextSize(size); view.setTextColor(ink()); return view;
     }
     private GradientDrawable rounded(int color, int radius) {
         GradientDrawable drawable = new GradientDrawable(); drawable.setColor(color); drawable.setCornerRadius(dp(radius)); return drawable;
@@ -140,7 +141,7 @@ public class MainActivity extends Activity {
         row.addView(icon, new LinearLayout.LayoutParams(dp(48), dp(height))); icon.setOnClickListener(v -> action.run()); return icon;
     }
     private void buildInterface() {
-        root = new FrameLayout(this); root.setBackgroundColor(isPrivateMode() ? 0xffede5f4 : PAPER);
+        root = new FrameLayout(this); root.setBackgroundColor(getColor(isPrivateMode()?R.color.browser_private_paper:R.color.browser_paper));
         shell = new LinearLayout(this); shell.setOrientation(LinearLayout.VERTICAL);
         root.addView(shell, new FrameLayout.LayoutParams(-1, -1)); setContentView(root);
         if (Build.VERSION.SDK_INT >= 30) {
@@ -150,15 +151,14 @@ public class MainActivity extends Activity {
                 root.setPadding(bars.left, bars.top, bars.right, bars.bottom); return insets;
             });
         }
-        if (Build.VERSION.SDK_INT >= 26) getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         top = new LinearLayout(this); top.setGravity(Gravity.CENTER_VERTICAL); top.setPadding(dp(6), dp(2), dp(6), dp(2));
         shell.addView(top, new LinearLayout.LayoutParams(-1, dp(28)));
-        LinearLayout omnibox = new LinearLayout(this); omnibox.setGravity(Gravity.CENTER_VERTICAL); omnibox.setBackground(rounded(0xffe5eeea, 12));
+        LinearLayout omnibox = new LinearLayout(this); omnibox.setGravity(Gravity.CENTER_VERTICAL); omnibox.setBackground(rounded(getColor(R.color.browser_field), 12));
         top.addView(omnibox, new LinearLayout.LayoutParams(0, dp(24), 1));
         siteState = text("⊕", 18); siteState.setIncludeFontPadding(false); siteState.setGravity(Gravity.CENTER); siteState.setContentDescription("Informationen zur Seite");
         omnibox.addView(siteState, new LinearLayout.LayoutParams(dp(44), -1)); siteState.setOnClickListener(v -> siteInfo());
-        address = new EditText(this); address.setSingleLine(true); address.setSelectAllOnFocus(true); address.setTextSize(16); address.setTextColor(INK);
-        address.setHint("Adresse oder Suche"); address.setHintTextColor(0xff647e75); address.setContentDescription("Adresse oder Suchbegriff"); address.setBackgroundColor(Color.TRANSPARENT);
+        address = new EditText(this); address.setSingleLine(true); address.setSelectAllOnFocus(true); address.setTextSize(16); address.setTextColor(ink());
+        address.setHint("Adresse oder Suche"); address.setHintTextColor(getColor(R.color.browser_hint)); address.setContentDescription("Adresse oder Suchbegriff"); address.setBackgroundColor(Color.TRANSPARENT);
         address.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI); address.setImeOptions(EditorInfo.IME_ACTION_GO | EditorInfo.IME_FLAG_NO_EXTRACT_UI | (isPrivateMode() && Build.VERSION.SDK_INT >= 26 ? EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING : 0));
         address.setMinimumHeight(0); address.setMinHeight(0); address.setIncludeFontPadding(false); address.setGravity(Gravity.CENTER_VERTICAL);
         address.setPadding(0,0,dp(8),0); omnibox.addView(address, new LinearLayout.LayoutParams(0,-1,1));
@@ -176,9 +176,9 @@ public class MainActivity extends Activity {
         });
         BrowserIcon reload = icon(top, "reload", "Neu laden oder Laden stoppen", () -> { WebView w = activeView(); if(w != null) { if(w.getProgress() < 100)w.stopLoading();else w.reload(); } }, 24);
         reload.setOnLongClickListener(v -> { WebView w=activeView();if(w!=null){w.clearCache(false);w.reload();}return true; });
-        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal); progress.setMax(100); progress.setProgressTintList(android.content.res.ColorStateList.valueOf(0xff247e6d));
+        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal); progress.setMax(100); progress.setProgressTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.browser_accent)));
         shell.addView(progress, new LinearLayout.LayoutParams(-1, dp(2))); progress.setVisibility(View.INVISIBLE);
-        pages = new FrameLayout(this); pages.setBackgroundColor(Color.WHITE); shell.addView(pages, new LinearLayout.LayoutParams(-1, 0, 1));
+        pages = new FrameLayout(this); pages.setBackgroundColor(getColor(R.color.browser_page)); shell.addView(pages, new LinearLayout.LayoutParams(-1, 0, 1));
         bottom = new LinearLayout(this); bottom.setGravity(Gravity.CENTER_VERTICAL);
         shell.addView(bottom, new LinearLayout.LayoutParams(-1, dp(25)));
         back = icon(bottom, "back", "Zurück", this::goBack, 25);
@@ -234,6 +234,7 @@ public class MainActivity extends Activity {
     @SuppressWarnings("SetJavaScriptEnabled")
     private WebView createWebView(Tab tab) {
         WebView web=new WebView(this);
+        BrowserWebAppearance.apply(web,BrowserAppearance.night(this));
         web.setSaveEnabled(false);
         if(Build.VERSION.SDK_INT>=26)web.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
         if (isPrivateMode()) {
@@ -283,6 +284,7 @@ public class MainActivity extends Activity {
             @Override public void onPageFinished(WebView view,String url) {
                 tab.url=url; tab.title=view.getTitle()==null?url:view.getTitle();
                 store.visit(url,tab.title); if(active()==tab)updateToolbar(); persist();
+                BrowserWebAppearance.pageFinished(view,BrowserAppearance.night(MainActivity.this));
                 if(passwords!=null)passwords.pageFinished(view);
                 if(adBlockingEnabled)view.evaluateJavascript(AdBlockResources.cosmeticScript(MainActivity.this,adBlockExceptions),null);
                 view.evaluateJavascript(VideoCatalog.HOOKS,null);
@@ -390,7 +392,8 @@ public class MainActivity extends Activity {
         browserMenu.item(15,"video","Videos erkennen und speichern")
             .divider().item(7,"find","Auf Seite suchen").item(6,"copy","Link kopieren")
             .checked(8,"desktop","Desktopwebsite",tab.desktop).item(20,"fullscreen","Vollbild")
-            .divider().status(18,"shield","Werbeblocker",adBlockingEnabled?"Ein":"Aus").item(19,"vpn","VPN");
+            .divider().checked(23,"night","Nachtmodus",BrowserAppearance.night(this))
+            .status(18,"shield","Werbeblocker",adBlockingEnabled?"Ein":"Aus").item(19,"vpn","VPN");
         browserMenu.show();
     }
     private void menuAction(int action) {
@@ -407,7 +410,7 @@ public class MainActivity extends Activity {
                 case 8: tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: new AlertDialog.Builder(this).setTitle("BestBrowser · 0.4.11").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: new AlertDialog.Builder(this).setTitle("BestBrowser · 0.4.12").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: endPrivate(); break;
@@ -417,6 +420,7 @@ public class MainActivity extends Activity {
                 case 18: showAdBlockingSettings(); break;
                 case 19: showVpn(); break;
                 case 20: setBrowserFullscreen(true); break;
+                case 23: setNightMode(!BrowserAppearance.night(this));break;
                 case 21: if(tab.view!=null&&tab.view.canGoForward())tab.view.goForward();break;
                 case 22: if(tab.view!=null){if(tab.view.getProgress()<100)tab.view.stopLoading();else tab.view.reload();}break;
         }
@@ -427,7 +431,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle((isPrivateMode()?"Private Tabs · ":"Tabs · ")+tabs.size()).setView(scroll).setPositiveButton("Neuer Tab",(d,w)->newTab(Address.HOME,true)).setNegativeButton("Fertig",null).create();
         for(int i=0;i<tabs.size();i++) {
             final int index=i; Tab tab=tabs.get(i); LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(12),dp(8),0,dp(8));
-            if(i==selected)row.setBackground(rounded(0xffe5eeea,12));
+            if(i==selected)row.setBackground(rounded(getColor(R.color.browser_field),12));
             TextView label=text((i==selected?"●  ":"")+tab.title+"\n"+(Address.HOME.equals(tab.url)?"Startseite":Address.host(tab.url)),15);label.setMaxLines(3);
             row.addView(label,new LinearLayout.LayoutParams(0,dp(66),1));label.setOnClickListener(v->{dialog.dismiss();switchTab(index);});
             icon(row,"stop","Tab schließen",()->{dialog.dismiss();closeTab(index);if(!closingPrivate)showTabs();});list.addView(row);
@@ -582,12 +586,14 @@ public class MainActivity extends Activity {
         if(Build.VERSION.SDK_INT>=30){
             android.view.WindowInsetsController controller=getWindow().getInsetsController();
             if(controller!=null){
+                int light=android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS|android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+                controller.setSystemBarsAppearance(BrowserAppearance.night(this)?0:light,light);
                 controller.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
                 if(fullscreen)controller.hide(WindowInsets.Type.systemBars());else controller.show(WindowInsets.Type.systemBars());
             }
             root.requestApplyInsets();
         }else{
-            int flags=Build.VERSION.SDK_INT>=26?View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR:View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            int flags=BrowserAppearance.night(this)?0:Build.VERSION.SDK_INT>=26?View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR:View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
             if(fullscreen)flags|=View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
             getWindow().getDecorView().setSystemUiVisibility(flags);
         }
@@ -619,11 +625,11 @@ public class MainActivity extends Activity {
     }
     @Override protected void onSaveInstanceState(Bundle state){state.putBoolean("browser_fullscreen",browserFullscreen);persist();super.onSaveInstanceState(state);}
     @Override protected void onPause(){if(browserMenu!=null)browserMenu.dismiss();if(addressSuggestions!=null)addressSuggestions.dismiss();if(videoDownloads!=null)videoDownloads.pause();if(passwords!=null)passwords.pause();persist();if(store!=null)CookieManager.getInstance().flush();if(activeView()!=null)activeView().onPause();super.onPause();}
-    @Override protected void onResume(){super.onResume();if(videoDownloads!=null)videoDownloads.resume();if(passwords!=null)passwords.resume();if(store==null)return;if(activeView()!=null)activeView().onResume();if(!isPrivateMode()){
+    @Override protected void onResume(){super.onResume();BrowserAppearance.sync(this);applyAppearance();if(videoDownloads!=null)videoDownloads.resume();if(passwords!=null)passwords.resume();if(store==null)return;if(activeView()!=null)activeView().onResume();if(!isPrivateMode()){
         PrivateSession.cleanIfStopped(this);
         root.postDelayed(() -> { if(!destroyed)PrivateSession.cleanIfStopped(this); },1000);
     }}
-    @Override public void onConfigurationChanged(android.content.res.Configuration configuration){super.onConfigurationChanged(configuration);if(browserMenu!=null)browserMenu.dismiss();}
+    @Override public void onConfigurationChanged(android.content.res.Configuration configuration){super.onConfigurationChanged(configuration);if(browserMenu!=null)browserMenu.dismiss();applyAppearance();}
     @Override public void onTrimMemory(int level){
         super.onTrimMemory(level);if(level>=TRIM_MEMORY_RUNNING_LOW){for(Tab tab:tabs)if(tab!=active() && tab.view!=null){tab.state=new Bundle();tab.view.saveState(tab.state);clearAdBlockScript(tab);tab.view.destroy();tab.view=null;}}
     }
@@ -702,19 +708,38 @@ public class MainActivity extends Activity {
             chooseVideoFile(item,original,clip);
         }).setNegativeButton("Abbrechen",null).show();
     }
+    private void setNightMode(boolean enabled){
+        BrowserAppearance.saveNight(this,enabled);BrowserAppearance.sync(this);applyAppearance();
+    }
+    private void tintToolbar(View view){
+        if(view instanceof BrowserIcon){((BrowserIcon)view).tint=ink();view.invalidate();}
+        if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)tintToolbar(group.getChildAt(i));}
+    }
+    private void applyAppearance(){
+        if(root==null)return;
+        root.setBackgroundColor(getColor(isPrivateMode()?R.color.browser_private_paper:R.color.browser_paper));
+        getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(getColor(R.color.browser_surface)));
+        getWindow().setStatusBarColor(getColor(R.color.browser_paper));getWindow().setNavigationBarColor(getColor(R.color.browser_paper));
+        siteState.setTextColor(ink());address.setTextColor(ink());address.setHintTextColor(getColor(R.color.browser_hint));
+        ((View)address.getParent()).setBackground(rounded(getColor(R.color.browser_field),12));
+        pages.setBackgroundColor(getColor(R.color.browser_page));progress.setProgressTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.browser_accent)));
+        tintToolbar(top);tintToolbar(bottom);addressSuggestions.appearanceChanged();
+        for(Tab tab:tabs)if(tab.view!=null){BrowserWebAppearance.apply(tab.view,BrowserAppearance.night(this));BrowserWebAppearance.pageFinished(tab.view,BrowserAppearance.night(this));}
+        applyFullscreenUi();
+    }
     private void settings(){
-        new AlertDialog.Builder(this).setTitle("Einstellungen").setItems(new String[]{"Video-Downloadordner: "+DownloadFolder.label(this),"Suchmaschine","Werbeblocker: "+(adBlockingEnabled?"Ein":"Aus"),"Video-Downloads · Fortschritt und Warteschlange","Browserdaten löschen","Über BestBrowser"},(d,which)->{
-            if(which==0){pendingVideo=null;pickDownloadFolder();}else if(which==1)chooseEngine();else if(which==2)showAdBlockingSettings();else if(which==3)showVideoQueue();else if(which==4)clearData();else menuAction(11);
+        new AlertDialog.Builder(this).setTitle("Einstellungen").setItems(new String[]{"Video-Downloadordner: "+DownloadFolder.label(this),"Suchmaschine","Werbeblocker: "+(adBlockingEnabled?"Ein":"Aus"),"Video-Downloads · Fortschritt und Warteschlange","Browserdaten löschen","Über BestBrowser","Nachtmodus: "+(BrowserAppearance.night(this)?"Ein":"Aus")},(d,which)->{
+            if(which==0){pendingVideo=null;pickDownloadFolder();}else if(which==1)chooseEngine();else if(which==2)showAdBlockingSettings();else if(which==3)showVideoQueue();else if(which==4)clearData();else if(which==5)menuAction(11);else setNightMode(!BrowserAppearance.night(this));
         }).setNegativeButton("Schließen",null).show();
     }
     private void showAdBlockingSettings(){
         LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(24),dp(8),dp(24),dp(8));
-        Switch toggle=new Switch(this);toggle.setText("Werbeblocker");toggle.setTextColor(INK);toggle.setTextSize(16);toggle.setMinHeight(dp(48));toggle.setChecked(adBlockingEnabled);
+        Switch toggle=new Switch(this);toggle.setText("Werbeblocker");toggle.setTextColor(ink());toggle.setTextSize(16);toggle.setMinHeight(dp(48));toggle.setChecked(adBlockingEnabled);
         content.addView(toggle,new LinearLayout.LayoutParams(-1,-2));
         String host=active()==null?"":AdBlocker.host(active().url);
         if(!host.isEmpty()){
             String inherited=AdBlocker.exceptionHost(active().url,adBlockExceptions);final String settingHost=inherited.isEmpty()?host:inherited;
-            Switch site=new Switch(this);site.setText("Auf "+settingHost+" blockieren");site.setTextColor(INK);site.setTextSize(15);site.setMinHeight(dp(48));
+            Switch site=new Switch(this);site.setText("Auf "+settingHost+" blockieren");site.setTextColor(ink());site.setTextSize(15);site.setMinHeight(dp(48));
             site.setChecked(!AdBlocker.excepted(active().url,adBlockExceptions));site.setEnabled(adBlockingEnabled);
             site.setOnCheckedChangeListener((button,enabled)->setAdBlockSiteException(settingHost,!enabled));
             content.addView(site,new LinearLayout.LayoutParams(-1,-2));

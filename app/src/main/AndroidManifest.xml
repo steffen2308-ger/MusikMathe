@@ -21,8 +21,8 @@
     <application android:name=".BrowserApplication" android:label="BestBrowser" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:theme="@style/AppTheme" android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="true" android:hardwareAccelerated="true">
         <service android:name=".VideoDownloadService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name=".PrivateVideoDownloadService" android:exported="false" android:process=":private" android:foregroundServiceType="dataSync" />
-        <activity android:name=".PrivateActivity" android:exported="false" android:process=":private" android:excludeFromRecents="true" android:configChanges="orientation|screenSize|keyboardHidden" android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
+        <activity android:name=".PrivateActivity" android:exported="false" android:process=":private" android:excludeFromRecents="true" android:configChanges="orientation|screenSize|keyboardHidden|uiMode" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize|keyboardHidden|uiMode" android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

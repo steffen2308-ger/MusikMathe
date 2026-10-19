@@ -16,5 +16,6 @@ public final class BrowserApplication extends Application {
                 privateReady = true;
             } catch (Exception error) { privateReady = false; }
         }
+        BrowserAppearance.sync(this);
     }
 }

@@ -166,3 +166,10 @@ Browser- und Video-Vollbild nutzen auch die Bildschirmfläche um den Kameraaussc
 ## Übersichtliches Browsermenü (0.4.11)
 
 Das Menü orientiert sich an Chrome: Eine obere Icon-Leiste bietet Vorwärts, Lesezeichen setzen/entfernen, Teilen und Neuladen/Stoppen. Die beschrifteten Einträge darunter erhalten passende Vektor-Icons und werden durch Trennlinien in Tabs, Bibliothek, Seitenwerkzeuge und Schutzfunktionen gegliedert. Desktopwebsite zeigt einen Haken; der Werbeblocker zeigt seinen Ein-/Aus-Status. Einstellungen bleiben am unteren Rand sichtbar, während die Liste auf kleinen Bildschirmen scrollt. Suchmaschine, Browserdaten löschen und die Versionsinformation sind unter Einstellungen erreichbar. Icons besitzen gesprochene Beschriftungen, die Menüzeilen passen sich größerer Schrift an.
+
+
+## Nachtmodus (0.4.12)
+
+Unter Menü → Nachtmodus lässt sich die dunkle Darstellung ein- und ausschalten; alternativ steht der Schalter unter Einstellungen. Die Auswahl bleibt nach einem Neustart gespeichert und gilt auch für private Tabs. Nur die Darstellungsoption wird gemeinsam gespeichert, keine privaten Seiten oder Verläufe.
+
+Browserleisten, Adressvorschläge, das Icon-Menü, Dialoge und die lokalen Start-/Wikipedia-Seiten erhalten dunkle Flächen und helle Schrift. Offene WebViews bleiben beim Umschalten erhalten: Formulare, Scrollposition und laufende Seiten werden nicht neu geladen. Aktuelle WebViews verwenden den Nachtmodus der Website beziehungsweise die native automatische Abdunklung; Bilder und Videos werden nicht pauschal invertiert. Alte WebViews ohne diese Funktionen erhalten eine einfache dunkle Grunddarstellung für Hintergrund, Text und Formulare; komplexe Webseiten können dort weiterhin helle Teilflächen enthalten.

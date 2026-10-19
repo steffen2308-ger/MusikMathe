@@ -134,7 +134,7 @@ jobs:
           disable-animations: true
           script: |
             adb logcat -G 16M
-            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest,de.steffen.musikmathe.BrowserFullscreenTest,de.steffen.musikmathe.BrowserMenuDeviceTest,de.steffen.musikmathe.VideoDownloadProgressTest,de.steffen.musikmathe.AddressSuggestionsDeviceTest -Pandroid.testInstrumentationRunnerArguments.adblockLive=true
+            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest,de.steffen.musikmathe.BrowserFullscreenTest,de.steffen.musikmathe.BrowserMenuDeviceTest,de.steffen.musikmathe.NightModeDeviceTest,de.steffen.musikmathe.VideoDownloadProgressTest,de.steffen.musikmathe.AddressSuggestionsDeviceTest -Pandroid.testInstrumentationRunnerArguments.adblockLive=true
             bash scripts/cutout-test.sh
       - name: Upload password test results
         if: always()

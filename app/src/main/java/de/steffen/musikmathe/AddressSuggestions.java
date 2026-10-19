@@ -36,7 +36,7 @@ final class AddressSuggestions {
     AddressSuggestions(EditText address,View anchor,BrowserStore store,Consumer<String> navigate){
         this.address=address;this.anchor=anchor;this.store=store;this.navigate=navigate;
         popup=new ListPopupWindow(address.getContext());popup.setAnchorView(anchor);popup.setModal(false);
-        popup.setInputMethodMode(ListPopupWindow.INPUT_METHOD_NEEDED);popup.setBackgroundDrawable(new ColorDrawable(0xfff5f7f8));
+        popup.setInputMethodMode(ListPopupWindow.INPUT_METHOD_NEEDED);popup.setBackgroundDrawable(new ColorDrawable(address.getContext().getColor(R.color.browser_surface)));
         popup.setAdapter(adapter);popup.setOnItemClickListener((parent,view,position,id)->choose(position));
         address.addTextChangedListener(changes);address.setOnFocusChangeListener((view,focused)->{if(focused)refresh();else dismiss();});
     }
@@ -62,6 +62,7 @@ final class AddressSuggestions {
         boolean exists=false;for(BrowserStore.Entry entry:store.read("history"))if(entry.url.equals(url)){exists=true;break;}
         dismiss();if(exists)navigate.accept(url);
     }
+    void appearanceChanged(){dismiss();popup.setBackgroundDrawable(new ColorDrawable(address.getContext().getColor(R.color.browser_surface)));}
     void destroy(){destroyed=true;dismiss();address.removeTextChangedListener(changes);address.setOnFocusChangeListener(null);}
     private final class Rows extends BaseAdapter {
         public int getCount(){return rows.size();}
@@ -72,8 +73,8 @@ final class AddressSuggestions {
             if(recycled instanceof LinearLayout)view=(LinearLayout)recycled;
             else{
                 view=new LinearLayout(address.getContext());view.setOrientation(LinearLayout.VERTICAL);view.setPadding(dp(14),dp(10),dp(14),dp(10));view.setMinimumHeight(dp(60));
-                TextView title=new TextView(address.getContext());title.setTextSize(16);title.setTextColor(0xff234a43);title.setTypeface(null,Typeface.BOLD);title.setSingleLine(true);title.setEllipsize(TextUtils.TruncateAt.END);view.addView(title,new LinearLayout.LayoutParams(-1,-2));
-                TextView url=new TextView(address.getContext());url.setTextSize(13);url.setTextColor(0xff526b63);url.setSingleLine(true);url.setEllipsize(TextUtils.TruncateAt.END);view.addView(url,new LinearLayout.LayoutParams(-1,-2));
+                TextView title=new TextView(address.getContext());title.setTextSize(16);title.setTextColor(address.getContext().getColor(R.color.browser_ink));title.setTypeface(null,Typeface.BOLD);title.setSingleLine(true);title.setEllipsize(TextUtils.TruncateAt.END);view.addView(title,new LinearLayout.LayoutParams(-1,-2));
+                TextView url=new TextView(address.getContext());url.setTextSize(13);url.setTextColor(address.getContext().getColor(R.color.browser_hint));url.setSingleLine(true);url.setEllipsize(TextUtils.TruncateAt.END);view.addView(url,new LinearLayout.LayoutParams(-1,-2));
             }
             BrowserStore.Entry entry=getItem(position);((TextView)view.getChildAt(0)).setText(entry.title);((TextView)view.getChildAt(1)).setText(entry.url);return view;
         }

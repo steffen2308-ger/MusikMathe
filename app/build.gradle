@@ -6,8 +6,8 @@ android {
         applicationId 'de.steffen.musikmathe'
         minSdk 23
         targetSdk 35
-        versionCode 17
-        versionName '0.4.11'
+        versionCode 18
+        versionName '0.4.12'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
     signingConfigs {
@@ -29,6 +29,7 @@ android {
     }
 }
 dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.1'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs_nio:2.1.5'
     implementation 'com.github.teamnewpipe:NewPipeExtractor:v0.26.5'
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
