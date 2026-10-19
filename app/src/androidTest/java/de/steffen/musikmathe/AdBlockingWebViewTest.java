@@ -38,14 +38,17 @@ public class AdBlockingWebViewTest {
         do{actual=js(web,expression);if(expected.equals(actual))return;Thread.sleep(50);}while(System.currentTimeMillis()<deadline);
         assertEquals(expression,expected,actual);
     }
-    private void load(WebView web){
-        String html="<html><body><div id='content'>Useful content</div><div id='static' class='adbox banner_ads adsbox'>Advert</div>"
+    private static String html(){
+        return "<html><body><div id='content'>Useful content</div><div id='static' class='adbox banner_ads adsbox'>Advert</div>"
                 +"<script src='https://publisher.example/widget/ads.js'></script><script>window.control='waiting';window.adFetch='waiting';"
                 +"fetch('https://publisher.example/control',{mode:'no-cors'}).then(function(){window.control='loaded';},function(){window.control='failed';});"
                 +"fetch('https://pixel.doubleclick.net/fakepage.html',{method:'HEAD',mode:'no-cors'}).then(function(){window.adFetch='loaded';},function(){window.adFetch='blocked';});"
                 +"setTimeout(function(){var ad=document.createElement('div');ad.id='dynamic';ad.className='textads';ad.textContent='Advert';document.body.appendChild(ad);},100);"
                 +"</script></body></html>";
-        instrumentation.runOnMainSync(()->{web.stopLoading();web.loadDataWithBaseURL("https://adblock.turtlecute.org/",html,"text/html","UTF-8",null);});
+    }
+    private void load(WebView web){
+        // A real HTTPS document URL avoids provider differences in loadDataWithBaseURL origins.
+        instrumentation.runOnMainSync(()->{web.stopLoading();web.loadUrl("https://adblock.turtlecute.org/__bestbrowser_fixture__");});
     }
     @Test public void blocksFetchScriptsAndDynamicAdsAndHonorsExceptions()throws Exception{
         instrumentation.getTargetContext().getSharedPreferences("browser",0).edit().clear().commit();
@@ -59,6 +62,7 @@ public class AdBlockingWebViewTest {
                     web.setWebViewClient(new WebViewClient(){
                         @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
                             WebResourceResponse denied=real.shouldInterceptRequest(view,request);if(denied!=null)return denied;
+                            if(request.isForMainFrame())return new WebResourceResponse("text/html","UTF-8",new ByteArrayInputStream(html().getBytes(StandardCharsets.UTF_8)));
                             return new WebResourceResponse("application/javascript","UTF-8",new ByteArrayInputStream("window.fixtureAdRan=true;".getBytes(StandardCharsets.UTF_8)));
                         }
                         @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap icon){real.onPageStarted(view,url,icon);}
