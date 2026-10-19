@@ -45,4 +45,6 @@ if __name__ == "__main__":
     data, skipped = compile_rules()
     target = ROOT / "app/src/main/assets/adblock_cosmetic.json"
     target.write_text(json.dumps(data, ensure_ascii=True, separators=(",", ":")) + "\n")
+    (target.parent / "adblock_sources.json").write_text((ROOT / "filters/SOURCES.json").read_text())
+    (target.parent / "third-party-notices.txt").write_text((ROOT / "THIRD_PARTY_NOTICES.md").read_text())
     print(f"Compiled {len(data['generic'])} generic selectors and {len(data['rules'])} site rules; skipped {skipped} unsupported entries.")

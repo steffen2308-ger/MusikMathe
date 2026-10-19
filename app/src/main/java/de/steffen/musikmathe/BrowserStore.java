@@ -90,7 +90,11 @@ final class BrowserStore {
     }
     void adBlockException(String host,boolean excepted){
         if(host.isEmpty())return;
-        Set<String> next=adBlockExceptions();if(excepted)next.add(host);else next.remove(host);
+        Set<String> next=adBlockExceptions();
+        if(excepted){
+            for(String existing:next)if(host.equals(existing)||host.endsWith("."+existing))return;
+            next.removeIf(existing->existing.endsWith("."+host));next.add(host);
+        }else next.remove(host);
         if(privateMode){privateAdBlockExceptions.clear();privateAdBlockExceptions.addAll(next);}
         else prefs.edit().putStringSet("ad_block_exceptions",next).apply();
     }

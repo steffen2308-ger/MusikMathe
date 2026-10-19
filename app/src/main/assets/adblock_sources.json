@@ -1,0 +1,35 @@
+{
+  "retrieved": "2026-10-19",
+  "license": "See individual source licenses below; full GPL-3.0 text in ../LICENSE and APK assets/extractor-license.txt",
+  "hosts": {
+    "name": "HaGeZi's Multi LIGHT",
+    "authors": "HaGeZi and contributors",
+    "license": "GPL-3.0",
+    "url": "https://github.com/hagezi/dns-blocklists/blob/main/wildcard/light-onlydomains.txt",
+    "upstream_blob_sha": "b862bb4886922ddf3ea6b37bc02d4cc287431bd0",
+    "version": "2026.1019.0859.37",
+    "domains": 65249
+  },
+  "cosmetic": {
+    "authors": "The EasyList authors (https://easylist.to/)",
+    "license": "GPL-3.0-or-later (one option of the upstream dual license)",
+    "license_url": "https://easylist.to/pages/licence.html",
+    "repository": "https://github.com/easylist/easylist",
+    "files": [
+      {
+        "path": "easylist/easylist_general_hide.txt",
+        "upstream_blob_sha": "59657a4b55a205d7018ce8fefbcef57e2e53b39b"
+      },
+      {
+        "path": "easylist/easylist_specific_hide.txt",
+        "upstream_blob_sha": "c230abf11972b650a940c47f10501ad1e7e7aecb"
+      },
+      {
+        "path": "easylist/easylist_allowlist_general_hide.txt",
+        "upstream_blob_sha": "71ce6580f0ea9d12d58dd86ba71d1680eb1c7f56"
+      }
+    ],
+    "build": "python3 scripts/compile-adblock.py",
+    "scope": "Native CSS selectors, site domain constraints and selector exceptions. Procedural filters and scriptlets are skipped."
+  }
+}

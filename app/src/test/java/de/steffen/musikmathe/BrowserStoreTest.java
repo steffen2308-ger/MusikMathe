@@ -51,5 +51,12 @@ public class BrowserStoreTest {
         assertEquals(java.util.Collections.singleton("example.org"),new BrowserStore(context).adBlockExceptions());
         assertEquals(java.util.Collections.singleton("example.org"),new BrowserStore(context,true).adBlockExceptions());
     }
+    @Test public void parentSiteExceptionsDoNotLeaveHiddenChildExceptionsBehind(){
+        store.adBlockException("news.example.org",true);store.adBlockException("example.org",true);
+        assertEquals(java.util.Collections.singleton("example.org"),store.adBlockExceptions());
+        store.adBlockException("news.example.org",true);
+        assertEquals(java.util.Collections.singleton("example.org"),store.adBlockExceptions());
+        store.adBlockException("example.org",false);assertTrue(store.adBlockExceptions().isEmpty());
+    }
 }
 
