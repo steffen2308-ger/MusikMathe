@@ -28,7 +28,10 @@ public class PasswordFeatureTest {
     private Context app(){return InstrumentationRegistry.getInstrumentation().getTargetContext();}
     private void main(Runnable run){InstrumentationRegistry.getInstrumentation().runOnMainSync(run);}
     private static WebView find(View v){if(v instanceof WebView)return (WebView)v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=g.getChildCount()-1;i>=0;i--){WebView w=find(g.getChildAt(i));if(w!=null)return w;}}return null;}
-    private String js(WebView web,String script)throws Exception{CountDownLatch done=new CountDownLatch(1);AtomicReference<String> result=new AtomicReference<>();main(()->web.evaluateJavascript(script,value->{result.set(value);done.countDown();}));assertTrue(done.await(8,TimeUnit.SECONDS));return result.get();}
+    private String js(WebView web,String script)throws Exception{CountDownLatch done=new CountDownLatch(1);AtomicReference<String> result=new AtomicReference<>();main(()->web.evaluateJavascript(script,value->{result.set(value);done.countDown();}));if(!done.await(8,TimeUnit.SECONDS)){
+            AtomicReference<String> state=new AtomicReference<>();main(()->state.set("attached="+web.isAttachedToWindow()+", visible="+web.getVisibility()+", url="+web.getUrl()+", activityDestroyed="+(web.getContext() instanceof Activity&&((Activity)web.getContext()).isDestroyed())));
+            fail("WebView script callback timed out: "+state.get());
+        }return result.get();}
     private Activity launch()throws Exception{UiDevice device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());device.wakeUp();device.executeShellCommand("wm dismiss-keyguard");return InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(app(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));}
     private WebView view(Activity a){AtomicReference<WebView> web=new AtomicReference<>();main(()->web.set(find(a.getWindow().getDecorView())));assertNotNull(web.get());return web.get();}
     private void page(WebView web,String host)throws Exception{

@@ -205,6 +205,7 @@ public class BrowserFullscreenTest {
     }
     @Test @SdkSuppress(minSdkVersion=28) public void cameraCutoutAreaIsUsedInBrowserAndVideoAndChromeIsRestored()throws Exception{
         UiDevice device=UiDevice.getInstance(instrumentation);String overlay="com.android.internal.display.cutout.emulation.tall";
+        android.content.res.Resources resources=instrumentation.getTargetContext().getResources();int cutoutResource=resources.getIdentifier("config_mainBuiltInDisplayCutout","string","android");String originalCutout=cutoutResource==0?null:resources.getString(cutoutResource);
         String before=device.executeShellCommand("cmd overlay list --user 0");assertTrue("Emulator must provide a camera-cutout overlay",before.contains(overlay));boolean alreadyEnabled=before.contains("[x] "+overlay);
         MainActivity activity=null;
         try{
@@ -219,9 +220,19 @@ public class BrowserFullscreenTest {
             assertTrue("Rotated cutout at side",side.getSafeInsetLeft()>0||side.getSafeInsetRight()>0);
             instrumentation.runOnMainSync(browser::onBackPressed);expectFullscreen(browser,false);expectProtectedChrome(browser,side);
         }finally{
-            if(activity!=null){MainActivity browser=activity;instrumentation.runOnMainSync(browser::finish);}
-            if(!alreadyEnabled)device.executeShellCommand("cmd overlay disable --user 0 "+overlay);
-            device.setOrientationNatural();device.unfreezeRotation();
+            try{
+                device.setOrientationNatural();
+                if(!alreadyEnabled)device.executeShellCommand("cmd overlay disable --user 0 "+overlay);
+                device.unfreezeRotation();
+                // Deliver overlay/rotation changes before the next test launches an activity.
+                long restoreDeadline=SystemClock.uptimeMillis()+8000;
+                while(originalCutout!=null&&!originalCutout.equals(resources.getString(cutoutResource))&&SystemClock.uptimeMillis()<restoreDeadline)Thread.sleep(100);
+                if(originalCutout!=null)assertEquals("Original cutout resources restored",originalCutout,resources.getString(cutoutResource));
+                device.waitForIdle();instrumentation.waitForIdleSync();Thread.sleep(500);instrumentation.waitForIdleSync();
+            }finally{
+                if(activity!=null){MainActivity browser=activity;instrumentation.runOnMainSync(browser::finish);}
+                instrumentation.waitForIdleSync();
+            }
         }
     }
 
