@@ -36,7 +36,7 @@ public class VideoDownloadProgressTest {
         Intent intent=new Intent(app,VideoDownloadService.class).putExtra("url","http://127.0.0.1:"+port+"/"+name).putExtra("type","MP4").putExtra("headers","{}").putExtra("title",name+".mp4").putExtra("original",true).putExtra("destination",uri(name).toString());
         if(Build.VERSION.SDK_INT>=26)app.startForegroundService(intent);else app.startService(intent);
     }
-    private void click(UiDevice device,String label){UiObject2 item=device.wait(Until.findObject(By.text(label)),6000);assertNotNull(label,item);item.click();}
+    private void click(UiDevice device,String label){UiObject2 item=device.wait(Until.findObject(By.text(java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(label),java.util.regex.Pattern.CASE_INSENSITIVE|java.util.regex.Pattern.UNICODE_CASE))),6000);assertNotNull(label,item);item.click();}
     @Test public void settingsShowLiveKnownAndUnknownSizeAndKeepCancelResultsVisible()throws Exception{
         UiDevice device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());device.wakeUp();device.executeShellCommand("wm dismiss-keyguard");
         Activity activity=InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(app,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));

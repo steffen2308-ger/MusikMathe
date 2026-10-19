@@ -59,7 +59,7 @@ public class BrowserFullscreenTest {
         WebView[] holder={null};instrumentation.runOnMainSync(()->{
             try{
                 holder[0]=(WebView)invoke(activity,"activeView",new Class<?>[0]);
-                String html="<html><head><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{margin:0;min-height:300vh}#blank{height:210px;background:#eef}button,input,a,p{display:block;height:44px;margin:4px;width:200px}#text{font-size:16px}</style></head><body><div id='blank'></div><button id='button' onclick='window.clicks++'>Button</button><input id='input'><a id='link' href='#destination'>Link</a><p id='text'>Selectable text</p><div id='destination'></div><script>window.clicks=0;window.fixtureReady=true;</script></body></html>";
+                String html="<html><head><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{margin:0;min-height:300vh}#blank{height:210px;background:#eef}button,input,a,p{display:block;height:44px;margin:4px;width:200px}#text{font-size:16px}</style></head><body><div id='blank'></div><button id='button' onclick='window.clicks++'>Button</button><input id='input' inputmode='none'><a id='link' href='#destination'>Link</a><p id='text'>Selectable text</p><div id='destination'></div><script>window.clicks=0;window.fixtureReady=true;</script></body></html>";
                 WebViewClient original=holder[0].getWebViewClient();
                 holder[0].setWebViewClient(new WebViewClient(){
                     @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
@@ -150,6 +150,7 @@ public class BrowserFullscreenTest {
         try{
             WebView web=load(activity);
             doubleTap(web,"button");expect(web,"String(window.clicks)","2");expectFullscreen(activity,false);
+            // Keep the IME from moving the fixture between the two taps; focus is still tested.
             doubleTap(web,"input");expect(web,"document.activeElement.id","input");expectFullscreen(activity,false);
             js(web,"document.activeElement.blur();'ok'");
             instrumentation.runOnMainSync(()->{try{invoke(activity,"hideKeyboard",new Class<?>[0]);}catch(Exception error){throw new RuntimeException(error);}});Thread.sleep(350);
