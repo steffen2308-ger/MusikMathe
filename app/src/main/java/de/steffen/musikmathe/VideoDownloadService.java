@@ -132,11 +132,14 @@ public class VideoDownloadService extends Service {
     }
     private void copyResult(Job job)throws Exception{
         if(job.cancelled)throw new InterruptedException();main.post(()->update(job,-1,"Video wird im gewählten Ordner gespeichert …"));
-        try(InputStream input=new FileInputStream(job.temporary);OutputStream output=getContentResolver().openOutputStream(job.destination,"w")){
+        try(OutputStream output=openResult(job);InputStream input=new FileInputStream(job.temporary)){
             if(output==null)throw new java.io.IOException("Zieldatei kann nicht geöffnet werden.");byte[] buffer=new byte[128*1024];int count;
             while((count=input.read(buffer))!=-1){if(job.cancelled)throw new InterruptedException();output.write(buffer,0,count);}
         }
         if(job.cancelled)throw new InterruptedException();main.post(()->finish(job,true,"Video gespeichert."));
+    }
+    private OutputStream openResult(Job job)throws Exception{
+        synchronized(job){if(job.cancelled)throw new InterruptedException();return getContentResolver().openOutputStream(job.destination,"w");}
     }
     private void update(Job job,int value,String message){
         if(!isActive(job)||(percent==value&&progressText.equals(message)))return;percent=value;progressText=message;publish(false);
@@ -157,8 +160,8 @@ public class VideoDownloadService extends Service {
     }
     private void finish(Job job,boolean success,String message){
         if(active!=job||destroyed)return;
-        job.cancelled=true;if(job.exporter!=null)job.exporter.cancel();
-        if(!success)deleteDocument(job.destination);release(job.destination);
+        synchronized(job){job.cancelled=true;if(!success)deleteDocument(job.destination);}
+        if(job.exporter!=null)job.exporter.cancel();release(job.destination);
         if(job.temporary!=null)job.temporary.delete();active=null;status=message;
         Toast.makeText(this,message,Toast.LENGTH_LONG).show();next();
     }
@@ -171,7 +174,7 @@ public class VideoDownloadService extends Service {
     @Override public void onTimeout(int startId,int fgsType){clearAll();}
     @Override public void onDestroy(){
         destroyed=true;for(Job job:waiting)discard(job.destination);waiting.clear();
-        if(active!=null){active.cancelled=true;if(active.exporter!=null)active.exporter.cancel();discard(active.destination);if(active.temporary!=null)active.temporary.delete();active=null;}
+        if(active!=null){synchronized(active){active.cancelled=true;discard(active.destination);}if(active.exporter!=null)active.exporter.cancel();if(active.temporary!=null)active.temporary.delete();active=null;}
         if(current==this)current=null;worker.shutdownNow();super.onDestroy();
     }
 }

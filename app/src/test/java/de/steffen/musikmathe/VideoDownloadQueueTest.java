@@ -83,8 +83,8 @@ public class VideoDownloadQueueTest {
         assertEquals(4,VideoDownloadService.queueLabels().size());assertTrue(VideoDownloadService.status.contains("3 in Warteschlange"));assertEquals(1,requests.size());
         releaseFirst.countDown();await(()->!VideoDownloadService.busy());
         assertEquals(java.util.Arrays.asList("/first","/bad","/second","/third"),requests);
-        assertEquals("video-data:/first",Files.readString(new File(folder,"one.mp4").toPath()));assertFalse(new File(folder,"bad.mp4").exists());
-        assertEquals("video-data:/second",Files.readString(new File(folder,"two.mp4").toPath()));assertEquals("video-data:/third",Files.readString(new File(folder,"three.mp4").toPath()));
+        assertEquals("video-data:/first",new String(Files.readAllBytes(new File(folder,"one.mp4").toPath()),StandardCharsets.UTF_8));assertFalse(new File(folder,"bad.mp4").exists());
+        assertEquals("video-data:/second",new String(Files.readAllBytes(new File(folder,"two.mp4").toPath()),StandardCharsets.UTF_8));assertEquals("video-data:/third",new String(Files.readAllBytes(new File(folder,"three.mp4").toPath()),StandardCharsets.UTF_8));
     }
     @Test public void cancellationSkipsCurrentAndClearAllDeletesWaitingTargets()throws Exception{
         holdSecond=true;enqueue("/first","one.mp4");await(()->requests.size()==1);enqueue("/second","two.mp4");enqueue("/third","three.mp4");
@@ -92,7 +92,7 @@ public class VideoDownloadQueueTest {
         releaseFirst.countDown();await(()->requests.contains("/second"));assertEquals(2,VideoDownloadService.queueLabels().size());
         VideoDownloadService.cancelAll();assertFalse(VideoDownloadService.busy());assertFalse(new File(folder,"two.mp4").exists());assertFalse(new File(folder,"three.mp4").exists());
         releaseSecond.countDown();enqueue("/fourth","four.mp4");await(()->!VideoDownloadService.busy());
-        assertEquals(java.util.Arrays.asList("/first","/second","/fourth"),requests);assertEquals("video-data:/fourth",Files.readString(new File(folder,"four.mp4").toPath()));
+        assertEquals(java.util.Arrays.asList("/first","/second","/fourth"),requests);assertEquals("video-data:/fourth",new String(Files.readAllBytes(new File(folder,"four.mp4").toPath()),StandardCharsets.UTF_8));
         File temporary=new File(service.getCacheDir(),"video-export");assertTrue(temporary.listFiles()==null||temporary.listFiles().length==0);
     }
     public static final class TestDocuments extends DocumentsProvider {
