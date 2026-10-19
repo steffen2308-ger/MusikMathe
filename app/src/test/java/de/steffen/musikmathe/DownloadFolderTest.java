@@ -69,6 +69,11 @@ public class DownloadFolderTest {
         try(OutputStream output=app.getContentResolver().openOutputStream(two)){output.write(42);}
         assertTrue("Changing folder must retain access for queued files",app.getContentResolver().getPersistedUriPermissions().stream().anyMatch(p->p.getUri().equals(first)&&p.isWritePermission()));
     }
+    @Test @Config(sdk=23) public void directorySelectionAlsoWorksOnAndroid6()throws Exception{
+        DownloadFolder.remember(app,first,FLAGS);assertEquals(first,DownloadFolder.selected(app));
+        assertNotNull(DownloadFolder.create(app,DownloadFolder.selected(app),"video/mp4","Android6.mp4"));
+        assertTrue(new File(root,"first/Android6.mp4").exists());
+    }
     @Test public void inaccessibleFolderFailsAndRejectedChoiceRetainsPreviousFolder()throws Exception{
         DownloadFolder.remember(app,first,FLAGS);
         assertThrows(Exception.class,()->DownloadFolder.remember(app,second,Intent.FLAG_GRANT_READ_URI_PERMISSION));assertEquals(first,DownloadFolder.selected(app));

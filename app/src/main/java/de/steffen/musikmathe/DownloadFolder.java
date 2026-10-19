@@ -22,13 +22,18 @@ final class DownloadFolder {
     private static JSONObject read(Context context){
         try{return new JSONObject(new String(file(context).readFully(),StandardCharsets.UTF_8));}catch(Exception ignored){return new JSONObject();}
     }
+    static boolean isTree(Uri uri){
+        if(uri==null)return false;
+        if(Build.VERSION.SDK_INT>=24)return DocumentsContract.isTreeUri(uri);
+        java.util.List<String> parts=uri.getPathSegments();return parts.size()>=2&&"tree".equals(parts.get(0));
+    }
     static Uri selected(Context context){
         String value=read(context).optString("uri");if(value.isEmpty())return null;
-        try{Uri uri=Uri.parse(value);return "content".equals(uri.getScheme())&&DocumentsContract.isTreeUri(uri)?uri:null;}catch(Exception ignored){return null;}
+        try{Uri uri=Uri.parse(value);return "content".equals(uri.getScheme())&&isTree(uri)?uri:null;}catch(Exception ignored){return null;}
     }
     static String label(Context context){return read(context).optString("label","Noch nicht gewählt");}
     static void remember(Context context,Uri tree,int flags)throws Exception{
-        if(tree==null||!"content".equals(tree.getScheme())||!DocumentsContract.isTreeUri(tree)||(flags&Intent.FLAG_GRANT_WRITE_URI_PERMISSION)==0||(flags&Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)==0)throw new IOException("Der Ordner erlaubt keinen dauerhaften Schreibzugriff.");
+        if(tree==null||!"content".equals(tree.getScheme())||!isTree(tree)||(flags&Intent.FLAG_GRANT_WRITE_URI_PERMISSION)==0||(flags&Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)==0)throw new IOException("Der Ordner erlaubt keinen dauerhaften Schreibzugriff.");
         int access=flags&(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
         context.getContentResolver().takePersistableUriPermission(tree,access);
         String name=DocumentsContract.getTreeDocumentId(tree);
