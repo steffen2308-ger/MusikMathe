@@ -96,8 +96,8 @@ public class DownloadFolderTest {
         VideoCatalog catalog=new VideoCatalog();catalog.add("https://example.org/movie.mp4","video/mp4",Collections.emptyMap());VideoCatalog.Item item=catalog.list().get(0);
         ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity activity=controller.get();
         try{
-            choose(activity,item);AlertDialog prompt=ShadowAlertDialog.getLatestAlertDialog();prompt.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
-            org.robolectric.shadows.ShadowActivity.IntentForResult pick=shadowOf(activity).getNextStartedActivityForResult();assertEquals(Intent.ACTION_OPEN_DOCUMENT_TREE,pick.intent.getAction());
+            choose(activity,item);AlertDialog prompt=ShadowAlertDialog.getLatestAlertDialog();prompt.getButton(AlertDialog.BUTTON_POSITIVE).performClick();shadowOf(Looper.getMainLooper()).idle();
+            org.robolectric.shadows.ShadowActivity.IntentForResult pick=shadowOf(activity).getNextStartedActivityForResult();assertNotNull("Folder picker should open after confirming the dialog",pick);assertEquals(Intent.ACTION_OPEN_DOCUMENT_TREE,pick.intent.getAction());
             activity.onActivityResult(pick.requestCode,Activity.RESULT_OK,new Intent().setData(first).addFlags(FLAGS));Intent firstDownload=downloadIntent();
             controller.pause().stop().destroy();controller=Robolectric.buildActivity(MainActivity.class).setup();activity=controller.get();
             choose(activity,item);Intent secondDownload=downloadIntent();assertNull(shadowOf(activity).getNextStartedActivity());assertNotEquals(firstDownload.getStringExtra("destination"),secondDownload.getStringExtra("destination"));
