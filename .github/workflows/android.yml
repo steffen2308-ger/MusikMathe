@@ -129,7 +129,9 @@ jobs:
           arch: x86_64
           target: default
           disable-animations: true
-          script: gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest
+          script: |
+            gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest -Pandroid.testInstrumentationRunnerArguments.adblockLive=true
+            adb shell run-as de.steffen.musikmathe cat files/adblock-live-probe.json
       - name: Upload password test results
         if: always()
         uses: actions/upload-artifact@v4
