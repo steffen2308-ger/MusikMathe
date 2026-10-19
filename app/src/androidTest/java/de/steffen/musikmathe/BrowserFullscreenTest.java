@@ -93,7 +93,8 @@ public class BrowserFullscreenTest {
     private void expectFullscreen(MainActivity activity,boolean expected)throws Exception{
         long deadline=SystemClock.uptimeMillis()+10000;
         while(fullscreen(activity)!=expected&&SystemClock.uptimeMillis()<deadline)Thread.sleep(50);
-        assertEquals("Browser fullscreen after "+stage,expected,fullscreen(activity));
+        String[] details={""};instrumentation.runOnMainSync(()->{try{details[0]=FreeSpaceGesture.diagnostics((WebView)invoke(activity,"activeView",new Class<?>[0]));}catch(Exception error){throw new RuntimeException(error);}});
+        assertEquals("Browser fullscreen after "+stage+"; "+details[0],expected,fullscreen(activity));
         instrumentation.runOnMainSync(()->{try{
             assertEquals(expected?View.GONE:View.VISIBLE,((View)field(activity,"top")).getVisibility());
             assertEquals(expected?View.GONE:View.VISIBLE,((View)field(activity,"bottom")).getVisibility());
