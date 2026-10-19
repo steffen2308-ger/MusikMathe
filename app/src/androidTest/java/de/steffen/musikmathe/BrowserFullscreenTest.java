@@ -75,7 +75,7 @@ public class BrowserFullscreenTest {
         expect(holder[0],"String(window.fixtureReady)","true");Thread.sleep(250);return holder[0];
     }
     private float[] point(WebView web,String id)throws Exception{
-        JSONArray fraction=new JSONArray(js(web,"JSON.stringify((function(){var e=document.getElementById('"+id+"'),r=e.getBoundingClientRect();if(e.id==='text'){var range=document.createRange();range.selectNodeContents(e);r=range.getBoundingClientRect();}return [(r.left+Math.min(r.width/2,30))/innerWidth,(r.top+r.height/2)/innerHeight];})())"));
+        JSONArray fraction=new JSONArray(js(web,"JSON.stringify((function(){var e=document.getElementById('"+id+"'),r=e.getBoundingClientRect();if(e.id==='text'){var range=document.createRange();range.selectNodeContents(e);r=range.getBoundingClientRect();}var v=window.visualViewport||{width:innerWidth,height:innerHeight,offsetLeft:0,offsetTop:0};return [(r.left+Math.min(r.width/2,30)-v.offsetLeft)/v.width,(r.top+r.height/2-v.offsetTop)/v.height];})())"));
         float[] point={0,0};instrumentation.runOnMainSync(()->{int[] location=new int[2];web.getLocationOnScreen(location);point[0]=location[0]+web.getWidth()*(float)fraction.optDouble(0);point[1]=location[1]+web.getHeight()*(float)fraction.optDouble(1);});return point;
     }
     private void touch(long down,int action,float x,float y){
