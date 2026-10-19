@@ -151,3 +151,8 @@ Links, Schaltflächen, Formulare, Medien, Text und andere erkennbare Bedieneleme
 Beim Tippen in die Adressleiste erscheinen bis zu acht passende besuchte Seiten mit Titel und genauer Webadresse. Der Abgleich berücksichtigt Adresse und Seitentitel ohne Unterscheidung von Groß- und Kleinschreibung sowie mehrere Suchwörter. Adressanfänge stehen vor anderen Treffern; innerhalb einer Treffergruppe stehen zuletzt besuchte Seiten oben. Antippen öffnet die gespeicherte Adresse. Bei angeschlossener Tastatur wählen die Pfeiltasten einen Vorschlag, Enter öffnet ihn. Ohne ausgewählten Vorschlag öffnet Enter die eingegebene Adresse beziehungsweise die gewählte Suchmaschine.
 
 Die Vorschläge werden ausschließlich lokal ermittelt. Tippen löst keine Webseitenaufrufe oder Abfragen bei einem Vorschlagsdienst aus. Leere Eingaben zeigen keine Vorschläge. Gelöschte Verlaufseinträge werden nicht weiter angeboten. Private Tabs lesen keinen normalen Verlauf und legen weiterhin keinen eigenen Verlauf an; dort erscheinen daher keine Verlaufsvorschläge.
+
+
+## Dezentes Icon auf der Startseite (0.4.9)
+
+Die lokale Startseite zeigt das vorhandene Browser-Icon als großes, blasses Hintergrundmotiv. Die Deckkraft beträgt 7 Prozent im hellen und 9 Prozent im dunklen Modus. Das Motiv bleibt hinter dem Inhalt und fängt keine Berührungen ab. Es verwendet die bereits enthaltene Android-Bildressource, ohne zusätzliche Netzwerkabfrage.
