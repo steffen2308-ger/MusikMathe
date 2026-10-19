@@ -36,7 +36,8 @@ public class BrowserMenuDeviceTest {
     private int openings;
     private UiObject2 text(String label){stage="menu #"+openings+" text "+label;UiObject2 item=device.wait(Until.findObject(By.text(label)),6000);assertNotNull(label,item);return item;}
     private UiObject2 description(String label){stage="menu #"+openings+" description "+label;UiObject2 item=device.wait(Until.findObject(By.desc(label)),6000);assertNotNull(label,item);return item;}
-    private void open(){openings++;description("Menü").click();text("Neuer Tab");text("Einstellungen");}
+    private void open(){openings++;description("Menü").click();text("Neuer Tab");text("Einstellungen");device.waitForIdle();instrumentation.waitForIdleSync();}
+    private void closed(){assertTrue("Action closes the native menu",device.wait(Until.gone(By.clazz("android.widget.ListView").hasDescendant(By.text("Neuer Tab"))),6000));instrumentation.waitForIdleSync();}
     private void scroll(String label)throws Exception{assertTrue("Scroll to "+label,new UiScrollable(new UiSelector().className("android.widget.ListView")).scrollIntoView(new UiSelector().text(label)));}
     private WebView web(MainActivity activity)throws Exception{Method method=MainActivity.class.getDeclaredMethod("activeView");method.setAccessible(true);return (WebView)method.invoke(activity);}
     private void preview(String name){
@@ -54,7 +55,7 @@ public class BrowserMenuDeviceTest {
         try{
             WebView[] holder={null};instrumentation.runOnMainSync(()->{try{holder[0]=web(activity);}catch(Exception e){throw new RuntimeException(e);}});
             open();assertFalse("Home bookmark is disabled",description("Lesezeichen hinzufügen").isEnabled());assertFalse("Home sharing is disabled",description("Seite teilen").isEnabled());preview("top");
-            device.pressBack();assertTrue("Back closes the native menu",device.wait(Until.gone(By.clazz("android.widget.ListView").hasDescendant(By.text("Neuer Tab"))),6000));
+            device.pressBack();closed();
             String url="https://menu.example/page";CountDownLatch loaded=new CountDownLatch(1);
             instrumentation.runOnMainSync(()->{
                 WebViewClient original=holder[0].getWebViewClient();
@@ -69,9 +70,9 @@ public class BrowserMenuDeviceTest {
                 });holder[0].loadUrl(url);
             });
             assertTrue("Fixture loaded",loaded.await(12,TimeUnit.SECONDS));
-            open();assertTrue("Website sharing is enabled",description("Seite teilen").isEnabled());description("Lesezeichen hinzufügen").click();
+            open();assertTrue("Website sharing is enabled",description("Seite teilen").isEnabled());description("Lesezeichen hinzufügen").click();closed();
             assertTrue("Bookmark stored after clicking the quick action",new BrowserStore(instrumentation.getTargetContext()).bookmarked(url));
-            open();description("Lesezeichen entfernen");scroll("Desktopwebsite");text("Desktopwebsite").click();
+            open();description("Lesezeichen entfernen");scroll("Desktopwebsite");text("Desktopwebsite").click();closed();
             instrumentation.runOnMainSync(()->assertTrue(holder[0].getSettings().getUserAgentString().contains("X11; Linux x86_64")));
             open();scroll("Desktopwebsite");assertNotNull("Desktop checkbox accessible state",device.findObject(By.desc("Desktopwebsite").checked(true)));
             scroll("VPN");text("Werbeblocker");text("Ein");preview("tools");
