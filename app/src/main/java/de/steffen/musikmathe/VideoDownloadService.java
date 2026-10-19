@@ -26,9 +26,11 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -47,6 +49,7 @@ public class VideoDownloadService extends Service {
     private String progressText="";
     private static final int NOTIFICATION=310;
     private static final class Job {
+        final String id=UUID.randomUUID().toString();
         final Uri destination;
         final String url,type,audio,title;
         final boolean original;
@@ -65,19 +68,24 @@ public class VideoDownloadService extends Service {
         }
     }
     static final String SHOW_DOWNLOADS="de.steffen.musikmathe.SHOW_VIDEO_DOWNLOADS";
+    /** Opaque identity and display title only; never exposes a URL or destination. */
+    static final class QueuedVideo {
+        final String id,title;
+        QueuedVideo(Job job){id=job.id;title=job.title;}
+    }
     static final class Snapshot {
         final boolean running;
         final String title,message;
         final VideoProgress.Reading progress;
-        final List<String> waiting;
-        Snapshot(boolean running,String title,String message,VideoProgress.Reading progress,List<String> waiting){
+        final List<QueuedVideo> waiting;
+        Snapshot(boolean running,String title,String message,VideoProgress.Reading progress,List<QueuedVideo> waiting){
             this.running=running;this.title=title;this.message=message;this.progress=progress;this.waiting=waiting;
         }
     }
     /** Main-thread snapshot; private and regular services remain in separate processes. */
     static Snapshot snapshot(){
         VideoDownloadService service=current;Job job=service==null?null:service.active;
-        List<String> queued=new ArrayList<>();if(service!=null)for(Job row:service.waiting)queued.add(row.title);
+        List<QueuedVideo> queued=new ArrayList<>();if(service!=null)for(Job row:service.waiting)queued.add(new QueuedVideo(row));
         return new Snapshot(job!=null,job==null?"":job.title,status,job==null||job.progress==null?null:job.progress.read(SystemClock.elapsedRealtime()),queued);
     }
     private final Runnable heartbeat=new Runnable(){public void run(){
@@ -86,6 +94,15 @@ public class VideoDownloadService extends Service {
     static boolean busy(){return current!=null;}
     static void cancelCurrent(){VideoDownloadService service=current;if(service!=null)service.cancel();}
     static void cancelAll(){VideoDownloadService service=current;if(service!=null)service.clearAll();}
+    /** Main thread, like queue advancement. A stale tap must never cancel an active job. */
+    static boolean cancelWaiting(String id){
+        VideoDownloadService service=current;if(service==null)return false;
+        for(Iterator<Job> rows=service.waiting.iterator();rows.hasNext();){
+            Job job=rows.next();if(!job.id.equals(id))continue;
+            rows.remove();job.cancelled=true;service.discard(job.destination);service.publish(false);return true;
+        }
+        return false;
+    }
     /** Called by the browser on the main thread; never includes URLs or credentials. */
     static List<String> queueLabels(){
         List<String> rows=new ArrayList<>();VideoDownloadService service=current;

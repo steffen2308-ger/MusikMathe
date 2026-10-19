@@ -78,9 +78,12 @@ public class VideoDownloadQueueTest {
         while(System.nanoTime()<end){shadowOf(Looper.getMainLooper()).idle();if(ready.getAsBoolean())return;Thread.sleep(10);}fail("Queue did not reach expected state; "+VideoDownloadService.status+"; HTTP requests: "+requests);
     }
     private void enqueue(String path,String name)throws Exception{
+        enqueue(path,name,name);
+    }
+    private void enqueue(String path,String name,String title)throws Exception{
         File file=new File(folder,name);assertTrue(file.createNewFile());
         Uri destination=DocumentsContract.buildDocumentUri("queue.test",name);
-        Intent intent=new Intent().putExtra("url","http://127.0.0.1:"+server.getLocalPort()+path).putExtra("type","MP4").putExtra("headers","{}").putExtra("title",name).putExtra("destination",destination.toString()).putExtra("original",true);
+        Intent intent=new Intent().putExtra("url","http://127.0.0.1:"+server.getLocalPort()+path).putExtra("type","MP4").putExtra("headers","{}").putExtra("title",title).putExtra("destination",destination.toString()).putExtra("original",true);
         service.onStartCommand(intent,0,++startId);
     }
     @Test public void savesInOrderAndContinuesAfterFailedDownload()throws Exception{
@@ -101,11 +104,37 @@ public class VideoDownloadQueueTest {
         assertEquals(java.util.Arrays.asList("/first","/second","/fourth"),requests);assertEquals("video-data:/fourth",new String(Files.readAllBytes(new File(folder,"four.mp4").toPath()),StandardCharsets.UTF_8));
         File temporary=new File(service.getCacheDir(),"video-export");assertTrue(temporary.listFiles()==null||temporary.listFiles().length==0);
     }
+    @Test public void cancelsOnlySelectedWaitingVideoEvenWithIdenticalTitles()throws Exception{
+        enqueue("/first","one.mp4");await(()->requests.size()==1);
+        enqueue("/second","two.mp4","gleich.mp4");enqueue("/third","three.mp4","gleich.mp4");enqueue("/fourth","four.mp4","gleich.mp4");
+        VideoDownloadService.Snapshot before=VideoDownloadService.snapshot();String removed=before.waiting.get(1).id;
+        assertEquals(before.waiting.get(0).id,VideoDownloadService.snapshot().waiting.get(0).id);
+        assertTrue(VideoDownloadService.cancelWaiting(removed));assertFalse(VideoDownloadService.cancelWaiting(removed));
+        VideoDownloadService.Snapshot after=VideoDownloadService.snapshot();assertEquals("one.mp4",after.title);assertEquals(2,after.waiting.size());
+        assertEquals(before.waiting.get(0).id,after.waiting.get(0).id);assertEquals(before.waiting.get(2).id,after.waiting.get(1).id);
+        assertTrue(VideoDownloadService.status.contains("2 in Warteschlange"));assertEquals(1,requests.size());
+        assertFalse(new File(folder,"three.mp4").exists());assertTrue(new File(folder,"one.mp4").exists());assertTrue(new File(folder,"two.mp4").exists());assertTrue(new File(folder,"four.mp4").exists());
+        releaseFirst.countDown();await(()->!VideoDownloadService.busy());
+        assertEquals(java.util.Arrays.asList("/first","/second","/fourth"),requests);
+        for(String name:new String[]{"one.mp4","two.mp4","four.mp4"})assertTrue(new File(folder,name).length()>0);
+        assertFalse(VideoDownloadService.cancelWaiting(removed));
+    }
+    @Test public void staleWaitingButtonCannotCancelPromotedVideoOrFollowingEntry()throws Exception{
+        holdSecond=true;enqueue("/first","one.mp4");await(()->requests.size()==1);enqueue("/second","two.mp4");enqueue("/third","three.mp4");
+        String promoted=VideoDownloadService.snapshot().waiting.get(0).id;
+        assertFalse(VideoDownloadService.cancelWaiting("missing"));
+        releaseFirst.countDown();await(()->requests.contains("/second"));
+        assertFalse(VideoDownloadService.cancelWaiting(promoted));assertTrue(VideoDownloadService.snapshot().running);assertEquals("two.mp4",VideoDownloadService.snapshot().title);
+        assertEquals("three.mp4",VideoDownloadService.snapshot().waiting.get(0).title);assertTrue(new File(folder,"two.mp4").exists());assertTrue(new File(folder,"three.mp4").exists());
+        releaseSecond.countDown();await(()->!VideoDownloadService.busy());assertEquals(java.util.Arrays.asList("/first","/second","/third"),requests);
+        assertEquals("video-data:/second",new String(Files.readAllBytes(new File(folder,"two.mp4").toPath()),StandardCharsets.UTF_8));
+        assertEquals("video-data:/third",new String(Files.readAllBytes(new File(folder,"three.mp4").toPath()),StandardCharsets.UTF_8));
+    }
     @Test public void reportsNetworkAndFinalCopySeparatelyWithoutStaleQueueProgress()throws Exception{
         documents.holdCopy=true;enqueue("/slow","slow.mp4");enqueue("/second","later.mp4");
         await(()->VideoDownloadService.snapshot().progress!=null&&VideoDownloadService.snapshot().progress.bytes==131072);
         VideoDownloadService.Snapshot snapshot=VideoDownloadService.snapshot();
-        assertEquals("slow.mp4",snapshot.title);assertEquals(java.util.Arrays.asList("later.mp4"),snapshot.waiting);
+        assertEquals("slow.mp4",snapshot.title);assertEquals(1,snapshot.waiting.size());assertEquals("later.mp4",snapshot.waiting.get(0).title);
         assertEquals(262144,snapshot.progress.total);assertEquals(50,snapshot.progress.percent);assertTrue(snapshot.progress.phase.contains("1/2"));
         releaseBody.countDown();await(()->documents.copyStarted.getCount()==0);
         snapshot=VideoDownloadService.snapshot();assertTrue(snapshot.running);assertTrue(snapshot.progress.phase.contains("2/2"));assertEquals(0,snapshot.progress.bytes);assertEquals(0,snapshot.progress.percent);
