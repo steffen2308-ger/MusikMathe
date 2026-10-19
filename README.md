@@ -111,3 +111,16 @@ Service-Tests prüfen mit echten lokalen HTTP-Antworten und getrennten Dokumentz
 Die App heißt BestBrowser. Paketname und Signierung bleiben für Updates sowie vorhandene Tabs, Lesezeichen und verschlüsselte Passwörter erhalten; das GitHub-Repository bleibt MusikMathe. Der Videoordner wird auch nach einem Neustart wiederverwendet und gilt in beiden Browserbereichen. Eine Änderung unter Menü → Einstellungen gilt für neue Downloads; bereits vorgemerkte Dateien behalten ihr Ziel. Normale Datei-Downloads über Androids Downloadmanager bleiben im systemweiten Downloads-Ordner.
 
 Ist der gewählte Videoordner nicht mehr erreichbar oder beschreibbar, wird keine Datei überschrieben und die App bietet eine neue Ordnerwahl an. Tests prüfen die Wiederverwendung nach einem App-Neustart, neue Dateinamen bei Kollisionen, Ordnerwechsel mit bereits angelegten Zielen und fehlgeschlagenen Schreibzugriff.
+
+## Werbeblocker und neues Browser-Icon (0.4.4)
+
+Der eingebaute Werbeblocker ist zunächst eingeschaltet. **Menü → Werbeblocker** schaltet ihn direkt ein oder aus; unter **Menü → Einstellungen → Werbeblocker** gibt es denselben Schalter mit einer kurzen Erklärung. Beim Umschalten wird die aktuelle Seite neu geladen. Die Einstellung gilt für neue Anfragen in allen Tabs des jeweiligen Browserbereichs. Bereits geladene Inhalte in anderen Tabs ändern sich erst nach dem Neuladen dieser Seiten.
+
+Normale Tabs behalten die Auswahl nach einem App-Neustart. Eine neue private Sitzung übernimmt die normale Einstellung; Änderungen im privaten Bereich bleiben nur für diese Sitzung im Arbeitsspeicher und verändern die normale Einstellung nicht.
+
+Der Blocker prüft HTTP-/HTTPS-Unteranfragen gegen eine kleine, mitgelieferte Liste bekannter Werbe- und Trackingserver. Er lädt keine Filterlisten herunter, speichert keine besuchten Adressen und blockiert keine ausdrücklich aufgerufene Hauptseite. Treffer erhalten eine leere, nicht zwischenspeicherbare Antwort, bevor sie an die Videoerkennung gelangen. Die Liste wird mit App-Updates gepflegt. Das ist kein vollständiger EasyList-/uBlock-Filter: Werbung aus derselben Quelle wie der Seiteninhalt, viele Videoanzeigen einschließlich YouTube und Anfragen außerhalb der WebView-Abfangfunktion werden damit nicht zuverlässig entfernt. Falls eine Website nicht funktioniert, den Blocker ausschalten und die Seite neu laden. Chrome-Erweiterungen werden weiterhin nicht ausgeführt.
+
+Das neue Launcher-Icon verbindet einen mehrfarbigen Ring, eine blaue Mitte, ein Löwen-/Fuchsmotiv und einen orangefarbenen Schweif. Android 6 und 7 verwenden ein klassisches Drawable; ab Android 8 passt sich das adaptive Icon der Launcher-Form an. Paketname und Entwicklungsschlüssel bleiben erhalten, sodass die APK als Update installierbar ist.
+
+Neue Tests prüfen Domain-Grenzen, Unterdomains, Groß-/Kleinschreibung, erlaubte Hauptnavigation, das Ausschalten, Wiederherstellung und private Sitzungseinstellungen sowie die tatsächliche WebView-Request-Abfangfunktion in mehreren Tabs. Pull Requests führen jetzt ebenfalls den vorhandenen APK-, Test- und Lint-Workflow aus.
+

@@ -33,4 +33,14 @@ public class BrowserStoreTest {
     @Test public void corruptStorageIsRecoverable(){
         RuntimeEnvironment.getApplication().getSharedPreferences("browser",0).edit().putString("tabs","not json").commit();assertTrue(store.read("tabs").isEmpty());
     }
+    @Test public void adBlockChoicePersistsAndPrivateChangesStayInMemory(){
+        Context context=RuntimeEnvironment.getApplication();
+        assertTrue(store.adBlockingEnabled());store.adBlockingEnabled(false);
+        assertFalse(new BrowserStore(context).adBlockingEnabled());
+        BrowserStore privateStore=new BrowserStore(context,true);
+        assertFalse(privateStore.adBlockingEnabled());privateStore.adBlockingEnabled(true);
+        assertTrue(privateStore.adBlockingEnabled());assertFalse(new BrowserStore(context).adBlockingEnabled());
+        assertFalse(new BrowserStore(context,true).adBlockingEnabled());
+    }
 }
+

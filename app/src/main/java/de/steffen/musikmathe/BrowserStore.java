@@ -21,11 +21,13 @@ final class BrowserStore {
     private final SharedPreferences prefs;
     private final boolean privateMode;
     private String privateEngine;
+    private boolean privateAdBlocking;
     BrowserStore(Context context) { this(context, false); }
     BrowserStore(Context context, boolean privateMode) {
         prefs = context.getSharedPreferences("browser", Context.MODE_PRIVATE);
         this.privateMode = privateMode;
         privateEngine = prefs.getString("engine", "google");
+        privateAdBlocking = prefs.getBoolean("ad_blocking", true);
     }
     List<Entry> read(String key) {
         ArrayList<Entry> result = new ArrayList<>();
@@ -73,4 +75,10 @@ final class BrowserStore {
     void selected(int index) { if (!privateMode) prefs.edit().putInt("selected", index).apply(); }
     String engine() { return privateMode ? privateEngine : prefs.getString("engine", "google"); }
     void engine(String engine) { if (privateMode) privateEngine = engine; else prefs.edit().putString("engine", engine).apply(); }
+    boolean adBlockingEnabled() { return privateMode ? privateAdBlocking : prefs.getBoolean("ad_blocking", true); }
+    void adBlockingEnabled(boolean enabled) {
+        if (privateMode) privateAdBlocking = enabled;
+        else prefs.edit().putBoolean("ad_blocking", enabled).apply();
+    }
 }
+

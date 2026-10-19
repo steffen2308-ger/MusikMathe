@@ -6,8 +6,8 @@ android {
         applicationId 'de.steffen.musikmathe'
         minSdk 23
         targetSdk 35
-        versionCode 9
-        versionName '0.4.3'
+        versionCode 10
+        versionName '0.4.4'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
     signingConfigs {
@@ -42,3 +42,4 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.robolectric:robolectric:4.14.1'
 }
+

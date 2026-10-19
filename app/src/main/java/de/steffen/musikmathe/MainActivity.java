@@ -43,6 +43,7 @@ import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.util.ArrayList;
@@ -64,6 +65,7 @@ public class MainActivity extends Activity {
     private final List<Tab> tabs = new ArrayList<>();
     private int selected;
     private BrowserStore store;
+    private volatile boolean adBlockingEnabled;
     private PasswordManager passwords;
     private LinearLayout shell, top, bottom;
     private FrameLayout root, pages;
@@ -100,6 +102,7 @@ public class MainActivity extends Activity {
         }
         if (isPrivateMode()) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         store = new BrowserStore(this, isPrivateMode());
+        adBlockingEnabled = store.adBlockingEnabled();
         if(!isPrivateMode())passwords=new PasswordManager(this,this::activeView);
         buildInterface();
         if (!isPrivateMode()) PrivateSession.cleanIfStopped(this);
@@ -236,6 +239,10 @@ public class MainActivity extends Activity {
         web.setWebViewClient(new WebViewClient() {
             @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 if (request.isForMainFrame() && WikiTop.URL.equals(request.getUrl().toString())) return WikiTop.response();
+                if (AdBlocker.shouldBlock(request.getUrl().toString(), request.isForMainFrame(), adBlockingEnabled)) {
+                    return new android.webkit.WebResourceResponse("text/plain", "UTF-8", 204, "No Content",
+                            Collections.singletonMap("Cache-Control", "no-store"), new java.io.ByteArrayInputStream(new byte[0]));
+                }
                 if ("GET".equals(request.getMethod())) tab.videos.observe(request.getUrl().toString(),request.getRequestHeaders());
                 if ("GET".equals(request.getMethod())) recordVideo(tab,tab.videoPage,request.getUrl().toString(),"",request.getRequestHeaders());
                 return null;
@@ -350,6 +357,7 @@ public class MainActivity extends Activity {
         popup.getMenu().add(0,15,0,"Videos erkennen und speichern");
         if(passwords!=null)popup.getMenu().add(0,16,0,"Passwörter");
         popup.getMenu().add(0,17,0,"Einstellungen");
+        popup.getMenu().add(0,18,0,"Werbeblocker").setCheckable(true).setChecked(adBlockingEnabled);
         popup.getMenu().add(0,12,0,"Neuer privater Tab");
         popup.getMenu().add(0,13,1,isPrivateMode()?"Zu normalen Tabs":"Zu privaten Tabs");
         if (isPrivateMode()) {
@@ -370,13 +378,14 @@ public class MainActivity extends Activity {
                 case 8: tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: new AlertDialog.Builder(this).setTitle("BestBrowser · 0.4.3").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenz: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: new AlertDialog.Builder(this).setTitle("BestBrowser · 0.4.4").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Eingebauter Werbeblocker mit Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenz: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: endPrivate(); break;
                 case 15: showVideos(); break;
                 case 16: if(passwords!=null)passwords.menu(); break;
                 case 17: settings(); break;
+                case 18: setAdBlockingEnabled(!adBlockingEnabled); break;
             } return true;
         }); popup.show();
     }
@@ -638,9 +647,25 @@ public class MainActivity extends Activity {
         }).setNegativeButton("Abbrechen",null).show();
     }
     private void settings(){
-        new AlertDialog.Builder(this).setTitle("Einstellungen").setItems(new String[]{"Video-Downloadordner: "+DownloadFolder.label(this),"Suchmaschine"},(d,which)->{
-            if(which==0){pendingVideo=null;pickDownloadFolder();}else chooseEngine();
+        new AlertDialog.Builder(this).setTitle("Einstellungen").setItems(new String[]{"Video-Downloadordner: "+DownloadFolder.label(this),"Suchmaschine","Werbeblocker: "+(adBlockingEnabled?"Ein":"Aus")},(d,which)->{
+            if(which==0){pendingVideo=null;pickDownloadFolder();}else if(which==1)chooseEngine();else showAdBlockingSettings();
         }).setNegativeButton("Schließen",null).show();
+    }
+    private void showAdBlockingSettings(){
+        LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(24),dp(8),dp(24),dp(8));
+        Switch toggle=new Switch(this);toggle.setText("Werbeblocker");toggle.setTextColor(INK);toggle.setTextSize(16);toggle.setMinHeight(dp(48));toggle.setChecked(adBlockingEnabled);
+        content.addView(toggle,new LinearLayout.LayoutParams(-1,-2));
+        String message="Blockiert bekannte Werbeserver. Manche Werbung, etwa in YouTube-Videos, bleibt sichtbar. Beim Umschalten wird die aktuelle Seite neu geladen.";
+        if(isPrivateMode())message+="\n\nDie Änderung gilt nur für diese private Sitzung.";
+        TextView explanation=text(message,14);explanation.setPadding(0,dp(12),0,dp(8));content.addView(explanation);
+        toggle.setOnCheckedChangeListener((button,enabled)->setAdBlockingEnabled(enabled));
+        new AlertDialog.Builder(this).setTitle("Werbeblocker").setView(content).setPositiveButton("Fertig",null).show();
+    }
+    private void setAdBlockingEnabled(boolean enabled){
+        if(adBlockingEnabled==enabled)return;
+        store.adBlockingEnabled(enabled);adBlockingEnabled=enabled;
+        WebView view=activeView();if(view!=null)view.reload();
+        toast("Werbeblocker "+(enabled?"eingeschaltet":"ausgeschaltet")+(isPrivateMode()?" · nur für diese private Sitzung":""));
     }
     private void pickDownloadFolder(){
         Intent choose=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION|Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
@@ -705,3 +730,4 @@ public class MainActivity extends Activity {
         });
     }
 }
+
