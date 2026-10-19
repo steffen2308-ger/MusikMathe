@@ -10,7 +10,7 @@ Spätere Testversionen können als Update installiert werden. Dafür wird ein fe
 
 ## Funktionen
 
-- Adresse oder Suchbegriff eingeben; Suchmaschinen Google, DuckDuckGo und Bing in der Adressleiste.
+- Adresse oder Suchbegriff eingeben; passende Vorschläge aus dem Verlauf nach Webadresse und Seitentitel. Antippen öffnet die Seite direkt. Suchmaschinen Google, DuckDuckGo und Bing in der Adressleiste.
 - Zurück, Vorwärts, Startseite, Neuladen; während des Ladens stoppt die Neuladen-Taste die Seite. Lange auf Neuladen leert den Arbeitsspeicher-Cache und lädt erneut.
 - Bis zu 20 Tabs, Tabübersicht, Schließen und Wiederherstellung der zuletzt geöffneten Adressen nach einem Neustart. Lange auf die Tabtaste öffnet einen neuen Tab. Innerhalb einer Sitzung bleibt der Navigationsverlauf je Tab erhalten; nach einem vollständigen App-Neustart werden nur die letzten Adressen wiederhergestellt.
 - Lesezeichen, Verlauf, Teilen, Link kopieren, Suche innerhalb einer Seite und Desktopansicht.
@@ -144,3 +144,10 @@ Tests umfassen native WebView-Fetch-/HEAD-Fehler, wirklich ausgeführte bzw. ges
 Ein Doppeltipp beziehungsweise Doppelklick auf eine freie Fläche der Webseite oder der Browserleiste schaltet den Vollbildmodus ein. Browserleisten und Android-Systemleisten werden ausgeblendet. Erneutes Doppeltippen auf freie Fläche oder die Zurück-Taste beendet den Browser-Vollbildmodus, ohne dabei im Verlauf zurückzugehen. Die Android-Leisten lassen sich im Vollbild vorübergehend vom Bildschirmrand einblenden. Alternativ ist der Modus über Menü → Vollbild erreichbar.
 
 Links, Schaltflächen, Formulare, Medien, Text und andere erkennbare Bedienelemente lösen den Modus nicht aus. Die Prüfung erfolgt an beiden Berührungspositionen im aktuellen Dokument; es wird keine JavaScript-Schnittstelle mit nativen Vollbildrechten auf Webseiten veröffentlicht. Scrollen, Pinch-Zoom und lange Berührungen bleiben erhalten. Der Modus funktioniert in normalen und privaten Tabs. Video-Vollbild bleibt getrennt: Nach dem Schließen des Videos wird der vorherige Browser-Vollbildzustand wiederhergestellt.
+
+
+## Vorschläge aus dem Verlauf (0.4.8)
+
+Beim Tippen in die Adressleiste erscheinen bis zu acht passende besuchte Seiten mit Titel und genauer Webadresse. Der Abgleich berücksichtigt Adresse und Seitentitel ohne Unterscheidung von Groß- und Kleinschreibung sowie mehrere Suchwörter. Adressanfänge stehen vor anderen Treffern; innerhalb einer Treffergruppe stehen zuletzt besuchte Seiten oben. Antippen öffnet die gespeicherte Adresse. Bei angeschlossener Tastatur wählen die Pfeiltasten einen Vorschlag, Enter öffnet ihn. Ohne ausgewählten Vorschlag öffnet Enter die eingegebene Adresse beziehungsweise die gewählte Suchmaschine.
+
+Die Vorschläge werden ausschließlich lokal ermittelt. Tippen löst keine Webseitenaufrufe oder Abfragen bei einem Vorschlagsdienst aus. Leere Eingaben zeigen keine Vorschläge. Gelöschte Verlaufseinträge werden nicht weiter angeboten. Private Tabs lesen keinen normalen Verlauf und legen weiterhin keinen eigenen Verlauf an; dort erscheinen daher keine Verlaufsvorschläge.

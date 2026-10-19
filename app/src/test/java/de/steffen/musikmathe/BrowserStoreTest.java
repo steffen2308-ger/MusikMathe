@@ -19,6 +19,13 @@ public class BrowserStoreTest {
         assertEquals(2,store.read("history").size());assertEquals("A updated",store.read("history").get(0).title);
         assertEquals("https://b.example",store.read("history").get(1).url);
     }
+    @Test public void historySuggestionsUseFreshStoreAndNeverReadPrivateHistory(){
+        store.visit("https://wiki.example/", "Wissen aus dem Verlauf");
+        assertEquals(1,HistorySuggestions.match(new BrowserStore(RuntimeEnvironment.getApplication()).read("history"),"wissen").size());
+        assertTrue(HistorySuggestions.match(new BrowserStore(RuntimeEnvironment.getApplication(),true).read("history"),"wissen").isEmpty());
+        store.write("history",java.util.Collections.emptyList());
+        assertTrue(HistorySuggestions.match(new BrowserStore(RuntimeEnvironment.getApplication()).read("history"),"wissen").isEmpty());
+    }
     @Test public void bookmarksAndSettingsSurviveNewStoreInstance(){
         assertTrue(store.toggleBookmark("https://example.org","Beispiel"));store.engine("duckduckgo");
         BrowserStore restored=new BrowserStore(RuntimeEnvironment.getApplication());

@@ -75,6 +75,7 @@ public class MainActivity extends Activity {
     private LinearLayout shell, top, bottom;
     private FrameLayout root, pages;
     private EditText address;
+    private AddressSuggestions addressSuggestions;
     private TextView siteState;
     private ProgressBar progress;
     private BrowserIcon back, forward, tabButton, videoButton;
@@ -161,14 +162,16 @@ public class MainActivity extends Activity {
         address.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI); address.setImeOptions(EditorInfo.IME_ACTION_GO | EditorInfo.IME_FLAG_NO_EXTRACT_UI | (isPrivateMode() && Build.VERSION.SDK_INT >= 26 ? EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING : 0));
         address.setMinimumHeight(0); address.setMinHeight(0); address.setIncludeFontPadding(false); address.setGravity(Gravity.CENTER_VERTICAL);
         address.setPadding(0,0,dp(8),0); omnibox.addView(address, new LinearLayout.LayoutParams(0,-1,1));
+        addressSuggestions=new AddressSuggestions(address,omnibox,store,this::navigate);
         address.setOnKeyListener((v,key,event) -> {
+            if(addressSuggestions.arrow(key,event))return true;
             if (key != KeyEvent.KEYCODE_ENTER) return false;
-            if (event.getAction() == KeyEvent.ACTION_UP) navigateTyped(address.getText().toString());
+            if (event.getAction() == KeyEvent.ACTION_UP && !addressSuggestions.completeSelection()) navigateTyped(address.getText().toString());
             return true;
         });
         address.setOnEditorActionListener((v, action, event) -> {
             if (action == EditorInfo.IME_ACTION_GO || action == EditorInfo.IME_ACTION_SEARCH || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER && event.getAction() == KeyEvent.ACTION_UP)) {
-                navigateTyped(address.getText().toString()); return true;
+                if(!addressSuggestions.completeSelection())navigateTyped(address.getText().toString()); return true;
             } return false;
         });
         BrowserIcon reload = icon(top, "reload", "Neu laden oder Laden stoppen", () -> { WebView w = activeView(); if(w != null) { if(w.getProgress() < 100)w.stopLoading();else w.reload(); } }, 24);
@@ -192,7 +195,7 @@ public class MainActivity extends Activity {
     private Tab active() { return tabs.isEmpty() ? null : tabs.get(selected); }
     private WebView activeView() { Tab tab=active(); return tab==null ? null : tab.view; }
     private void hideKeyboard() {
-        address.clearFocus(); pages.requestFocus();
+        addressSuggestions.dismiss();address.clearFocus(); pages.requestFocus();
         ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(address.getWindowToken(),0);
     }
     private void navigateTyped(String input) {
@@ -211,7 +214,7 @@ public class MainActivity extends Activity {
     }
     private void switchTab(int index) {
         if(index<0 || index>=tabs.size()) return;
-        cancelPermission(); cancelUpload();if(passwords!=null)passwords.tabChanged();
+        addressSuggestions.dismiss();cancelPermission(); cancelUpload();if(passwords!=null)passwords.tabChanged();
         WebView old=activeView(); if(old!=null) { old.onPause(); pages.removeView(old); }
         hideFullscreen(); selected=index; Tab tab=active();
         if(tab.view==null) tab.view=createWebView(tab);
@@ -370,6 +373,7 @@ public class MainActivity extends Activity {
         int value=tab.view==null?100:tab.view.getProgress(); progress.setProgress(value); progress.setVisibility(browserFullscreen?View.GONE:value<100?View.VISIBLE:View.INVISIBLE);
     }
     private void menu() {
+        addressSuggestions.dismiss();
         PopupMenu popup=new PopupMenu(this,bottom.getChildAt(bottom.getChildCount()-1));
         String[] actions={"Neuer Tab",store.bookmarked(active().url)?"Lesezeichen entfernen":"Lesezeichen hinzufügen","Lesezeichen","Verlauf","Downloads","Seite teilen","Link kopieren","Auf Seite suchen",active().desktop?"Mobile Ansicht":"Desktopansicht","Suchmaschine","Browserdaten löschen","Über BestBrowser"};
         for(int i=0;i<actions.length;i++)popup.getMenu().add(0,i,i,actions[i]);
@@ -399,7 +403,7 @@ public class MainActivity extends Activity {
                 case 8: tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: new AlertDialog.Builder(this).setTitle("BestBrowser · 0.4.6").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: new AlertDialog.Builder(this).setTitle("BestBrowser · 0.4.8").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: endPrivate(); break;
@@ -454,7 +458,7 @@ public class MainActivity extends Activity {
         boolean[] checked={true,false,false};
         new AlertDialog.Builder(this).setTitle("Browserdaten löschen").setMultiChoiceItems(new String[]{"Verlauf","Cookies & Website-Daten (meldet dich ab)","Zwischengespeicherte Bilder und Dateien"},checked,(d,i,on)->checked[i]=on)
             .setNegativeButton("Abbrechen",null).setPositiveButton("Löschen",(d,w)->{
-                if(checked[0]) { store.write("history",Collections.emptyList());for(Tab tab:tabs){tab.state=null;if(tab.view!=null)tab.view.clearHistory();} }
+                if(checked[0]) { addressSuggestions.dismiss();store.write("history",Collections.emptyList());for(Tab tab:tabs){tab.state=null;if(tab.view!=null)tab.view.clearHistory();} }
                 if(checked[1]) { CookieManager.getInstance().removeAllCookies(value->CookieManager.getInstance().flush());android.webkit.WebStorage.getInstance().deleteAllData();GeolocationPermissions.getInstance().clearAll(); }
                 if(checked[2] && activeView()!=null)activeView().clearCache(true);
                 toast("Ausgewählte Browserdaten gelöscht.");
@@ -579,7 +583,7 @@ public class MainActivity extends Activity {
         }
     }
     @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(focused&&(browserFullscreen||customView!=null))applyFullscreenUi();}
-    private void goBack(){if(customView!=null){hideFullscreen();return;}if(browserFullscreen){setBrowserFullscreen(false);return;}WebView web=activeView();if(web!=null && web.canGoBack())web.goBack();else if(tabs.size()>1)closeTab(selected);else if(isPrivateMode())endPrivate();else moveTaskToBack(true);}
+    private void goBack(){if(addressSuggestions!=null&&addressSuggestions.dismissIfShowing())return;if(customView!=null){hideFullscreen();return;}if(browserFullscreen){setBrowserFullscreen(false);return;}WebView web=activeView();if(web!=null && web.canGoBack())web.goBack();else if(tabs.size()>1)closeTab(selected);else if(isPrivateMode())endPrivate();else moveTaskToBack(true);}
     @Override public void onBackPressed(){goBack();}
     private void share(String url){try{startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,url),"Seite teilen"));}catch(ActivityNotFoundException e){toast("Keine passende App verfügbar.");}}
     private void copy(String url){((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Webadresse",url));toast("Link kopiert.");}
@@ -604,7 +608,7 @@ public class MainActivity extends Activity {
         closingPrivate=true;openNormal();finish();
     }
     @Override protected void onSaveInstanceState(Bundle state){state.putBoolean("browser_fullscreen",browserFullscreen);persist();super.onSaveInstanceState(state);}
-    @Override protected void onPause(){if(videoDownloads!=null)videoDownloads.pause();if(passwords!=null)passwords.pause();persist();if(store!=null)CookieManager.getInstance().flush();if(activeView()!=null)activeView().onPause();super.onPause();}
+    @Override protected void onPause(){if(addressSuggestions!=null)addressSuggestions.dismiss();if(videoDownloads!=null)videoDownloads.pause();if(passwords!=null)passwords.pause();persist();if(store!=null)CookieManager.getInstance().flush();if(activeView()!=null)activeView().onPause();super.onPause();}
     @Override protected void onResume(){super.onResume();if(videoDownloads!=null)videoDownloads.resume();if(passwords!=null)passwords.resume();if(store==null)return;if(activeView()!=null)activeView().onResume();if(!isPrivateMode()){
         PrivateSession.cleanIfStopped(this);
         root.postDelayed(() -> { if(!destroyed)PrivateSession.cleanIfStopped(this); },1000);
@@ -613,7 +617,7 @@ public class MainActivity extends Activity {
         super.onTrimMemory(level);if(level>=TRIM_MEMORY_RUNNING_LOW){for(Tab tab:tabs)if(tab!=active() && tab.view!=null){tab.state=new Bundle();tab.view.saveState(tab.state);clearAdBlockScript(tab);tab.view.destroy();tab.view=null;}}
     }
     @Override protected void onDestroy(){
-        destroyed=true;if(videoDownloads!=null)videoDownloads.dismiss();if(passwords!=null)passwords.destroy();if(videoResolver!=null)videoResolver.cancel();if(videoSearch!=null)videoSearch.dismiss();videoWorker.shutdownNow();cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs){clearAdBlockScript(tab);if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}}super.onDestroy();
+        destroyed=true;if(addressSuggestions!=null)addressSuggestions.destroy();if(videoDownloads!=null)videoDownloads.dismiss();if(passwords!=null)passwords.destroy();if(videoResolver!=null)videoResolver.cancel();if(videoSearch!=null)videoSearch.dismiss();videoWorker.shutdownNow();cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs){clearAdBlockScript(tab);if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}}super.onDestroy();
         if (isPrivateMode() && !isChangingConfigurations()) {
             VideoDownloadService.cancelAll();
             try { if(Build.VERSION.SDK_INT>=28)PrivateSession.wipe(this); } catch(java.io.IOException ignored) { }
