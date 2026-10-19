@@ -76,6 +76,8 @@ public class VideoDownloadProgressTest {
             assertTrue("Live percentage missing",device.wait(Until.hasObject(By.textContains("25 %")),6000));
             assertTrue("Per-step ETA missing: "+snapshot().progress.detail(),device.wait(Until.hasObject(By.textContains("Restzeit für diesen Schritt: ca.")),6000));
             assertTrue(device.hasObject(By.textContains("In Warteschlange: 2")));
+            assertTrue("Close button must remain visible",device.hasObject(By.text(java.util.regex.Pattern.compile("Schließen",java.util.regex.Pattern.CASE_INSENSITIVE|java.util.regex.Pattern.UNICODE_CASE))));
+            assertTrue("Cancel-all button must remain visible",device.hasObject(By.text(java.util.regex.Pattern.compile("Alle abbrechen",java.util.regex.Pattern.CASE_INSENSITIVE|java.util.regex.Pattern.UNICODE_CASE))));
             UiObject2 remove=device.wait(Until.findObject(By.desc("Video aus Warteschlange entfernen: removed.mp4")),6000);assertNotNull("Individual queued cancel missing",remove);
             preview();Thread.sleep(1100);remove.click();
             await(()->snapshot().waiting.size()==1);assertEquals("unknown.mp4",snapshot().waiting.get(0).title);assertEquals("known.mp4",snapshot().title);assertEquals(65536,snapshot().progress.bytes);

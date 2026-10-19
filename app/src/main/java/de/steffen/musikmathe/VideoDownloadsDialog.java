@@ -23,6 +23,7 @@ final class VideoDownloadsDialog {
     private final LinearLayout waitingRows;
     private List<String> renderedIds=new ArrayList<>();
     private final ProgressBar bar;
+    private final Button cancelCurrent;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Runnable refresh=new Runnable(){public void run(){if(!dialog.isShowing())return;render();handler.postDelayed(this,500);}};
     VideoDownloadsDialog(Activity activity){
@@ -31,12 +32,15 @@ final class VideoDownloadsDialog {
         LinearLayout content=new LinearLayout(activity);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(padding,padding/2,padding,padding/2);
         title=label(activity,content,17);phase=label(activity,content,15);
         bar=new ProgressBar(activity,null,android.R.attr.progressBarStyleHorizontal);bar.setMax(100);bar.setContentDescription("Fortschritt des aktuellen Videoschritts");content.addView(bar,new LinearLayout.LayoutParams(-1,padding));
-        numbers=label(activity,content,14);queue=label(activity,content,14);
+        numbers=label(activity,content,14);
+        cancelCurrent=new Button(activity,null,android.R.attr.borderlessButtonStyle);cancelCurrent.setText("Aktuellen abbrechen");cancelCurrent.setContentDescription("Aktuelles Video abbrechen");cancelCurrent.setTextColor(activity.getColor(R.color.browser_accent));
+        cancelCurrent.setOnClickListener(v->{VideoDownloadService.cancelCurrent();render();});content.addView(cancelCurrent,new LinearLayout.LayoutParams(-1,-2));
+        queue=label(activity,content,14);
         waitingRows=new LinearLayout(activity);waitingRows.setOrientation(LinearLayout.VERTICAL);content.addView(waitingRows,new LinearLayout.LayoutParams(-1,-2));
         queueHint=label(activity,content,14);queueHint.setText("Die Restzeit gilt für den aktuellen Schritt. Für die gesamte Warteschlange ist noch keine verlässliche Schätzung möglich.");
         ScrollView scroll=new ScrollView(activity);scroll.addView(content);
         dialog=new AlertDialog.Builder(activity).setTitle("Video-Downloads").setView(scroll).setNegativeButton("Schließen",null)
-            .setPositiveButton("Abbrechen",null).setNeutralButton("Alle abbrechen",null).create();
+            .setNeutralButton("Alle abbrechen",null).create();
         dialog.setOnDismissListener(ignored->handler.removeCallbacks(refresh));
     }
     private static TextView label(Activity activity,LinearLayout parent,int size){
@@ -44,8 +48,6 @@ final class VideoDownloadsDialog {
     }
     void show(){
         dialog.show();
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setContentDescription("Aktuelles Video abbrechen");
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{VideoDownloadService.cancelCurrent();render();});
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{VideoDownloadService.cancelAll();render();});resume();
     }
     void pause(){handler.removeCallbacks(refresh);}
@@ -62,7 +64,7 @@ final class VideoDownloadsDialog {
         numbers.setVisibility(reading==null?View.GONE:View.VISIBLE);put(numbers,reading==null?"":reading.detail());
         put(queue,snapshot.running?"\nNoch offen: "+(1+snapshot.waiting.size())+" Video(s)"+(snapshot.waiting.isEmpty()?"":"\nIn Warteschlange: "+snapshot.waiting.size()):"");
         renderWaiting(snapshot.waiting);queueHint.setVisibility(snapshot.waiting.isEmpty()?View.GONE:View.VISIBLE);
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(snapshot.running);dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setEnabled(snapshot.running||!snapshot.waiting.isEmpty());
+        cancelCurrent.setVisibility(snapshot.running?View.VISIBLE:View.GONE);dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setEnabled(snapshot.running||!snapshot.waiting.isEmpty());
     }
     private void renderWaiting(List<VideoDownloadService.QueuedVideo> waiting){
         List<String> ids=new ArrayList<>();for(VideoDownloadService.QueuedVideo video:waiting)ids.add(video.id);
