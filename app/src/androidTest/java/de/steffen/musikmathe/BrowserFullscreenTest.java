@@ -31,6 +31,7 @@ import static org.junit.Assert.*;
 @SdkSuppress(minSdkVersion=26)
 public class BrowserFullscreenTest {
     private final Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();
+    private String stage="initial";
     private Object field(MainActivity activity,String name)throws Exception{
         Field field=MainActivity.class.getDeclaredField(name);field.setAccessible(true);return field.get(activity);
     }
@@ -73,7 +74,7 @@ public class BrowserFullscreenTest {
         expect(holder[0],"String(window.fixtureReady)","true");Thread.sleep(250);return holder[0];
     }
     private float[] point(WebView web,String id)throws Exception{
-        JSONArray fraction=new JSONArray(js(web,"JSON.stringify((function(){var r=document.getElementById('"+id+"').getBoundingClientRect();return [(r.left+Math.min(r.width/2,30))/innerWidth,(r.top+r.height/2)/innerHeight];})())"));
+        JSONArray fraction=new JSONArray(js(web,"JSON.stringify((function(){var e=document.getElementById('"+id+"'),r=e.getBoundingClientRect();if(e.id==='text'){var range=document.createRange();range.selectNodeContents(e);r=range.getBoundingClientRect();}return [(r.left+Math.min(r.width/2,30))/innerWidth,(r.top+r.height/2)/innerHeight];})())"));
         float[] point={0,0};instrumentation.runOnMainSync(()->{int[] location=new int[2];web.getLocationOnScreen(location);point[0]=location[0]+web.getWidth()*(float)fraction.optDouble(0);point[1]=location[1]+web.getHeight()*(float)fraction.optDouble(1);});return point;
     }
     private void touch(long down,int action,float x,float y){
@@ -81,6 +82,7 @@ public class BrowserFullscreenTest {
         try{assertTrue("Touch injection at "+x+","+y,instrumentation.getUiAutomation().injectInputEvent(event,true));}finally{event.recycle();}
     }
     private void doubleTap(WebView web,String id)throws Exception{
+        stage="double tap on "+id;
         Thread.sleep(400);float[] p=point(web,id);
         for(int i=0;i<2;i++){long down=SystemClock.uptimeMillis();touch(down,MotionEvent.ACTION_DOWN,p[0],p[1]);Thread.sleep(25);touch(down,MotionEvent.ACTION_UP,p[0],p[1]);if(i==0)Thread.sleep(100);}
     }
@@ -90,7 +92,7 @@ public class BrowserFullscreenTest {
     private void expectFullscreen(MainActivity activity,boolean expected)throws Exception{
         long deadline=SystemClock.uptimeMillis()+10000;
         while(fullscreen(activity)!=expected&&SystemClock.uptimeMillis()<deadline)Thread.sleep(50);
-        assertEquals("Browser fullscreen",expected,fullscreen(activity));
+        assertEquals("Browser fullscreen after "+stage,expected,fullscreen(activity));
         instrumentation.runOnMainSync(()->{try{
             assertEquals(expected?View.GONE:View.VISIBLE,((View)field(activity,"top")).getVisibility());
             assertEquals(expected?View.GONE:View.VISIBLE,((View)field(activity,"bottom")).getVisibility());
@@ -142,7 +144,8 @@ public class BrowserFullscreenTest {
             js(web,"document.getElementById('text').scrollIntoView({block:'center'});'ok'");Thread.sleep(150);
             doubleTap(web,"text");Thread.sleep(250);expectFullscreen(activity,false);
             js(web,"window.getSelection().removeAllRanges();window.scrollTo(0,0);'ok'");Thread.sleep(200);
-            float[] p=point(web,"blank");long down=SystemClock.uptimeMillis();touch(down,MotionEvent.ACTION_DOWN,p[0],p[1]);Thread.sleep(650);touch(down,MotionEvent.ACTION_UP,p[0],p[1]);expectFullscreen(activity,false);
+            stage="long press on blank space";float[] p=point(web,"blank");long down=SystemClock.uptimeMillis();touch(down,MotionEvent.ACTION_DOWN,p[0],p[1]);Thread.sleep(650);touch(down,MotionEvent.ACTION_UP,p[0],p[1]);expectFullscreen(activity,false);
+            stage="scrolling";
             Thread.sleep(400);down=SystemClock.uptimeMillis();touch(down,MotionEvent.ACTION_DOWN,p[0],p[1]);
             for(int i=1;i<=8;i++){Thread.sleep(20);touch(down,MotionEvent.ACTION_MOVE,p[0],p[1]-i*10);}
             touch(down,MotionEvent.ACTION_UP,p[0],p[1]-80);Thread.sleep(250);
