@@ -26,7 +26,6 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -93,8 +92,12 @@ public class NightModeDeviceTest {
             open();text("Alle privaten Tabs schließen").click();assertTrue(device.wait(Until.gone(By.descStartsWith("Privater Tab")),15000));privateOpen=false;night(false);
             assertSame(original,web());expect(original,"document.getElementById('kept').value","\"keep-this\"");assertEquals(1,requests.get());
             if(WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING))expect(original,"matchMedia('(prefers-color-scheme:dark)').matches","false");
-            toggle();night(true);main(activity::finish);instrumentation.waitForIdleSync();
-            new BrowserStore(instrumentation.getTargetContext()).write("tabs",Collections.singletonList(new BrowserStore.Entry(Address.HOME,"Neuer Tab",0,false)));
+            toggle();night(true);stage="Navigate home before relaunch";
+            UiObject2 homeButton=device.wait(Until.findObject(By.desc("Startseite")),8000);assertNotNull(homeButton);homeButton.click();
+            expect(original,"location.href",org.json.JSONObject.quote(Address.HOME));expect(original,"document.documentElement.classList.contains('bestbrowser-night')","true");
+            // Persist through the actual browser navigation/lifecycle. Writing test
+            // preferences while an Activity is still finishing races its onPause save.
+            main(activity::finish);instrumentation.waitForIdleSync();stage="Relaunch dark home";
             activity=launch();night(true);WebView home=web();expect(home,"document.documentElement.classList.contains('bestbrowser-night')","true");expect(home,"getComputedStyle(document.body).backgroundColor","\"rgb(20, 41, 37)\"");preview("home");
             open();preview("menu");text("Einstellungen").click();text("Über BestBrowser");preview("settings");scroll("Nachtmodus: Ein");text("Nachtmodus: Ein").click();night(false);
             expect(home,"document.documentElement.classList.contains('bestbrowser-light')","true");expect(home,"getComputedStyle(document.body).backgroundColor","\"rgb(248, 250, 249)\"");
