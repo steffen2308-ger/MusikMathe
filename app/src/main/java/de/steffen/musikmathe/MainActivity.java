@@ -79,6 +79,7 @@ public class MainActivity extends Activity {
     private ProgressBar progress;
     private BrowserIcon back, forward, tabButton, videoButton;
     private View customView;
+    private boolean browserFullscreen;
     private WebChromeClient.CustomViewCallback customCallback;
     private ValueCallback<Uri[]> upload;
     private Runnable permissionResult, permissionCancel;
@@ -107,6 +108,7 @@ public class MainActivity extends Activity {
         }
         if (isPrivateMode()) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         store = new BrowserStore(this, isPrivateMode());
+        browserFullscreen = saved != null && saved.getBoolean("browser_fullscreen", false);
         adBlockingEnabled = store.adBlockingEnabled();
         adBlockExceptions = Collections.unmodifiableSet(store.adBlockExceptions());
         AdBlockResources.preload(this);
@@ -119,6 +121,7 @@ public class MainActivity extends Activity {
         selected = Math.max(0, Math.min(store.selected(), tabs.size() - 1));
         switchTab(selected);
         if (saved == null) acceptIntent(getIntent());
+        applyFullscreenUi();
     }
     private int dp(float n) { return Math.round(n * getResources().getDisplayMetrics().density); }
     private TextView text(String value, float size) {
@@ -141,7 +144,7 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 30) {
             getWindow().setDecorFitsSystemWindows(false);
             root.setOnApplyWindowInsetsListener((v, insets) -> {
-                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
+                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.displayCutout() | WindowInsets.Type.ime() | (browserFullscreen || customView != null ? 0 : WindowInsets.Type.systemBars()));
                 root.setPadding(bars.left, bars.top, bars.right, bars.bottom); return insets;
             });
         }
@@ -182,6 +185,8 @@ public class MainActivity extends Activity {
         tabButton = icon(bottom, "tabs", "Tabs anzeigen", this::showTabs, 25);
         tabButton.setOnLongClickListener(v -> { newTab(Address.HOME, true); return true; });
         icon(bottom, "menu", "Menü", this::menu, 25);
+        FreeSpaceGesture.attachBlankView(top,()->setBrowserFullscreen(!browserFullscreen));
+        FreeSpaceGesture.attachBlankView(bottom,()->setBrowserFullscreen(!browserFullscreen));
     }
     private Tab active() { return tabs.isEmpty() ? null : tabs.get(selected); }
     private WebView activeView() { Tab tab=active(); return tab==null ? null : tab.view; }
@@ -291,7 +296,7 @@ public class MainActivity extends Activity {
             // The platform rejects invalid TLS certificates and unsafe browsing hits; no bypass.
         });
         web.setWebChromeClient(new WebChromeClient() {
-            @Override public void onProgressChanged(WebView view,int value) { if(active()==tab) { progress.setProgress(value); progress.setVisibility(value<100?View.VISIBLE:View.INVISIBLE); back.setEnabled(view.canGoBack()); forward.setEnabled(view.canGoForward()); } }
+            @Override public void onProgressChanged(WebView view,int value) { if(active()==tab) { progress.setProgress(value); progress.setVisibility(browserFullscreen?View.GONE:value<100?View.VISIBLE:View.INVISIBLE); back.setEnabled(view.canGoBack()); forward.setEnabled(view.canGoForward()); } }
             @Override public void onReceivedTitle(WebView view,String title) { tab.title=title; if(active()==tab)updateToolbar(); }
             @Override public boolean onCreateWindow(WebView view,boolean dialog,boolean userGesture,android.os.Message message) {
                 if(!userGesture || active()!=tab || tabs.size()>=BrowserStore.MAX_TABS)return false;
@@ -316,7 +321,7 @@ public class MainActivity extends Activity {
                 if(active()!=tab || customView!=null) { callback.onCustomViewHidden(); return; }
                 customView=view; customCallback=callback; shell.setVisibility(View.GONE); root.addView(view,new FrameLayout.LayoutParams(-1,-1));
                 getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+                applyFullscreenUi();
             }
             @Override public void onHideCustomView() { hideFullscreen(); }
         });
@@ -326,6 +331,7 @@ public class MainActivity extends Activity {
             String target=hit.getExtra(); if(!Address.isWeb(target))return false;
             new AlertDialog.Builder(this).setTitle(target).setItems(new String[]{"In neuem Tab öffnen","Link kopieren","Link teilen"},(dialog,which) -> { if(which==0)newTab(target,true);else if(which==1)copy(target);else share(target); }).show(); return true;
         });
+        FreeSpaceGesture.attach(web,()->!destroyed&&activeView()==web&&customView==null,()->tab.videoPage,()->setBrowserFullscreen(!browserFullscreen));
         configureAdBlocking(tab,web);
         if((tab.state==null || web.restoreState(tab.state)==null) && !"about:blank".equals(tab.url))web.loadUrl(Address.isWeb(tab.url)?tab.url:Address.HOME);
         tab.state=null; return web;
@@ -360,7 +366,7 @@ public class MainActivity extends Activity {
         back.setEnabled(tab.view!=null && tab.view.canGoBack()); forward.setEnabled(tab.view!=null && tab.view.canGoForward());
         videoButton.count=tab.videos.list().size();videoButton.setContentDescription("Videos auf dieser Seite · "+videoButton.count+" erkannt");videoButton.invalidate();
         tabButton.count=tabs.size(); tabButton.setContentDescription(tabs.size()+" Tabs. Tabs anzeigen"); tabButton.invalidate();
-        int value=tab.view==null?100:tab.view.getProgress(); progress.setProgress(value); progress.setVisibility(value<100?View.VISIBLE:View.INVISIBLE);
+        int value=tab.view==null?100:tab.view.getProgress(); progress.setProgress(value); progress.setVisibility(browserFullscreen?View.GONE:value<100?View.VISIBLE:View.INVISIBLE);
     }
     private void menu() {
         PopupMenu popup=new PopupMenu(this,bottom.getChildAt(bottom.getChildCount()-1));
@@ -371,6 +377,7 @@ public class MainActivity extends Activity {
         popup.getMenu().add(0,17,0,"Einstellungen");
         popup.getMenu().add(0,18,0,"Werbeblocker").setCheckable(true).setChecked(adBlockingEnabled);
         popup.getMenu().add(0,19,0,"VPN");
+        popup.getMenu().add(0,20,0,"Vollbild");
         popup.getMenu().add(0,12,0,"Neuer privater Tab");
         popup.getMenu().add(0,13,1,isPrivateMode()?"Zu normalen Tabs":"Zu privaten Tabs");
         if (isPrivateMode()) {
@@ -391,7 +398,7 @@ public class MainActivity extends Activity {
                 case 8: tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: new AlertDialog.Builder(this).setTitle("BestBrowser · 0.4.5").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: new AlertDialog.Builder(this).setTitle("BestBrowser · 0.4.6").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: endPrivate(); break;
@@ -400,6 +407,7 @@ public class MainActivity extends Activity {
                 case 17: settings(); break;
                 case 18: showAdBlockingSettings(); break;
                 case 19: showVpn(); break;
+                case 20: setBrowserFullscreen(true); break;
             } return true;
         }); popup.show();
     }
@@ -544,10 +552,33 @@ public class MainActivity extends Activity {
     }
     private void hideFullscreen(){
         if(customView==null)return;root.removeView(customView);customView=null;shell.setVisibility(View.VISIBLE);getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        getWindow().getDecorView().setSystemUiVisibility(Build.VERSION.SDK_INT>=26?View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR:0);
+        applyFullscreenUi();
         WebChromeClient.CustomViewCallback callback=customCallback;customCallback=null;if(callback!=null)callback.onCustomViewHidden();
     }
-    private void goBack(){if(customView!=null){hideFullscreen();return;}WebView web=activeView();if(web!=null && web.canGoBack())web.goBack();else if(tabs.size()>1)closeTab(selected);else if(isPrivateMode())endPrivate();else moveTaskToBack(true);}
+    private void setBrowserFullscreen(boolean enabled){
+        if(browserFullscreen==enabled)return;
+        if(enabled)hideKeyboard();browserFullscreen=enabled;applyFullscreenUi();
+    }
+    private void applyFullscreenUi(){
+        if(root==null)return;
+        top.setVisibility(browserFullscreen?View.GONE:View.VISIBLE);bottom.setVisibility(browserFullscreen?View.GONE:View.VISIBLE);
+        progress.setVisibility(browserFullscreen?View.GONE:progress.getProgress()<100?View.VISIBLE:View.INVISIBLE);
+        boolean fullscreen=browserFullscreen||customView!=null;
+        if(Build.VERSION.SDK_INT>=30){
+            android.view.WindowInsetsController controller=getWindow().getInsetsController();
+            if(controller!=null){
+                controller.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                if(fullscreen)controller.hide(WindowInsets.Type.systemBars());else controller.show(WindowInsets.Type.systemBars());
+            }
+            root.requestApplyInsets();
+        }else{
+            int flags=Build.VERSION.SDK_INT>=26?View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR:View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            if(fullscreen)flags|=View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
+            getWindow().getDecorView().setSystemUiVisibility(flags);
+        }
+    }
+    @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(focused&&(browserFullscreen||customView!=null))applyFullscreenUi();}
+    private void goBack(){if(customView!=null){hideFullscreen();return;}if(browserFullscreen){setBrowserFullscreen(false);return;}WebView web=activeView();if(web!=null && web.canGoBack())web.goBack();else if(tabs.size()>1)closeTab(selected);else if(isPrivateMode())endPrivate();else moveTaskToBack(true);}
     @Override public void onBackPressed(){goBack();}
     private void share(String url){try{startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,url),"Seite teilen"));}catch(ActivityNotFoundException e){toast("Keine passende App verfügbar.");}}
     private void copy(String url){((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Webadresse",url));toast("Link kopiert.");}
@@ -571,7 +602,7 @@ public class MainActivity extends Activity {
         }
         closingPrivate=true;openNormal();finish();
     }
-    @Override protected void onSaveInstanceState(Bundle state){persist();super.onSaveInstanceState(state);}
+    @Override protected void onSaveInstanceState(Bundle state){state.putBoolean("browser_fullscreen",browserFullscreen);persist();super.onSaveInstanceState(state);}
     @Override protected void onPause(){if(passwords!=null)passwords.pause();persist();if(store!=null)CookieManager.getInstance().flush();if(activeView()!=null)activeView().onPause();super.onPause();}
     @Override protected void onResume(){super.onResume();if(passwords!=null)passwords.resume();if(store==null)return;if(activeView()!=null)activeView().onResume();if(!isPrivateMode()){
         PrivateSession.cleanIfStopped(this);

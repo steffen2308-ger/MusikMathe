@@ -138,3 +138,9 @@ Der VPN-Dialog zeigt ausschließlich, ob Android für den Aufrufer eine VPN-Verb
 
 Tests umfassen native WebView-Fetch-/HEAD-Fehler, wirklich ausgeführte bzw. gesperrte Werbeskripte, statische und dynamische CSS-Werbeelemente, Positivkontrollen für normale Inhalte, Website-Ausnahmen und Ausschalten, Filterdaten-Validierung sowie die ehrliche VPN-Statusanzeige. Die kontrollierten WebView-Prüfungen benötigen keine externen Websites und laufen auf Android 9 und Android 15. Ein bestimmter Live-Test-Prozentwert oder eine echte VPN-Verbindung ohne Nutzerzugang wird dadurch nicht bestätigt.
 
+
+## Doppeltipp-Vollbild (0.4.6)
+
+Ein Doppeltipp beziehungsweise Doppelklick auf eine freie Fläche der Webseite oder der Browserleiste schaltet den Vollbildmodus ein. Browserleisten und Android-Systemleisten werden ausgeblendet. Erneutes Doppeltippen auf freie Fläche oder die Zurück-Taste beendet den Browser-Vollbildmodus, ohne dabei im Verlauf zurückzugehen. Die Android-Leisten lassen sich im Vollbild vorübergehend vom Bildschirmrand einblenden. Alternativ ist der Modus über Menü → Vollbild erreichbar.
+
+Links, Schaltflächen, Formulare, Medien, Text und andere erkennbare Bedienelemente lösen den Modus nicht aus. Die Prüfung erfolgt an beiden Berührungspositionen im aktuellen Dokument; es wird keine JavaScript-Schnittstelle mit nativen Vollbildrechten auf Webseiten veröffentlicht. Scrollen, Pinch-Zoom und lange Berührungen bleiben erhalten. Der Modus funktioniert in normalen und privaten Tabs. Video-Vollbild bleibt getrennt: Nach dem Schließen des Videos wird der vorherige Browser-Vollbildzustand wiederhergestellt.

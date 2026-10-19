@@ -43,6 +43,7 @@ jobs:
           node --check app/src/main/assets/passwords.js
           python3 scripts/compile-adblock.py
           node scripts/test-adblock.js
+          node --check app/src/main/assets/free-space.js
 
       - name: Build and lint
         run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
@@ -131,7 +132,7 @@ jobs:
           disable-animations: true
           script: |
             adb logcat -G 16M
-            gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest -Pandroid.testInstrumentationRunnerArguments.adblockLive=true
+            gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest,de.steffen.musikmathe.BrowserFullscreenTest -Pandroid.testInstrumentationRunnerArguments.adblockLive=true
             adb logcat -d -s AdBlockLiveProbe:I '*:S'
       - name: Upload password test results
         if: always()

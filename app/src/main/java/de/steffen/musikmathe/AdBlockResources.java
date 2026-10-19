@@ -93,7 +93,7 @@ final class AdBlockResources {
     static void update(Context context)throws IOException {
         OkHttpClient client=new OkHttpClient.Builder().connectTimeout(15,TimeUnit.SECONDS).readTimeout(20,TimeUnit.SECONDS)
                 .callTimeout(40,TimeUnit.SECONDS).followRedirects(false).followSslRedirects(false).build();
-        Request request=new Request.Builder().url(UPDATE_URL).header("User-Agent","BestBrowser/0.4.5 FilterUpdate").build();
+        Request request=new Request.Builder().url(UPDATE_URL).header("User-Agent","BestBrowser/0.4.6 FilterUpdate").build();
         try(Response response=client.newCall(request).execute()){
             if(response.code()!=200||response.body()==null)throw new IOException("Filterserver ist nicht erreichbar.");
             if(response.body().contentLength()>MAX_BYTES)throw new IOException("Filterliste ist zu groß.");
