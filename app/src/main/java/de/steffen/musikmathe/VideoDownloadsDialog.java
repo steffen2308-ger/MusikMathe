@@ -40,18 +40,21 @@ final class VideoDownloadsDialog {
     void pause(){handler.removeCallbacks(refresh);}
     void resume(){pause();if(dialog.isShowing())refresh.run();}
     void dismiss(){pause();dialog.dismiss();}
+    private static void put(TextView view,String value){
+        if(!android.text.TextUtils.equals(view.getText(),value))view.setText(value);
+    }
     private void render(){
         VideoDownloadService.Snapshot snapshot=VideoDownloadService.snapshot();VideoProgress.Reading reading=snapshot.progress;
-        title.setText(snapshot.running?snapshot.title:"Keine laufenden Video-Downloads");
-        phase.setText(reading==null?(snapshot.message.isEmpty()?"Hier erscheint der Fortschritt, sobald du ein Video speicherst.":snapshot.message):reading.phase+(reading.percent<0?"":" · "+reading.percent+" %"));
+        put(title,snapshot.running?snapshot.title:"Keine laufenden Video-Downloads");
+        put(phase,reading==null?(snapshot.message.isEmpty()?"Hier erscheint der Fortschritt, sobald du ein Video speicherst.":snapshot.message):reading.phase+(reading.percent<0?"":" · "+reading.percent+" %"));
         bar.setVisibility(snapshot.running?View.VISIBLE:View.GONE);bar.setIndeterminate(reading==null||reading.percent<0);if(reading!=null&&reading.percent>=0)bar.setProgress(reading.percent);
-        numbers.setVisibility(reading==null?View.GONE:View.VISIBLE);numbers.setText(reading==null?"":reading.detail());
+        numbers.setVisibility(reading==null?View.GONE:View.VISIBLE);put(numbers,reading==null?"":reading.detail());
         StringBuilder waiting=new StringBuilder(snapshot.running?"\nNoch offen: "+(1+snapshot.waiting.size())+" Video(s)":"");
         if(!snapshot.waiting.isEmpty()){
             waiting.append("\nIn Warteschlange: ").append(snapshot.waiting.size());for(String name:snapshot.waiting)waiting.append("\n• ").append(name);
             waiting.append("\n\nDie Restzeit gilt für den aktuellen Schritt. Für die gesamte Warteschlange ist noch keine verlässliche Schätzung möglich.");
         }
-        queue.setText(waiting.toString());
+        put(queue,waiting.toString());
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(snapshot.running);dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setEnabled(snapshot.running||!snapshot.waiting.isEmpty());
     }
 }

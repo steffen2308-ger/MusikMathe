@@ -8,6 +8,7 @@ import android.os.Build;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.uiautomator.By;
+import androidx.test.uiautomator.Configurator;
 import androidx.test.uiautomator.UiDevice;
 import androidx.test.uiautomator.UiObject2;
 import androidx.test.uiautomator.Until;
@@ -40,6 +41,8 @@ public class VideoDownloadProgressTest {
     @Test public void settingsShowLiveKnownAndUnknownSizeAndKeepCancelResultsVisible()throws Exception{
         UiDevice device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());device.wakeUp();device.executeShellCommand("wm dismiss-keyguard");
         Activity activity=InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(app,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));
+        // A progress screen deliberately never becomes idle. Observe its live tree directly.
+        long idleTimeout=Configurator.getInstance().getWaitForIdleTimeout();Configurator.getInstance().setWaitForIdleTimeout(0);
         CountDownLatch knownRelease=new CountDownLatch(1),unknownRelease=new CountDownLatch(1);
         try(ServerSocket server=new ServerSocket(0)){
             Thread responses=new Thread(()->{while(!server.isClosed())try(Socket socket=server.accept()){
@@ -52,9 +55,9 @@ public class VideoDownloadProgressTest {
             await(()->snapshot().progress!=null&&snapshot().progress.bytes==65536);
             assertEquals(25,snapshot().progress.percent);assertEquals(262144,snapshot().progress.total);
             UiObject2 menu=device.wait(Until.findObject(By.desc("Menü")),6000);assertNotNull(menu);menu.click();click(device,"Einstellungen");click(device,"Video-Downloads · Fortschritt und Warteschlange");
-            assertTrue(device.wait(Until.hasObject(By.text("known.mp4")),6000));
-            assertTrue(device.wait(Until.hasObject(By.textContains("25 %")),6000));
-            assertTrue(device.wait(Until.hasObject(By.textContains("Restzeit für diesen Schritt: ca.")),6000));
+            assertTrue("Active filename missing",device.wait(Until.hasObject(By.text("known.mp4")),6000));
+            assertTrue("Live percentage missing",device.wait(Until.hasObject(By.textContains("25 %")),6000));
+            assertTrue("Per-step ETA missing: "+snapshot().progress.detail(),device.wait(Until.hasObject(By.textContains("Restzeit für diesen Schritt: ca.")),6000));
             assertTrue(device.hasObject(By.textContains("In Warteschlange: 1")));
             click(device,"Schließen");app.startActivity(new Intent(app,MainActivity.class).setAction(VideoDownloadService.SHOW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT|Intent.FLAG_ACTIVITY_SINGLE_TOP));
             assertTrue(device.wait(Until.hasObject(By.text("Video-Downloads")),6000));
@@ -66,7 +69,7 @@ public class VideoDownloadProgressTest {
             await(()->!snapshot().running);assertTrue(snapshot().waiting.isEmpty());assertNull(snapshot().progress);
             assertTrue(device.wait(Until.hasObject(By.text("Keine laufenden Video-Downloads")),6000));assertTrue(device.hasObject(By.text("Videospeicherung abgebrochen.")));
         }finally{
-            knownRelease.countDown();unknownRelease.countDown();main(VideoDownloadService::cancelAll);for(String name:new String[]{"known","unknown","waiting"})app.getContentResolver().delete(uri(name),null,null);main(activity::finish);
+            Configurator.getInstance().setWaitForIdleTimeout(idleTimeout);knownRelease.countDown();unknownRelease.countDown();main(VideoDownloadService::cancelAll);for(String name:new String[]{"known","unknown","waiting"})app.getContentResolver().delete(uri(name),null,null);main(activity::finish);
         }
     }
 }
