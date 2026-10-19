@@ -383,7 +383,7 @@ public class MainActivity extends Activity {
             .quick(22,web!=null&&web.getProgress()<100?"stop":"reload",web!=null&&web.getProgress()<100?"Laden stoppen":"Neu laden",web!=null)
             .item(0,"plus","Neuer Tab")
             .item(12,"private","Neuer privater Tab")
-            .item(13,"tabs",isPrivateMode()?"Zu normalen Tabs":"Zu privaten Tabs");
+            .item(13,"switch-tabs",isPrivateMode()?"Zu normalen Tabs":"Zu privaten Tabs");
         if(isPrivateMode())browserMenu.item(14,"close","Alle privaten Tabs schließen");
         browserMenu.divider().item(2,"bookmarks","Lesezeichen").item(3,"history","Verlauf").item(4,"download","Downloads");
         if(passwords!=null)browserMenu.item(16,"key","Passwörter");

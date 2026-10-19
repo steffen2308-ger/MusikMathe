@@ -3,7 +3,6 @@ package de.steffen.musikmathe;
 import android.app.Instrumentation;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.os.Build;
 import android.util.Base64;
 import android.util.Log;
 import android.webkit.WebView;
@@ -55,7 +54,7 @@ public class BrowserMenuDeviceTest {
         try{
             WebView[] holder={null};instrumentation.runOnMainSync(()->{try{holder[0]=web(activity);}catch(Exception e){throw new RuntimeException(e);}});
             open();assertFalse("Home bookmark is disabled",description("Lesezeichen hinzufügen").isEnabled());assertFalse("Home sharing is disabled",description("Seite teilen").isEnabled());preview("top");
-            device.pressBack();assertTrue(device.wait(Until.gone(By.text("Neuer Tab")),6000));
+            device.pressBack();assertTrue("Back closes the native menu",device.wait(Until.gone(By.clazz("android.widget.ListView").hasDescendant(By.text("Neuer Tab"))),6000));
             String url="https://menu.example/page";CountDownLatch loaded=new CountDownLatch(1);
             instrumentation.runOnMainSync(()->{
                 WebViewClient original=holder[0].getWebViewClient();

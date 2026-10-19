@@ -96,6 +96,7 @@ jobs:
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             adb shell am instrument -w -e class de.steffen.musikmathe.YouTubeLiveProbeTest de.steffen.musikmathe.test/androidx.test.runner.AndroidJUnitRunner
             adb shell run-as de.steffen.musikmathe cat files/youtube-probe.json
+            bash scripts/cutout-test.sh
       - name: Upload device test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -104,6 +105,7 @@ jobs:
           path: |
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
+            cutout-test.txt
           if-no-files-found: ignore
 
   passwords:
@@ -133,6 +135,7 @@ jobs:
           script: |
             adb logcat -G 16M
             bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest,de.steffen.musikmathe.BrowserFullscreenTest,de.steffen.musikmathe.BrowserMenuDeviceTest,de.steffen.musikmathe.VideoDownloadProgressTest,de.steffen.musikmathe.AddressSuggestionsDeviceTest -Pandroid.testInstrumentationRunnerArguments.adblockLive=true
+            bash scripts/cutout-test.sh
       - name: Upload password test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -141,5 +144,6 @@ jobs:
           path: |
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
+            cutout-test.txt
           if-no-files-found: ignore
 

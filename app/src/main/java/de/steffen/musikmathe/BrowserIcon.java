@@ -52,6 +52,8 @@ final class BrowserIcon extends View {
                 Path star=new Path();for(int i=0;i<10;i++){double angle=-Math.PI/2+i*Math.PI/5;float radius=i%2==0?12:5.5f;float x=24+(float)Math.cos(angle)*radius,y=24+(float)Math.sin(angle)*radius;if(i==0)star.moveTo(x,y);else star.lineTo(x,y);}star.close();if(kind.equals("star-filled"))paint.setStyle(Paint.Style.FILL);canvas.drawPath(star,paint);break;
             case "private":
                 Path hat=new Path();hat.moveTo(15,21);hat.lineTo(19,12);hat.lineTo(29,12);hat.lineTo(33,21);hat.close();canvas.drawPath(hat,paint);canvas.drawLine(11,22,37,22,paint);canvas.drawCircle(17,31,5,paint);canvas.drawCircle(31,31,5,paint);canvas.drawLine(22,30,26,30,paint);break;
+            case "switch-tabs":
+                canvas.drawRoundRect(new RectF(17,17,36,36),3,3,paint);Path behind=new Path();behind.moveTo(30,12);behind.lineTo(12,12);behind.lineTo(12,30);canvas.drawPath(behind,paint);break;
             case "history":
                 canvas.drawArc(new RectF(13,13,35,35),-70,310,false,paint);canvas.drawLine(12,14,12,21,paint);canvas.drawLine(12,21,19,21,paint);canvas.drawLine(24,17,24,24,paint);canvas.drawLine(24,24,29,27,paint);break;
             case "download":
