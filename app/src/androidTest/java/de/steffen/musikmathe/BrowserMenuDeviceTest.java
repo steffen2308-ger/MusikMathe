@@ -33,14 +33,15 @@ import static org.junit.Assert.*;
 public class BrowserMenuDeviceTest {
     private final Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();
     private final UiDevice device=UiDevice.getInstance(instrumentation);
-    private UiObject2 text(String label){UiObject2 item=device.wait(Until.findObject(By.text(label)),6000);assertNotNull(label,item);return item;}
-    private UiObject2 description(String label){UiObject2 item=device.wait(Until.findObject(By.desc(label)),6000);assertNotNull(label,item);return item;}
-    private void open(){description("Menü").click();text("Neuer Tab");text("Einstellungen");}
-    private void scroll(String label)throws Exception{assertTrue(new UiScrollable(new UiSelector().className("android.widget.ListView")).scrollIntoView(new UiSelector().text(label)));}
+    private String stage="launch";
+    private int openings;
+    private UiObject2 text(String label){stage="menu #"+openings+" text "+label;UiObject2 item=device.wait(Until.findObject(By.text(label)),6000);assertNotNull(label,item);return item;}
+    private UiObject2 description(String label){stage="menu #"+openings+" description "+label;UiObject2 item=device.wait(Until.findObject(By.desc(label)),6000);assertNotNull(label,item);return item;}
+    private void open(){openings++;description("Menü").click();text("Neuer Tab");text("Einstellungen");}
+    private void scroll(String label)throws Exception{assertTrue("Scroll to "+label,new UiScrollable(new UiSelector().className("android.widget.ListView")).scrollIntoView(new UiSelector().text(label)));}
     private WebView web(MainActivity activity)throws Exception{Method method=MainActivity.class.getDeclaredMethod("activeView");method.setAccessible(true);return (WebView)method.invoke(activity);}
     private void preview(String name){
-        if(Build.VERSION.SDK_INT<35)return;
-        Bitmap full=instrumentation.getUiAutomation().takeScreenshot();assertNotNull(full);
+        Bitmap full=instrumentation.getUiAutomation().takeScreenshot();if(full==null){Log.w("MenuPreview","Screenshot unavailable: "+name);return;}
         Bitmap small=Bitmap.createScaledBitmap(full,480,Math.round(full.getHeight()*480f/full.getWidth()),true);
         ByteArrayOutputStream bytes=new ByteArrayOutputStream();small.compress(Bitmap.CompressFormat.JPEG,85,bytes);
         String encoded=Base64.encodeToString(bytes.toByteArray(),Base64.NO_WRAP);int chunks=(encoded.length()+1799)/1800;
@@ -53,7 +54,7 @@ public class BrowserMenuDeviceTest {
         MainActivity activity=(MainActivity)instrumentation.startActivitySync(new Intent(instrumentation.getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));
         try{
             WebView[] holder={null};instrumentation.runOnMainSync(()->{try{holder[0]=web(activity);}catch(Exception e){throw new RuntimeException(e);}});
-            open();assertFalse(description("Lesezeichen hinzufügen").isEnabled());assertFalse(description("Seite teilen").isEnabled());preview("top");
+            open();assertFalse("Home bookmark is disabled",description("Lesezeichen hinzufügen").isEnabled());assertFalse("Home sharing is disabled",description("Seite teilen").isEnabled());preview("top");
             device.pressBack();assertTrue(device.wait(Until.gone(By.text("Neuer Tab")),6000));
             String url="https://menu.example/page";CountDownLatch loaded=new CountDownLatch(1);
             instrumentation.runOnMainSync(()->{
@@ -69,15 +70,18 @@ public class BrowserMenuDeviceTest {
                 });holder[0].loadUrl(url);
             });
             assertTrue("Fixture loaded",loaded.await(12,TimeUnit.SECONDS));
-            open();assertTrue(description("Seite teilen").isEnabled());description("Lesezeichen hinzufügen").click();
-            assertTrue(new BrowserStore(instrumentation.getTargetContext()).bookmarked(url));
+            open();assertTrue("Website sharing is enabled",description("Seite teilen").isEnabled());description("Lesezeichen hinzufügen").click();
+            assertTrue("Bookmark stored after clicking the quick action",new BrowserStore(instrumentation.getTargetContext()).bookmarked(url));
             open();description("Lesezeichen entfernen");scroll("Desktopwebsite");text("Desktopwebsite").click();
             instrumentation.runOnMainSync(()->assertTrue(holder[0].getSettings().getUserAgentString().contains("X11; Linux x86_64")));
-            open();scroll("Desktopwebsite");assertNotNull(device.findObject(By.desc("Desktopwebsite").checked(true)));
+            open();scroll("Desktopwebsite");assertNotNull("Desktop checkbox accessible state",device.findObject(By.desc("Desktopwebsite").checked(true)));
             scroll("VPN");text("Werbeblocker");text("Ein");preview("tools");
             // The settings action is outside the scrolled list and remains visible at its end.
             text("Einstellungen").click();text("Browserdaten löschen");text("Suchmaschine");text("Über BestBrowser").click();text("BestBrowser · 0.4.11");text("OK").click();
             instrumentation.runOnMainSync(()->assertEquals("Menu dismissal and settings do not navigate",url,holder[0].getUrl()));
-        }finally{instrumentation.runOnMainSync(activity::finish);}
+        }catch(Throwable error){
+            try{preview("failure");}catch(Exception ignored){}
+            throw new AssertionError("Menu test stage: "+stage,error);
+        }finally{instrumentation.runOnMainSync(activity::finish);instrumentation.waitForIdleSync();}
     }
 }
