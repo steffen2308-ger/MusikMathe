@@ -1,10 +1,10 @@
-# MusikMathe
+# BestBrowser
 
 Ein eigenständiger Android-Browser als Grundlage für spätere Spezialfunktionen. Die erste Version verwendet die Chromium-WebView des Geräts. Mindestversion: Android 6; private Tabs ab Android 9. Die App heißt vorerst wie dieses Repository.
 
 ## APK installieren
 
-Unter **Actions → Android APK → letzter erfolgreicher Lauf → Artifacts → musikmathe-debug-apk** das ZIP herunterladen, entpacken und `app-debug.apk` installieren. GitHub kann dafür eine Anmeldung verlangen. Android erlaubt die Installation nach Freigabe der verwendeten Download-/Datei-App.
+Unter **Actions → Android APK → letzter erfolgreicher Lauf → Artifacts → bestbrowser-debug-apk** das ZIP herunterladen, entpacken und `app-debug.apk` installieren. GitHub kann dafür eine Anmeldung verlangen. Android erlaubt die Installation nach Freigabe der verwendeten Download-/Datei-App.
 
 Spätere Testversionen können als Update installiert werden. Dafür wird ein fester öffentlicher Entwicklungsschlüssel verwendet (`app/debug.keystore`, Alias `androiddebugkey`, Passwort `android`). Dieser Testschlüssel ist nicht für eine Store-Veröffentlichung gedacht. Paketname: `de.steffen.musikmathe`. Die Kreuzworträtsel-App ist ein getrenntes Projekt und bleibt unverändert.
 
@@ -59,7 +59,7 @@ Zusätzlich führt GitHub Actions einen Android-9-Emulator-Test mit echter WebVi
 
 Video auf einer Webseite starten, dann die **Videotaste** in der unteren Leiste oder **Menü → Videos erkennen und speichern** öffnen. Die Zahl an der Taste zeigt gefundene Quellen des aktuellen Tabs. Die Liste sammelt direkte MP4-/WebM-/andere Videoadressen, HLS-Manifeste (`m3u8`) und DASH-Manifeste (`mpd`) aus WebView-Anfragen, HTML5-Videoelementen und den Ressourcen der Seite. Nach dem Laden der Seite beobachtet ein seiteneigenes JavaScript außerdem Content-Type-Header nachfolgender fetch-/XHR-Antworten, ohne deren Inhalt zu lesen oder eine JavaScript-Schnittstelle zu Android freizugeben. So werden auch manche Quellen ohne Video-Dateiendung gefunden. Gleichnamige Adressen werden zusammengefasst, Segmentdateien möglichst ausgefiltert. Die Kandidaten stehen nur im Arbeitsspeicher und werden bei einem Seitenwechsel gelöscht. Einige Player verbergen ihre Quellen, insbesondere hinter Service Workern oder individuellen POST-Anfragen. Eine universelle Erkennung ist nicht möglich.
 
-Eine Quelle antippen und **Als MP4 speichern** wählen; direkte Dateien lassen sich alternativ unverändert im Originalformat speichern. Die Android-Dateiauswahl bestimmt Dateiname und Ordner. Media3 führt bei unterstützten Quellen Ton und Bild in einer MP4-Datei zusammen; falls nötig werden kompatible H.264-/AAC-Spuren erzeugt. Adaptive Quellen verwenden standardmäßig die höchste unterstützte Variante. Für lange oder Live-Quellen gibt es zusätzlich zeitlich begrenzte Ausschnitte. Je nach Live-Zeitleiste funktioniert ein Export nicht oder enthält den verfügbaren Ausschnitt des Streamfensters; keine universelle Live-Aufnahme-Zusage. DRM-/Lizenzschutz, abgelaufene Quellen, fehlende Berechtigungen und nicht unterstützte Codecs werden nicht umgangen. Kopiergeschützte Streams können erkannt werden, der Export schlägt dann jedoch fehl.
+Eine Quelle antippen und **Als MP4 speichern** wählen; direkte Dateien lassen sich alternativ unverändert im Originalformat speichern. Beim ersten Video wird ein Downloadordner gewählt und dauerhaft freigegeben. Danach werden neue Dateien automatisch dort angelegt; gleiche Dateinamen erhalten einen zusätzlichen Zähler. Der Ordner kann unter **Menü → Einstellungen → Video-Downloadordner** geändert werden. Media3 führt bei unterstützten Quellen Ton und Bild in einer MP4-Datei zusammen; falls nötig werden kompatible H.264-/AAC-Spuren erzeugt. Adaptive Quellen verwenden standardmäßig die höchste unterstützte Variante. Für lange oder Live-Quellen gibt es zusätzlich zeitlich begrenzte Ausschnitte. Je nach Live-Zeitleiste funktioniert ein Export nicht oder enthält den verfügbaren Ausschnitt des Streamfensters; keine universelle Live-Aufnahme-Zusage. DRM-/Lizenzschutz, abgelaufene Quellen, fehlende Berechtigungen und nicht unterstützte Codecs werden nicht umgangen. Kopiergeschützte Streams können erkannt werden, der Export schlägt dann jedoch fehl.
 
 Die Exporte laufen als Android-Vordergrunddienst mit Fortschritt. Mehrere Videos lassen sich vormerken und werden je Browserbereich in ihrer Reihenfolge nacheinander gespeichert. Unter **Videos → Warteschlange** stehen der aktuelle und die wartenden Downloads; **Aktuellen abbrechen** überspringt den laufenden Download, **Alle abbrechen** leert die Warteschlange. Fehler blockieren die folgenden Downloads nicht. Der Fortschritt steht auch in der Systembenachrichtigung; Android kann deren Anzeige abhängig von den Benachrichtigungseinstellungen begrenzen. HLS/DASH-Exporte benötigen vorübergehend freien internen Speicher für die MP4-Datei, bevor sie zum gewählten Ziel kopiert wird. Abbruch oder Fehler entfernen die temporäre Datei und versuchen die neu erzeugte Zieldatei zu löschen.
 
@@ -86,7 +86,7 @@ Tests: JavaScript-Player- und Navigationsbeispiele, Quellen-/Spurzuordnung und F
 
 ## Eigener Passwortspeicher (0.4.0)
 
-MusikMathe kann Logins nach ausdrücklicher Bestätigung speichern und für dieselbe HTTPS-Website wieder ausfüllen. Benutzername, Passwort und Website-Zuordnung liegen gemeinsam AES-256-GCM-verschlüsselt in einer atomar geschriebenen Datei unter Androids `no_backup`-Verzeichnis. Der nicht exportierbare Schlüssel liegt im Android-Keystore. Es gibt keine Passwortsynchronisation oder Klartext-Passwortdatei. Beschädigte Dateien oder verlorene Schlüssel werden nicht stillschweigend durch einen leeren Speicher ersetzt.
+BestBrowser kann Logins nach ausdrücklicher Bestätigung speichern und für dieselbe HTTPS-Website wieder ausfüllen. Benutzername, Passwort und Website-Zuordnung liegen gemeinsam AES-256-GCM-verschlüsselt in einer atomar geschriebenen Datei unter Androids `no_backup`-Verzeichnis. Der nicht exportierbare Schlüssel liegt im Android-Keystore. Es gibt keine Passwortsynchronisation oder Klartext-Passwortdatei. Beschädigte Dateien oder verlorene Schlüssel werden nicht stillschweigend durch einen leeren Speicher ersetzt.
 
 Beim Absenden eines einfachen Login-Formulars fragt die App nach Speichern oder Aktualisieren. Auf aktuellen WebViews erscheint nach Antippen eines Login-Felds eine Auswahl passender gespeicherter Konten. Unter **Menü → Passwörter** gibt es außerdem manuelles Speichern, Ausfüllen, Verwaltung und Löschen sowie einen Schalter für automatische Speichernachfragen. Passwörter werden maskiert dargestellt; Passwortdialoge verhindern Screenshots. Eine eigene Geräte-PIN oder ein Masterpasswort ist nicht enthalten: Die Funktion ist im entsperrten Browser verfügbar.
 
@@ -102,6 +102,12 @@ Die Adressleiste ist 28 statt 56 dp hoch, die untere Buttonreihe 25 statt 50 dp.
 
 ## Video-Warteschlange (0.4.2)
 
-Nach der Wahl des Speicherorts wird jedes Video vorgemerkt. Die Benachrichtigung zeigt den Fortschritt und die Anzahl wartender Downloads. Die Warteschlange bleibt im Arbeitsspeicher, auch beim Wechsel der Webseite; nach einem Prozessabbruch wird sie nicht wiederhergestellt. Normale und private Warteschlangen sind getrennt.
+Nach der erstmaligen Wahl des Videoordners wird jedes weitere Video direkt vorgemerkt. Die Benachrichtigung zeigt den Fortschritt und die Anzahl wartender Downloads. Die Warteschlange bleibt im Arbeitsspeicher, auch beim Wechsel der Webseite; nach einem Prozessabbruch wird sie nicht wiederhergestellt. Normale und private Warteschlangen sind getrennt.
 
 Service-Tests prüfen mit echten lokalen HTTP-Antworten und getrennten Dokumentzielen die Reihenfolge, das Weitermachen nach HTTP-Fehlern, Abbruch des aktuellen Downloads, Leeren der Warteschlange und verspätete Rückmeldungen abgebrochener Downloads.
+
+## BestBrowser und dauerhafter Videoordner (0.4.3)
+
+Die App heißt BestBrowser. Paketname und Signierung bleiben für Updates sowie vorhandene Tabs, Lesezeichen und verschlüsselte Passwörter erhalten; das GitHub-Repository bleibt MusikMathe. Der Videoordner wird auch nach einem Neustart wiederverwendet und gilt in beiden Browserbereichen. Eine Änderung unter Menü → Einstellungen gilt für neue Downloads; bereits vorgemerkte Dateien behalten ihr Ziel. Normale Datei-Downloads über Androids Downloadmanager bleiben im systemweiten Downloads-Ordner.
+
+Ist der gewählte Videoordner nicht mehr erreichbar oder beschreibbar, wird keine Datei überschrieben und die App bietet eine neue Ordnerwahl an. Tests prüfen die Wiederverwendung nach einem App-Neustart, neue Dateinamen bei Kollisionen, Ordnerwechsel mit bereits angelegten Zielen und fehlgeschlagenen Schreibzugriff.

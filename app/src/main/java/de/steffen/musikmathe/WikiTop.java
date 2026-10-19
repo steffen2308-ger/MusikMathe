@@ -66,7 +66,7 @@ final class WikiTop {
                 day.add(Calendar.DAY_OF_MONTH,-1);String source=endpoint(day);
                 HttpURLConnection connection=(HttpURLConnection)new URL(source).openConnection();
                 connection.setConnectTimeout(8000);connection.setReadTimeout(8000);connection.setInstanceFollowRedirects(false);
-                connection.setRequestProperty("User-Agent","MusikMathe/0.2 (https://github.com/steffen2308-ger/MusikMathe)");
+                connection.setRequestProperty("User-Agent","BestBrowser/0.4.3 (https://github.com/steffen2308-ger/MusikMathe)");
                 connection.setRequestProperty("Accept","application/json");
                 try {
                     int status=connection.getResponseCode();

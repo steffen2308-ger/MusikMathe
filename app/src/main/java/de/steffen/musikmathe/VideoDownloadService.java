@@ -166,7 +166,7 @@ public class VideoDownloadService extends Service {
         Toast.makeText(this,message,Toast.LENGTH_LONG).show();next();
     }
     private void stopQueue(){if(current==this)current=null;stopForeground(true);stopSelfResult(lastStartId);}
-    private void release(Uri uri){try{getContentResolver().releasePersistableUriPermission(uri,Intent.FLAG_GRANT_WRITE_URI_PERMISSION);}catch(Exception ignored){}}
+    private void release(Uri uri){if(DocumentsContract.isTreeUri(uri))return;try{getContentResolver().releasePersistableUriPermission(uri,Intent.FLAG_GRANT_WRITE_URI_PERMISSION);}catch(Exception ignored){}}
     private void discard(Uri uri){deleteDocument(uri);release(uri);}
     private void deleteDocument(Uri uri){if(uri==null||!"content".equals(uri.getScheme()))return;try{DocumentsContract.deleteDocument(getContentResolver(),uri);}catch(Exception ignored){try{getContentResolver().delete(uri,null,null);}catch(Exception ignoredAgain){}}}
     private void cancel(){if(active!=null)finish(active,false,"Videospeicherung abgebrochen.");else stopQueue();}

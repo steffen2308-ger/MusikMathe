@@ -13,7 +13,7 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.location" android:required="false" />
-    <application android:name=".BrowserApplication" android:label="MusikMathe" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:theme="@style/AppTheme" android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="true" android:hardwareAccelerated="true">
+    <application android:name=".BrowserApplication" android:label="BestBrowser" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:theme="@style/AppTheme" android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="true" android:hardwareAccelerated="true">
         <service android:name=".VideoDownloadService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name=".PrivateVideoDownloadService" android:exported="false" android:process=":private" android:foregroundServiceType="dataSync" />
         <activity android:name=".PrivateActivity" android:exported="false" android:process=":private" android:excludeFromRecents="true" android:configChanges="orientation|screenSize|keyboardHidden" android:windowSoftInputMode="adjustResize" />
