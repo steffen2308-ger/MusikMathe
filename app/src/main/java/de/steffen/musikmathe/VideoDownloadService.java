@@ -217,7 +217,15 @@ public class VideoDownloadService extends Service {
     private void stopQueue(){main.removeCallbacks(heartbeat);if(current==this)current=null;stopForeground(true);stopSelfResult(lastStartId);}
     private void release(Uri uri){if(DownloadFolder.isTree(uri))return;try{getContentResolver().releasePersistableUriPermission(uri,Intent.FLAG_GRANT_WRITE_URI_PERMISSION);}catch(Exception ignored){}}
     private void discard(Uri uri){deleteDocument(uri);release(uri);}
-    private void deleteDocument(Uri uri){if(uri==null||!"content".equals(uri.getScheme()))return;try{DocumentsContract.deleteDocument(getContentResolver(),uri);}catch(Exception ignored){try{getContentResolver().delete(uri,null,null);}catch(Exception ignoredAgain){}}}
+    private void deleteDocument(Uri uri){
+        if(uri==null||!"content".equals(uri.getScheme()))return;
+        try{
+            // A plain content provider may silently ignore the DocumentsContract call.
+            DocumentsContract.getDocumentId(uri);
+            if(DocumentsContract.deleteDocument(getContentResolver(),uri))return;
+        }catch(Exception ignored){}
+        try{getContentResolver().delete(uri,null,null);}catch(Exception ignored){}
+    }
     private void cancel(){if(active!=null)finish(active,false,"Videospeicherung abgebrochen.");else stopQueue();}
     private void clearAll(){for(Job job:waiting)discard(job.destination);waiting.clear();cancel();}
     @Override public void onTimeout(int startId,int fgsType){clearAll();}
