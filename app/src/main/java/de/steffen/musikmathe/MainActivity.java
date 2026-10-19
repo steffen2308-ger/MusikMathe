@@ -93,6 +93,7 @@ public class MainActivity extends Activity {
     private final java.util.concurrent.ExecutorService videoWorker=java.util.concurrent.Executors.newSingleThreadExecutor();
     private YouTubeDownloadResolver videoResolver;
     private AlertDialog videoSearch;
+    private VideoDownloadsDialog videoDownloads;
     private boolean closingPrivate;
     private VideoCatalog.Item pendingVideo;
     private boolean pendingVideoOriginal;
@@ -586,7 +587,7 @@ public class MainActivity extends Activity {
     private void persist(){
         if(store==null || isPrivateMode())return;ArrayList<BrowserStore.Entry> rows=new ArrayList<>();for(Tab tab:tabs)rows.add(new BrowserStore.Entry("about:blank".equals(tab.url)?Address.HOME:tab.url,tab.title,0,tab.desktop));store.write("tabs",rows);store.selected(selected);
     }
-    private void acceptIntent(Intent intent){if(intent!=null && Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData()!=null){String url=intent.getData().toString();if(Address.isWeb(url))newTab(url,true);}}
+    private void acceptIntent(Intent intent){if(intent!=null&&VideoDownloadService.SHOW_DOWNLOADS.equals(intent.getAction())){showVideoQueue();return;}if(intent!=null && Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData()!=null){String url=intent.getData().toString();if(Address.isWeb(url))newTab(url,true);}}
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);acceptIntent(intent);if(isPrivateMode() && intent.getBooleanExtra("new_private_tab",false))newTab(Address.HOME,true);}
     private void openPrivate(boolean newTab) {
         if (Build.VERSION.SDK_INT < 28) { toast("Private Tabs benötigen Android 9 oder neuer."); return; }
@@ -603,8 +604,8 @@ public class MainActivity extends Activity {
         closingPrivate=true;openNormal();finish();
     }
     @Override protected void onSaveInstanceState(Bundle state){state.putBoolean("browser_fullscreen",browserFullscreen);persist();super.onSaveInstanceState(state);}
-    @Override protected void onPause(){if(passwords!=null)passwords.pause();persist();if(store!=null)CookieManager.getInstance().flush();if(activeView()!=null)activeView().onPause();super.onPause();}
-    @Override protected void onResume(){super.onResume();if(passwords!=null)passwords.resume();if(store==null)return;if(activeView()!=null)activeView().onResume();if(!isPrivateMode()){
+    @Override protected void onPause(){if(videoDownloads!=null)videoDownloads.pause();if(passwords!=null)passwords.pause();persist();if(store!=null)CookieManager.getInstance().flush();if(activeView()!=null)activeView().onPause();super.onPause();}
+    @Override protected void onResume(){super.onResume();if(videoDownloads!=null)videoDownloads.resume();if(passwords!=null)passwords.resume();if(store==null)return;if(activeView()!=null)activeView().onResume();if(!isPrivateMode()){
         PrivateSession.cleanIfStopped(this);
         root.postDelayed(() -> { if(!destroyed)PrivateSession.cleanIfStopped(this); },1000);
     }}
@@ -612,7 +613,7 @@ public class MainActivity extends Activity {
         super.onTrimMemory(level);if(level>=TRIM_MEMORY_RUNNING_LOW){for(Tab tab:tabs)if(tab!=active() && tab.view!=null){tab.state=new Bundle();tab.view.saveState(tab.state);clearAdBlockScript(tab);tab.view.destroy();tab.view=null;}}
     }
     @Override protected void onDestroy(){
-        destroyed=true;if(passwords!=null)passwords.destroy();if(videoResolver!=null)videoResolver.cancel();if(videoSearch!=null)videoSearch.dismiss();videoWorker.shutdownNow();cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs){clearAdBlockScript(tab);if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}}super.onDestroy();
+        destroyed=true;if(videoDownloads!=null)videoDownloads.dismiss();if(passwords!=null)passwords.destroy();if(videoResolver!=null)videoResolver.cancel();if(videoSearch!=null)videoSearch.dismiss();videoWorker.shutdownNow();cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs){clearAdBlockScript(tab);if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}}super.onDestroy();
         if (isPrivateMode() && !isChangingConfigurations()) {
             VideoDownloadService.cancelAll();
             try { if(Build.VERSION.SDK_INT>=28)PrivateSession.wipe(this); } catch(java.io.IOException ignored) { }
@@ -669,19 +670,14 @@ public class MainActivity extends Activity {
             boolean youtube=!YouTubeSources.videoId(tab.url).isEmpty();
             String message=youtube?(error.isEmpty()?"Für dieses YouTube-Video wurde keine erreichbare Downloadquelle gefunden.":error):"Noch kein speicherbarer Stream erkannt. Starte das Video und suche erneut.";
             AlertDialog.Builder empty=new AlertDialog.Builder(this).setTitle(youtube?"YouTube-Download nicht verfügbar":"Videos auf dieser Seite").setMessage(message).setNegativeButton("Schließen",null).setPositiveButton("Erneut suchen",(d,w)->showVideos());
-            if(VideoDownloadService.busy())empty.setNeutralButton("Warteschlange",(d,w)->showVideoQueue());empty.show();return;
+            empty.setNeutralButton("Download-Fortschritt",(d,w)->showVideoQueue());empty.show();return;
         }
         String[] labels=new String[videos.size()];for(int i=0;i<labels.length;i++)labels[i]=videos.get(i).label();
         AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("Videos · "+videos.size()).setItems(labels,(d,i)->videoOptions(videos.get(i))).setNegativeButton("Schließen",null).setPositiveButton("Neu suchen",(d,w)->{tab.videos.clearResolved();showVideos();});
-        if(VideoDownloadService.busy())dialog.setNeutralButton("Warteschlange",(d,w)->showVideoQueue());
-        else if(!VideoDownloadService.status.isEmpty())dialog.setNeutralButton("Letzter Export",(d,w)->new AlertDialog.Builder(this).setMessage(VideoDownloadService.status).setPositiveButton("OK",null).show());dialog.show();
+        dialog.setNeutralButton("Download-Fortschritt",(d,w)->showVideoQueue());dialog.show();
     }
     private void showVideoQueue(){
-        java.util.List<String> rows=VideoDownloadService.queueLabels();
-        String message=VideoDownloadService.status;for(String row:rows)message+="\n\n"+row;
-        AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("Video-Warteschlange").setMessage(message).setNegativeButton("Schließen",null);
-        if(VideoDownloadService.busy())dialog.setPositiveButton("Aktuellen abbrechen",(d,w)->VideoDownloadService.cancelCurrent()).setNeutralButton("Alle abbrechen",(d,w)->VideoDownloadService.cancelAll());
-        dialog.show();
+        if(destroyed)return;if(videoDownloads!=null)videoDownloads.dismiss();videoDownloads=new VideoDownloadsDialog(this);videoDownloads.show();
     }
     private void videoOptions(VideoCatalog.Item item){
         boolean stream="HLS".equals(item.type)||"DASH".equals(item.type)||!item.audioUrl.isEmpty();
@@ -692,8 +688,8 @@ public class MainActivity extends Activity {
         }).setNegativeButton("Abbrechen",null).show();
     }
     private void settings(){
-        new AlertDialog.Builder(this).setTitle("Einstellungen").setItems(new String[]{"Video-Downloadordner: "+DownloadFolder.label(this),"Suchmaschine","Werbeblocker: "+(adBlockingEnabled?"Ein":"Aus")},(d,which)->{
-            if(which==0){pendingVideo=null;pickDownloadFolder();}else if(which==1)chooseEngine();else showAdBlockingSettings();
+        new AlertDialog.Builder(this).setTitle("Einstellungen").setItems(new String[]{"Video-Downloadordner: "+DownloadFolder.label(this),"Suchmaschine","Werbeblocker: "+(adBlockingEnabled?"Ein":"Aus"),"Video-Downloads · Fortschritt und Warteschlange"},(d,which)->{
+            if(which==0){pendingVideo=null;pickDownloadFolder();}else if(which==1)chooseEngine();else if(which==2)showAdBlockingSettings();else showVideoQueue();
         }).setNegativeButton("Schließen",null).show();
     }
     private void showAdBlockingSettings(){
@@ -807,7 +803,7 @@ public class MainActivity extends Activity {
                     Intent download=new Intent(this,isPrivateMode()?PrivateVideoDownloadService.class:VideoDownloadService.class).putExtra("title",filename).putExtra("url",item.url).putExtra("type",item.type).putExtra("audio",item.audioUrl).putExtra("headers",new org.json.JSONObject(item.headers).toString()).putExtra("destination",destination.toString()).putExtra("original",original).putExtra("clip",clip);
                     if(Build.VERSION.SDK_INT>=26)startForegroundService(download);else startService(download);
                     if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},21);
-                    toast("Video zur Warteschlange hinzugefügt.");
+                    toast("Video hinzugefügt. Fortschritt unter Einstellungen → Video-Downloads.");
                 }catch(Exception error){videoWorkerCleanup(destination);toast("Videospeicherung konnte nicht gestartet werden.");}
             });
         });

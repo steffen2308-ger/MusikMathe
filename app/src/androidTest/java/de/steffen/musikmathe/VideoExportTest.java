@@ -18,6 +18,10 @@ import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicLong;
+import androidx.media3.datasource.DataSource;
+import androidx.media3.datasource.DataSpec;
+import androidx.media3.datasource.TransferListener;
 import static org.junit.Assert.*;
 
 @RunWith(AndroidJUnit4.class)
@@ -39,10 +43,15 @@ public class VideoExportTest {
             String[] paths={"/video/source.mp4","/video/hls/index.m3u8","/video/dash/manifest.mpd","/video/hls/live.m3u8","/video/youtube-video.mp4"};String[] types={"MP4","HLS","DASH","HLS","MP4"};
             for(int i=0;i<paths.length;i++){
                 String url="http://127.0.0.1:"+server.getLocalPort()+paths[i],type=types[i];long clip=i==3?1000:0;String audioUrl=i==4?"http://127.0.0.1:"+server.getLocalPort()+"/video/youtube-audio.m4a":"";File output=new File(app.getCacheDir(),"test-export-"+i+".mp4");output.delete();
-                CountDownLatch done=new CountDownLatch(1);AtomicReference<String> error=new AtomicReference<>();AtomicReference<VideoExporter> active=new AtomicReference<>();
-                InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{VideoExporter exporter=new VideoExporter();active.set(exporter);exporter.start(app,url,type,Collections.emptyMap(),output,clip,audioUrl,new VideoExporter.Listener(){public void completed(){done.countDown();}public void failed(String message){error.set(message);done.countDown();}public void progress(int percent){}});});
+                CountDownLatch done=new CountDownLatch(1);AtomicReference<String> error=new AtomicReference<>();AtomicReference<VideoExporter> active=new AtomicReference<>();AtomicLong received=new AtomicLong();
+                InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{VideoExporter exporter=new VideoExporter();active.set(exporter);exporter.start(app,url,type,Collections.emptyMap(),output,clip,audioUrl,new VideoExporter.Listener(){public void completed(){done.countDown();}public void failed(String message){error.set(message);done.countDown();}public void progress(int percent){}},new TransferListener(){
+                    public void onTransferInitializing(DataSource source,DataSpec spec,boolean network){}
+                    public void onTransferStart(DataSource source,DataSpec spec,boolean network){}
+                    public void onBytesTransferred(DataSource source,DataSpec spec,boolean network,int bytes){received.addAndGet(bytes);}
+                    public void onTransferEnd(DataSource source,DataSpec spec,boolean network){}
+                });});
                 try{
-                    assertTrue(type+" export timed out",done.await(60,TimeUnit.SECONDS));assertNull(type+" export failed: "+error.get(),error.get());assertTrue(output.length()>1000);
+                    assertTrue(type+" export timed out",done.await(60,TimeUnit.SECONDS));assertNull(type+" export failed: "+error.get(),error.get());assertTrue(output.length()>1000);assertTrue(type+" missing transfer metrics",received.get()>1000);
                     MediaExtractor media=new MediaExtractor();try{media.setDataSource(output.getAbsolutePath());boolean audio=false,video=false;for(int t=0;t<media.getTrackCount();t++){MediaFormat f=media.getTrackFormat(t);String mime=f.getString(MediaFormat.KEY_MIME);if(mime.startsWith("audio/"))audio=true;if(mime.startsWith("video/"))video=true;assertTrue(f.getLong(MediaFormat.KEY_DURATION)>(clip>0?500000:1000000));}assertTrue(type+" missing audio",audio);assertTrue(type+" missing video",video);}finally{media.release();}
                 }finally{InstrumentationRegistry.getInstrumentation().runOnMainSync(()->active.get().cancel());output.delete();}
             }

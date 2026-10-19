@@ -49,22 +49,28 @@ public class VideoDownloadQueueTest {
     private final List<String> requests=Collections.synchronizedList(new ArrayList<>());
     private final CountDownLatch releaseFirst=new CountDownLatch(1),releaseSecond=new CountDownLatch(1);
     private boolean holdSecond;
+    private TestDocuments documents;
+    private final CountDownLatch releaseBody=new CountDownLatch(1);
     private int startId;
     @Before public void setup()throws Exception{
         Context context=RuntimeEnvironment.getApplication();folder=Files.createTempDirectory("queue-documents").toFile();
-        TestDocuments provider=new TestDocuments(folder);ProviderInfo info=new ProviderInfo();info.authority="queue.test";info.exported=true;info.grantUriPermissions=true;info.readPermission=info.writePermission="android.permission.MANAGE_DOCUMENTS";provider.attachInfo(context,info);ShadowContentResolver.registerProviderInternal(info.authority,provider);
+        TestDocuments provider=new TestDocuments(folder);documents=provider;ProviderInfo info=new ProviderInfo();info.authority="queue.test";info.exported=true;info.grantUriPermissions=true;info.readPermission=info.writePermission="android.permission.MANAGE_DOCUMENTS";provider.attachInfo(context,info);ShadowContentResolver.registerProviderInternal(info.authority,provider);
         controller=Robolectric.buildService(VideoDownloadService.class).create();service=controller.get();
         server=new ServerSocket(0);Thread responses=new Thread(()->{
             while(!server.isClosed())try(Socket socket=server.accept()){
                 socket.setSoTimeout(5000);BufferedReader reader=new BufferedReader(new InputStreamReader(socket.getInputStream(),StandardCharsets.US_ASCII));String first=reader.readLine();if(first==null)continue;String path=first.split(" ")[1];String line;while((line=reader.readLine())!=null&&!line.isEmpty()){}
                 requests.add(path);if(path.equals("/first"))releaseFirst.await(10,TimeUnit.SECONDS);if(holdSecond&&path.equals("/second"))releaseSecond.await(10,TimeUnit.SECONDS);
+                if(path.equals("/slow")){
+                    socket.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: 262144\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
+                    byte[] chunk=new byte[131072];socket.getOutputStream().write(chunk);socket.getOutputStream().flush();releaseBody.await(10,TimeUnit.SECONDS);socket.getOutputStream().write(chunk);continue;
+                }
                 byte[] body=("video-data:"+path).getBytes(StandardCharsets.UTF_8);String headers="HTTP/1.1 "+(path.equals("/bad")?"500 Failed":"200 OK")+"\r\nContent-Length: "+body.length+"\r\nConnection: close\r\n\r\n";
                 socket.getOutputStream().write(headers.getBytes(StandardCharsets.US_ASCII));socket.getOutputStream().write(body);
             }catch(Exception ignored){}
         });responses.setDaemon(true);responses.start();
     }
     @After public void cleanup()throws Exception{
-        releaseFirst.countDown();releaseSecond.countDown();VideoDownloadService.cancelAll();server.close();
+        releaseFirst.countDown();releaseSecond.countDown();releaseBody.countDown();documents.releaseCopy.countDown();VideoDownloadService.cancelAll();server.close();
         controller.destroy();shadowOf(Looper.getMainLooper()).idle();for(File file:folder.listFiles())file.delete();folder.delete();
     }
     private void await(BooleanSupplier ready)throws Exception{
@@ -95,14 +101,27 @@ public class VideoDownloadQueueTest {
         assertEquals(java.util.Arrays.asList("/first","/second","/fourth"),requests);assertEquals("video-data:/fourth",new String(Files.readAllBytes(new File(folder,"four.mp4").toPath()),StandardCharsets.UTF_8));
         File temporary=new File(service.getCacheDir(),"video-export");assertTrue(temporary.listFiles()==null||temporary.listFiles().length==0);
     }
+    @Test public void reportsNetworkAndFinalCopySeparatelyWithoutStaleQueueProgress()throws Exception{
+        documents.holdCopy=true;enqueue("/slow","slow.mp4");enqueue("/second","later.mp4");
+        await(()->VideoDownloadService.snapshot().progress!=null&&VideoDownloadService.snapshot().progress.bytes==131072);
+        VideoDownloadService.Snapshot snapshot=VideoDownloadService.snapshot();
+        assertEquals("slow.mp4",snapshot.title);assertEquals(java.util.Arrays.asList("later.mp4"),snapshot.waiting);
+        assertEquals(262144,snapshot.progress.total);assertEquals(50,snapshot.progress.percent);assertTrue(snapshot.progress.phase.contains("1/2"));
+        releaseBody.countDown();await(()->documents.copyStarted.getCount()==0);
+        snapshot=VideoDownloadService.snapshot();assertTrue(snapshot.running);assertTrue(snapshot.progress.phase.contains("2/2"));assertEquals(0,snapshot.progress.bytes);assertEquals(0,snapshot.progress.percent);
+        documents.holdCopy=false;documents.releaseCopy.countDown();await(()->!VideoDownloadService.busy());
+        assertEquals(262144,new File(folder,"slow.mp4").length());assertNull(VideoDownloadService.snapshot().progress);assertTrue(VideoDownloadService.snapshot().waiting.isEmpty());assertTrue(VideoDownloadService.snapshot().message.contains("gespeichert"));
+    }
     public static final class TestDocuments extends DocumentsProvider {
         private final File folder;
+        volatile boolean holdCopy;
+        final CountDownLatch copyStarted=new CountDownLatch(1),releaseCopy=new CountDownLatch(1);
         TestDocuments(File folder){this.folder=folder;}
         @Override public boolean onCreate(){return true;}
         @Override public Cursor queryRoots(String[] projection){return new MatrixCursor(new String[]{DocumentsContract.Root.COLUMN_ROOT_ID});}
         @Override public Cursor queryDocument(String id,String[] projection){return new MatrixCursor(new String[]{DocumentsContract.Document.COLUMN_DOCUMENT_ID});}
         @Override public Cursor queryChildDocuments(String parent,String[] projection,String sort){return queryDocument(parent,projection);}
-        @Override public ParcelFileDescriptor openDocument(String id,String mode,CancellationSignal signal)throws java.io.FileNotFoundException{return ParcelFileDescriptor.open(new File(folder,id),ParcelFileDescriptor.parseMode(mode));}
+        @Override public ParcelFileDescriptor openDocument(String id,String mode,CancellationSignal signal)throws java.io.FileNotFoundException{if(holdCopy){copyStarted.countDown();try{if(!releaseCopy.await(10,TimeUnit.SECONDS))throw new java.io.FileNotFoundException("copy timeout");}catch(InterruptedException e){throw new java.io.FileNotFoundException("interrupted");}}return ParcelFileDescriptor.open(new File(folder,id),ParcelFileDescriptor.parseMode(mode));}
         @Override public void deleteDocument(String id){assertTrue(new File(folder,id).delete());}
     }
 }
