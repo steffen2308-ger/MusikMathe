@@ -94,7 +94,7 @@ public class NightModeDeviceTest {
             if(WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING))expect(original,"matchMedia('(prefers-color-scheme:dark)').matches","false");
             toggle();night(true);stage="Navigate home before relaunch";
             UiObject2 homeButton=device.wait(Until.findObject(By.desc("Startseite")),8000);assertNotNull(homeButton);homeButton.click();
-            expect(original,"location.href",org.json.JSONObject.quote(Address.HOME));expect(original,"document.documentElement.classList.contains('bestbrowser-night')","true");
+            expect(original,"location.href==="+org.json.JSONObject.quote(Address.HOME),"true");expect(original,"document.documentElement.classList.contains('bestbrowser-night')","true");
             // Persist through the actual browser navigation/lifecycle. Writing test
             // preferences while an Activity is still finishing races its onPause save.
             main(activity::finish);instrumentation.waitForIdleSync();stage="Relaunch dark home";
