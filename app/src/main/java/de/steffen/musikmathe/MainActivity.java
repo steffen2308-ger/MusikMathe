@@ -368,7 +368,7 @@ public class MainActivity extends Activity {
                 case 8: tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: new AlertDialog.Builder(this).setTitle("MusikMathe · 0.4.1").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenz: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: new AlertDialog.Builder(this).setTitle("MusikMathe · 0.4.2").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenz: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: endPrivate(); break;
@@ -503,10 +503,10 @@ public class MainActivity extends Activity {
             if(item==null || !"content".equals(destination.getScheme())){try{android.provider.DocumentsContract.deleteDocument(getContentResolver(),destination);}catch(Exception ignored){}return;}
             try{
                 if((data.getFlags()&Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)!=0 && (data.getFlags()&Intent.FLAG_GRANT_WRITE_URI_PERMISSION)!=0)getContentResolver().takePersistableUriPermission(destination,Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                Intent download=new Intent(this,isPrivateMode()?PrivateVideoDownloadService.class:VideoDownloadService.class).putExtra("url",item.url).putExtra("type",item.type).putExtra("audio",item.audioUrl).putExtra("headers",new org.json.JSONObject(item.headers).toString()).putExtra("destination",destination.toString()).putExtra("original",pendingVideoOriginal).putExtra("clip",pendingVideoClip);
+                Intent download=new Intent(this,isPrivateMode()?PrivateVideoDownloadService.class:VideoDownloadService.class).putExtra("title",active().title).putExtra("url",item.url).putExtra("type",item.type).putExtra("audio",item.audioUrl).putExtra("headers",new org.json.JSONObject(item.headers).toString()).putExtra("destination",destination.toString()).putExtra("original",pendingVideoOriginal).putExtra("clip",pendingVideoClip);
                 if(Build.VERSION.SDK_INT>=26)startForegroundService(download);else startService(download);
                 if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},21);
-                toast("Video wird gespeichert. Fortschritt und Abbruch unter Videos oder in der Benachrichtigung.");
+                toast("Video zur Warteschlange hinzugefügt. Fortschritt unter Videos oder in der Benachrichtigung.");
             }catch(Exception error){try{android.provider.DocumentsContract.deleteDocument(getContentResolver(),destination);}catch(Exception ignored){}toast("Videospeicherung konnte nicht gestartet werden.");}
         }
         if(request==FILE_PICK){
@@ -545,7 +545,7 @@ public class MainActivity extends Activity {
     private void endPrivate() {
         if (!isPrivateMode()) return;
         if(VideoDownloadService.busy()){
-            new AlertDialog.Builder(this).setMessage("Im privaten Bereich läuft ein Videoexport. Abbrechen und alle privaten Tabs schließen?").setNegativeButton("Weiter speichern",null).setPositiveButton("Abbrechen und schließen",(d,w)->{VideoDownloadService.cancelCurrent();endPrivate();}).show();return;
+            new AlertDialog.Builder(this).setMessage("Im privaten Bereich werden Videos gespeichert oder warten auf den Download. Alle abbrechen und die privaten Tabs schließen?").setNegativeButton("Weiter speichern",null).setPositiveButton("Abbrechen und schließen",(d,w)->{VideoDownloadService.cancelAll();endPrivate();}).show();return;
         }
         closingPrivate=true;openNormal();finish();
     }
@@ -561,7 +561,7 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy(){
         destroyed=true;if(passwords!=null)passwords.destroy();if(videoResolver!=null)videoResolver.cancel();if(videoSearch!=null)videoSearch.dismiss();videoWorker.shutdownNow();cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs)if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}super.onDestroy();
         if (isPrivateMode() && !isChangingConfigurations()) {
-            VideoDownloadService.cancelCurrent();
+            VideoDownloadService.cancelAll();
             try { if(Build.VERSION.SDK_INT>=28)PrivateSession.wipe(this); } catch(java.io.IOException ignored) { }
             android.os.Process.killProcess(android.os.Process.myPid());
         }
@@ -616,21 +616,27 @@ public class MainActivity extends Activity {
             boolean youtube=!YouTubeSources.videoId(tab.url).isEmpty();
             String message=youtube?(error.isEmpty()?"Für dieses YouTube-Video wurde keine erreichbare Downloadquelle gefunden.":error):"Noch kein speicherbarer Stream erkannt. Starte das Video und suche erneut.";
             AlertDialog.Builder empty=new AlertDialog.Builder(this).setTitle(youtube?"YouTube-Download nicht verfügbar":"Videos auf dieser Seite").setMessage(message).setNegativeButton("Schließen",null).setPositiveButton("Erneut suchen",(d,w)->showVideos());
-            if(VideoDownloadService.busy())empty.setNeutralButton("Export abbrechen",(d,w)->VideoDownloadService.cancelCurrent());empty.show();return;
+            if(VideoDownloadService.busy())empty.setNeutralButton("Warteschlange",(d,w)->showVideoQueue());empty.show();return;
         }
         String[] labels=new String[videos.size()];for(int i=0;i<labels.length;i++)labels[i]=videos.get(i).label();
         AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("Videos · "+videos.size()).setItems(labels,(d,i)->videoOptions(videos.get(i))).setNegativeButton("Schließen",null).setPositiveButton("Neu suchen",(d,w)->{tab.videos.clearResolved();showVideos();});
-        if(VideoDownloadService.busy())dialog.setNeutralButton("Export abbrechen",(d,w)->VideoDownloadService.cancelCurrent());
+        if(VideoDownloadService.busy())dialog.setNeutralButton("Warteschlange",(d,w)->showVideoQueue());
         else if(!VideoDownloadService.status.isEmpty())dialog.setNeutralButton("Letzter Export",(d,w)->new AlertDialog.Builder(this).setMessage(VideoDownloadService.status).setPositiveButton("OK",null).show());dialog.show();
     }
+    private void showVideoQueue(){
+        java.util.List<String> rows=VideoDownloadService.queueLabels();
+        String message=VideoDownloadService.status;for(String row:rows)message+="\n\n"+row;
+        AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("Video-Warteschlange").setMessage(message).setNegativeButton("Schließen",null);
+        if(VideoDownloadService.busy())dialog.setPositiveButton("Aktuellen abbrechen",(d,w)->VideoDownloadService.cancelCurrent()).setNeutralButton("Alle abbrechen",(d,w)->VideoDownloadService.cancelAll());
+        dialog.show();
+    }
     private void videoOptions(VideoCatalog.Item item){
-        if(VideoDownloadService.busy()){new AlertDialog.Builder(this).setMessage(VideoDownloadService.status+"\n\nEs läuft bereits ein Videoexport.").setNegativeButton("Weiter speichern",null).setPositiveButton("Export abbrechen",(d,w)->VideoDownloadService.cancelCurrent()).show();return;}
         boolean stream="HLS".equals(item.type)||"DASH".equals(item.type)||!item.audioUrl.isEmpty();
         String[] choices=stream?new String[]{"Als MP4 speichern","MP4-Ausschnitt: 1 Minute","MP4-Ausschnitt: 5 Minuten","MP4-Ausschnitt: 10 Minuten"}:new String[]{"Als MP4 speichern","Originaldatei speichern"};
         new AlertDialog.Builder(this).setTitle(item.type+" speichern").setItems(choices,(d,i)->{
             boolean original=!stream && i==1;long clip=stream&&i>0?new long[]{0,60000,300000,600000}[i]:0;
             String info="Speicherort wählen. HLS und DASH werden mit Bild und Ton nach MP4 exportiert. Je nach Videoformat kann das dauern.\n\nLive-Streams brauchen einen begrenzten Ausschnitt; nicht jede Live-Quelle wird unterstützt. Kopiergeschützte oder abgelaufene Quellen können nicht exportiert werden.";
-            if(isPrivateMode())info+="\n\nDie Datei bleibt nach Ende der privaten Sitzung erhalten. Während des Exports den privaten Bereich geöffnet lassen.";
+            if(isPrivateMode())info+="\n\nDie Datei bleibt nach Ende der privaten Sitzung erhalten. Bis zum Ende der Warteschlange den privaten Bereich geöffnet lassen.";
             new AlertDialog.Builder(this).setMessage(info).setNegativeButton("Abbrechen",null).setPositiveButton("Speicherort wählen",(dialog,which)->chooseVideoFile(item,original,clip)).show();
         }).setNegativeButton("Abbrechen",null).show();
     }
