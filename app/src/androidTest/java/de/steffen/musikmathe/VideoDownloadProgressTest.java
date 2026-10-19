@@ -91,7 +91,10 @@ public class VideoDownloadProgressTest {
             assertEquals(java.util.Arrays.asList("/known","/unknown"),requests);
             assertTrue(device.wait(Until.hasObject(By.text("unknown.mp4")),6000));assertTrue(device.wait(Until.hasObject(By.textContains("Gesamtgröße unbekannt")),6000));
             try(InputStream saved=app.getContentResolver().openInputStream(uri("known"))){byte[] buffer=new byte[8192];int n;long total=0;while((n=saved.read(buffer))!=-1)total+=n;assertEquals(262144,total);}
-            enqueue(server.getLocalPort(),"waiting");await(()->snapshot().waiting.size()==1);click(device,"Alle abbrechen");
+            enqueue(server.getLocalPort(),"waiting");await(()->snapshot().waiting.size()==1);
+            // The service updates before the dialog grows; wait for its new layout
+            // before locating the footer button's tap coordinates.
+            assertTrue(device.wait(Until.hasObject(By.textContains("In Warteschlange: 1")),6000));click(device,"Alle abbrechen");
             await(()->!snapshot().running);assertTrue(snapshot().waiting.isEmpty());assertNull(snapshot().progress);
             assertTrue(device.wait(Until.hasObject(By.text("Keine laufenden Video-Downloads")),6000));assertTrue(device.hasObject(By.text("Videospeicherung abgebrochen.")));
         }finally{
