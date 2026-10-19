@@ -118,7 +118,9 @@ public class MainActivity extends AppCompatActivity {
         if(!isPrivateMode())passwords=new PasswordManager(this,this::activeView);
         buildInterface();
         if (!isPrivateMode()) PrivateSession.cleanIfStopped(this);
-        if (Build.VERSION.SDK_INT >= 33) getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::goBack);
+        getOnBackPressedDispatcher().addCallback(this,new androidx.activity.OnBackPressedCallback(true){
+            @Override public void handleOnBackPressed(){goBack();}
+        });
         for (BrowserStore.Entry row : store.read("tabs")) tabs.add(new Tab(row.url, row.title, row.desktop));
         if (tabs.isEmpty()) tabs.add(new Tab(Address.HOME, "Neuer Tab", false));
         selected = Math.max(0, Math.min(store.selected(), tabs.size() - 1));
@@ -600,7 +602,6 @@ public class MainActivity extends AppCompatActivity {
     }
     @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(focused&&(browserFullscreen||customView!=null))applyFullscreenUi();}
     private void goBack(){if(browserMenu!=null&&browserMenu.dismiss())return;if(addressSuggestions!=null&&addressSuggestions.dismissIfShowing())return;if(customView!=null){hideFullscreen();return;}if(browserFullscreen){setBrowserFullscreen(false);return;}WebView web=activeView();if(web!=null && web.canGoBack())web.goBack();else if(tabs.size()>1)closeTab(selected);else if(isPrivateMode())endPrivate();else moveTaskToBack(true);}
-    @Override public void onBackPressed(){goBack();}
     private void share(String url){try{startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,url),"Seite teilen"));}catch(ActivityNotFoundException e){toast("Keine passende App verfügbar.");}}
     private void copy(String url){((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Webadresse",url));toast("Link kopiert.");}
     private void toast(String message){if(!destroyed)Toast.makeText(this,message,Toast.LENGTH_SHORT).show();}

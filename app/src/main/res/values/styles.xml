@@ -6,6 +6,7 @@
         <item name="android:statusBarColor">@color/browser_paper</item>
         <item name="android:navigationBarColor">@color/browser_paper</item>
         <item name="android:windowLightStatusBar">@bool/browser_light_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/browser_light_bars</item>
         <item name="android:textColorPrimary">@color/browser_ink</item>
         <item name="android:textColorSecondary">@color/browser_hint</item>
         <item name="android:alertDialogTheme">@style/BrowserAlertTheme</item>
