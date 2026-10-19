@@ -208,7 +208,6 @@ public class BrowserFullscreenTest {
         // Run this probe explicitly after the ordinary suite, in its own instrumentation process.
         org.junit.Assume.assumeTrue("Camera emulation runs in the separate cutout pass", "true".equals(InstrumentationRegistry.getArguments().getString("cutoutProbe")));
         UiDevice device=UiDevice.getInstance(instrumentation);String overlay="com.android.internal.display.cutout.emulation.tall";
-        android.content.res.Resources resources=instrumentation.getTargetContext().getResources();int cutoutResource=resources.getIdentifier("config_mainBuiltInDisplayCutout","string","android");String originalCutout=cutoutResource==0?null:resources.getString(cutoutResource);
         String before=device.executeShellCommand("cmd overlay list --user 0");assertTrue("Emulator must provide a camera-cutout overlay",before.contains(overlay));boolean alreadyEnabled=before.contains("[x] "+overlay);
         MainActivity activity=null;
         try{
@@ -227,10 +226,10 @@ public class BrowserFullscreenTest {
                 device.setOrientationNatural();
                 if(!alreadyEnabled)device.executeShellCommand("cmd overlay disable --user 0 "+overlay);
                 device.unfreezeRotation();
-                // Deliver overlay/rotation changes before the next test launches an activity.
-                long restoreDeadline=SystemClock.uptimeMillis()+8000;
-                while(originalCutout!=null&&!originalCutout.equals(resources.getString(cutoutResource))&&SystemClock.uptimeMillis()<restoreDeadline)Thread.sleep(100);
-                if(originalCutout!=null)assertEquals("Original cutout resources restored",originalCutout,resources.getString(cutoutResource));
+                // Verify the actual overlay state; a cached Resources instance can retain
+                // the old overlay assets in this dedicated instrumentation process.
+                String restored=device.executeShellCommand("cmd overlay list --user 0");
+                assertEquals("Original camera overlay state restored",alreadyEnabled,restored.contains("[x] "+overlay));
                 device.waitForIdle();instrumentation.waitForIdleSync();Thread.sleep(500);instrumentation.waitForIdleSync();
             }finally{
                 if(activity!=null){MainActivity browser=activity;instrumentation.runOnMainSync(browser::finish);}
