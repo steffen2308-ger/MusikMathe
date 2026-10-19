@@ -79,6 +79,7 @@ public class BrowserFullscreenTest {
     }
     private void touch(long down,int action,float x,float y){
         MotionEvent event=MotionEvent.obtain(down,SystemClock.uptimeMillis(),action,x,y,0);
+        event.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);
         try{assertTrue("Touch injection at "+x+","+y,instrumentation.getUiAutomation().injectInputEvent(event,true));}finally{event.recycle();}
     }
     private void doubleTap(WebView web,String id)throws Exception{
