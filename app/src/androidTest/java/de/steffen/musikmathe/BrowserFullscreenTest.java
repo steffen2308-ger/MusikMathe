@@ -8,12 +8,17 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.widget.FrameLayout;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SdkSuppress;
 import androidx.test.platform.app.InstrumentationRegistry;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.json.JSONArray;
@@ -50,7 +55,19 @@ public class BrowserFullscreenTest {
         WebView[] holder={null};instrumentation.runOnMainSync(()->{
             try{
                 holder[0]=(WebView)invoke(activity,"activeView",new Class<?>[0]);
-                holder[0].loadDataWithBaseURL("https://fullscreen.example/","<html><head><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{margin:0;min-height:300vh}#blank{height:210px;background:#eef}button,input,a,p{display:block;height:44px;margin:4px;width:200px}#text{font-size:16px}</style></head><body><div id='blank'></div><button id='button' onclick='window.clicks++'>Button</button><input id='input'><a id='link' href='#destination'>Link</a><p id='text'>Selectable text</p><div id='destination'></div><script>window.clicks=0;window.fixtureReady=true;</script></body></html>","text/html","UTF-8",null);
+                String html="<html><head><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{margin:0;min-height:300vh}#blank{height:210px;background:#eef}button,input,a,p{display:block;height:44px;margin:4px;width:200px}#text{font-size:16px}</style></head><body><div id='blank'></div><button id='button' onclick='window.clicks++'>Button</button><input id='input'><a id='link' href='#destination'>Link</a><p id='text'>Selectable text</p><div id='destination'></div><script>window.clicks=0;window.fixtureReady=true;</script></body></html>";
+                WebViewClient original=holder[0].getWebViewClient();
+                holder[0].setWebViewClient(new WebViewClient(){
+                    @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
+                        if(request.isForMainFrame()&&request.getUrl().toString().startsWith("https://fullscreen.example/"))return new WebResourceResponse("text/html","UTF-8",new ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8)));
+                        return original.shouldInterceptRequest(view,request);
+                    }
+                    @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap icon){original.onPageStarted(view,url,icon);}
+                    @Override public void onPageFinished(WebView view,String url){original.onPageFinished(view,url);}
+                    @Override public void doUpdateVisitedHistory(WebView view,String url,boolean reload){original.doUpdateVisitedHistory(view,url,reload);}
+                    @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){return original.shouldOverrideUrlLoading(view,request);}
+                });
+                holder[0].loadUrl("https://fullscreen.example/");
             }catch(Exception error){throw new RuntimeException(error);}
         });
         expect(holder[0],"String(window.fixtureReady)","true");Thread.sleep(250);return holder[0];
@@ -61,7 +78,7 @@ public class BrowserFullscreenTest {
     }
     private void touch(long down,int action,float x,float y){
         MotionEvent event=MotionEvent.obtain(down,SystemClock.uptimeMillis(),action,x,y,0);
-        try{instrumentation.sendPointerSync(event);}finally{event.recycle();}
+        try{assertTrue("Touch injection at "+x+","+y,instrumentation.getUiAutomation().injectInputEvent(event,true));}finally{event.recycle();}
     }
     private void doubleTap(WebView web,String id)throws Exception{
         Thread.sleep(400);float[] p=point(web,id);
@@ -100,6 +117,7 @@ public class BrowserFullscreenTest {
             });
             assertEquals(1,hidden[0]);expectFullscreen(activity,true);
             js(web,"history.pushState({},'', '#keep-history');location.href");
+            expect(web,"location.hash","#keep-history");
             String url=js(web,"location.href");
             instrumentation.runOnMainSync(activity::onBackPressed);expectFullscreen(activity,false);
             assertEquals("Back exits fullscreen before navigating",url,js(web,"location.href"));
