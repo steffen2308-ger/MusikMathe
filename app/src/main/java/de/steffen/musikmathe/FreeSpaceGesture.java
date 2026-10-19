@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
+import java.util.function.Consumer;
 
 /** Observe real touches without swallowing page clicks; only blank-space double taps toggle the UI. */
 final class FreeSpaceGesture {
@@ -70,7 +71,7 @@ final class FreeSpaceGesture {
         view.setOnTouchListener((target,event)->detector.onTouchEvent(event));
     }
     @SuppressLint("ClickableViewAccessibility") // Observes events only; WebView receives every click and accessibility action.
-    static void attach(WebView web,BooleanSupplier active,IntSupplier page,Runnable toggle){
+    static void attach(WebView web,BooleanSupplier active,IntSupplier page,Runnable toggle,Consumer<MotionEvent> touchObserver){
         String script;
         try(InputStream input=web.getContext().getAssets().open("free-space.js");ByteArrayOutputStream out=new ByteArrayOutputStream()){
             byte[] buffer=new byte[4096];int length;
@@ -79,6 +80,7 @@ final class FreeSpaceGesture {
         }catch(IOException failure){return;}
         FreeSpaceGesture gesture=new FreeSpaceGesture(web,active,page,toggle,script);
         web.setOnTouchListener((view,event)->{
+            touchObserver.accept(event);
             int action=event.getActionMasked();
             if(action==MotionEvent.ACTION_DOWN){gesture.generation++;gesture.secondTap=false;gesture.multiple=false;}
             if(action==MotionEvent.ACTION_POINTER_DOWN){gesture.multiple=true;gesture.firstFree=false;gesture.restoreZoom();}

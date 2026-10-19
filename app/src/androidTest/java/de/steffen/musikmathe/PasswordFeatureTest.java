@@ -82,6 +82,22 @@ public class PasswordFeatureTest {
             assertEquals("\"\"",js(web,"document.getElementById('password').value"));
         }finally{main(activity::finish);vault.clear();}
     }
+    @Test public void realTouchStillOffersAutofillAfterFullscreenGesturesAreAttached()throws Exception{
+        PasswordVault vault=new PasswordVault(app(),false);vault.clear();Activity activity=launch();WebView web=view(activity);
+        try{
+            Assume.assumeTrue("Older WebView uses explicit fill menu",WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER));
+            vault.save("https://focus.example.test","focus-user","Dummy-focus-password");page(web,"focus.example.test");
+            js(web,"document.getElementById('username').focus();true");
+            UiDevice device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
+            assertFalse("Script focus alone must not open autofill",device.wait(Until.hasObject(By.text("focus-user")),500));
+            js(web,"document.getElementById('username').blur();true");
+            org.json.JSONArray position=new org.json.JSONArray(new org.json.JSONTokener(js(web,"JSON.stringify((function(){var r=document.getElementById('username').getBoundingClientRect();return [(r.left+r.width/2)/innerWidth,(r.top+r.height/2)/innerHeight];})())")).nextValue().toString());
+            int[] point=new int[2];main(()->{int[] location=new int[2];web.getLocationOnScreen(location);point[0]=location[0]+(int)(web.getWidth()*position.optDouble(0));point[1]=location[1]+(int)(web.getHeight()*position.optDouble(1));});
+            device.click(point[0],point[1]);click("focus-user");
+            assertEquals("\"Dummy-focus-password\"",js(web,"document.getElementById('password').value"));
+            assertTrue("Normal browser controls stay visible",device.hasObject(By.desc("Menü")));
+        }finally{main(activity::finish);vault.clear();}
+    }
     @Test public void formSubmissionOffersNativeSaveOnSupportedWebViews()throws Exception{
         PasswordVault vault=new PasswordVault(app(),false);vault.clear();Activity activity=launch();WebView web=view(activity);
         try{

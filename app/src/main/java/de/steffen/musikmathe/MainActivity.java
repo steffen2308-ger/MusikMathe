@@ -331,7 +331,7 @@ public class MainActivity extends Activity {
             String target=hit.getExtra(); if(!Address.isWeb(target))return false;
             new AlertDialog.Builder(this).setTitle(target).setItems(new String[]{"In neuem Tab öffnen","Link kopieren","Link teilen"},(dialog,which) -> { if(which==0)newTab(target,true);else if(which==1)copy(target);else share(target); }).show(); return true;
         });
-        FreeSpaceGesture.attach(web,()->!destroyed&&activeView()==web&&customView==null,()->tab.videoPage,()->setBrowserFullscreen(!browserFullscreen));
+        FreeSpaceGesture.attach(web,()->!destroyed&&activeView()==web&&customView==null,()->tab.videoPage,()->setBrowserFullscreen(!browserFullscreen),event->{if(passwords!=null)passwords.touch(web,event);});
         configureAdBlocking(tab,web);
         if((tab.state==null || web.restoreState(tab.state)==null) && !"about:blank".equals(tab.url))web.loadUrl(Address.isWeb(tab.url)?tab.url:Address.HOME);
         tab.state=null; return web;

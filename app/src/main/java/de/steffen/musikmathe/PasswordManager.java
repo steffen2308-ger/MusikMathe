@@ -35,7 +35,7 @@ final class PasswordManager {
     private void show(AlertDialog next){if(destroyed)return;if(dialog!=null)dialog.dismiss();dialog=next;next.setOnDismissListener(d->{if(dialog==next)dialog=null;});next.show();if(next.getWindow()!=null)next.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);}
     void attach(WebView web){
         State state=new State();states.put(web,state);
-        web.setOnTouchListener((view,event)->{if(event.getActionMasked()==MotionEvent.ACTION_DOWN)state.touch=SystemClock.elapsedRealtime();return false;});
+        web.setOnTouchListener((view,event)->{touch(web,event);return false;});
         try{
             if(!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER))return;
             WebViewCompat.addWebMessageListener(web,"musikPasswords",Collections.singleton("*"),(view,message,source,main,reply)->{
@@ -49,6 +49,10 @@ final class PasswordManager {
                 }catch(Exception ignored){}
             });state.bridge=true;
         }catch(RuntimeException|LinkageError ignored){ /* Explicit menu actions work on older providers. */ }
+    }
+    void touch(WebView web,MotionEvent event){
+        State state=states.get(web);
+        if(state!=null&&event.getActionMasked()==MotionEvent.ACTION_DOWN)state.touch=SystemClock.elapsedRealtime();
     }
     void pageStarted(WebView web){State s=states.get(web);if(s!=null){s.token=UUID.randomUUID().toString();s.touch=-10000;s.prompt=-100000;}}
     void pageFinished(WebView web){
