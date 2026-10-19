@@ -26,11 +26,12 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
 
-/** Actual touch dispatch into WebView, including page controls and the native immersive UI. */
+/** Real MotionEvents through the Activity and WebView, including page controls and immersive UI. */
 @RunWith(AndroidJUnit4.class)
 @SdkSuppress(minSdkVersion=26)
 public class BrowserFullscreenTest {
     private final Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();
+    private MainActivity currentActivity;
     private String stage="initial";
     private int doubleTaps;
     private Object field(MainActivity activity,String name)throws Exception{
@@ -51,7 +52,8 @@ public class BrowserFullscreenTest {
     }
     private MainActivity start() {
         instrumentation.getTargetContext().getSharedPreferences("browser",0).edit().clear().commit();
-        return (MainActivity)instrumentation.startActivitySync(new Intent(instrumentation.getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));
+        currentActivity=(MainActivity)instrumentation.startActivitySync(new Intent(instrumentation.getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));
+        return currentActivity;
     }
     private WebView load(MainActivity activity)throws Exception{
         WebView[] holder={null};instrumentation.runOnMainSync(()->{
@@ -81,7 +83,14 @@ public class BrowserFullscreenTest {
     private void touch(long down,int action,float x,float y){
         MotionEvent event=MotionEvent.obtain(down,SystemClock.uptimeMillis(),action,x,y,0);
         event.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);
-        try{assertTrue("Touch injection at "+x+","+y,instrumentation.getUiAutomation().injectInputEvent(event,true));}finally{event.recycle();}
+        // UiAutomation waits for system-bar animations between injected events on modern Android,
+        // stretching a double tap beyond Android's timeout. Dispatch into the app's real view tree
+        // so timestamps and cadence match a finger gesture while still exercising WebView and WM.
+        try{instrumentation.runOnMainSync(()->{
+            int[] origin=new int[2];currentActivity.getWindow().getDecorView().getLocationOnScreen(origin);
+            event.offsetLocation(-origin[0],-origin[1]);
+            assertTrue("Touch dispatch at "+x+","+y,currentActivity.dispatchTouchEvent(event));
+        });}finally{event.recycle();}
     }
     private void doubleTap(WebView web,String id)throws Exception{
         stage="double tap #"+(++doubleTaps)+" on "+id;
