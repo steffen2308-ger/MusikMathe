@@ -1,0 +1,4 @@
+! BestBrowser site rules, independent of the upstream EasyList snapshots.
+! Ad-shaped fixtures documented by https://adblock.turtlecute.org/.
+adblock.turtlecute.org##.adbox.banner_ads.adsbox
+adblock.turtlecute.org##.textads

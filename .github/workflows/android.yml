@@ -41,6 +41,8 @@ jobs:
         run: |
           node scripts/test-youtube.js
           node --check app/src/main/assets/passwords.js
+          python3 scripts/compile-adblock.py
+          node scripts/test-adblock.js
 
       - name: Build and lint
         run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
@@ -127,7 +129,7 @@ jobs:
           arch: x86_64
           target: default
           disable-animations: true
-          script: gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest
+          script: gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest
       - name: Upload password test results
         if: always()
         uses: actions/upload-artifact@v4

@@ -54,18 +54,23 @@ public class MainActivity extends Activity {
     private static final int FILE_PICK = 10, WEB_PERMISSION = 11, DOWNLOAD_PERMISSION = 12, PICK_DOWNLOAD_FOLDER = 20;
     private static final int INK = 0xff234a43, PAPER = 0xfff5f7f8;
     static final class Tab {
-        String url, title;
+        volatile String url;
+        String title;
         boolean desktop;
         WebView view;
         Bundle state;
         final VideoCatalog videos=new VideoCatalog();
         volatile int videoPage;
+        final java.util.concurrent.atomic.AtomicInteger blockedRequests=new java.util.concurrent.atomic.AtomicInteger();
+        androidx.webkit.ScriptHandler adBlockScript;
         Tab(String url, String title, boolean desktop) { this.url = url; this.title = title; this.desktop = desktop; }
     }
     private final List<Tab> tabs = new ArrayList<>();
     private int selected;
     private BrowserStore store;
     private volatile boolean adBlockingEnabled;
+    private volatile java.util.Set<String> adBlockExceptions=Collections.emptySet();
+    private boolean adBlockUpdating;
     private PasswordManager passwords;
     private LinearLayout shell, top, bottom;
     private FrameLayout root, pages;
@@ -103,6 +108,8 @@ public class MainActivity extends Activity {
         if (isPrivateMode()) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         store = new BrowserStore(this, isPrivateMode());
         adBlockingEnabled = store.adBlockingEnabled();
+        adBlockExceptions = Collections.unmodifiableSet(store.adBlockExceptions());
+        AdBlockResources.preload(this);
         if(!isPrivateMode())passwords=new PasswordManager(this,this::activeView);
         buildInterface();
         if (!isPrivateMode()) PrivateSession.cleanIfStopped(this);
@@ -210,7 +217,7 @@ public class MainActivity extends Activity {
         if(index<0 || index>=tabs.size()) return;
         if(isPrivateMode() && tabs.size()==1 && VideoDownloadService.busy()){endPrivate();return;}
         cancelPermission(); cancelUpload(); hideFullscreen();if(passwords!=null)passwords.tabChanged();
-        Tab removed=tabs.remove(index); if(removed.view!=null) { pages.removeView(removed.view); removed.view.stopLoading(); removed.view.destroy(); }
+        Tab removed=tabs.remove(index); clearAdBlockScript(removed); if(removed.view!=null) { pages.removeView(removed.view); removed.view.stopLoading(); removed.view.destroy(); }
         if(tabs.isEmpty() && isPrivateMode()) { endPrivate(); return; }
         if(tabs.isEmpty()) tabs.add(new Tab(Address.HOME,"Neuer Tab",false));
         if(index<selected)selected--; selected=Math.min(selected,tabs.size()-1); switchTab(selected);
@@ -239,9 +246,10 @@ public class MainActivity extends Activity {
         web.setWebViewClient(new WebViewClient() {
             @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 if (request.isForMainFrame() && WikiTop.URL.equals(request.getUrl().toString())) return WikiTop.response();
-                if (AdBlocker.shouldBlock(request.getUrl().toString(), request.isForMainFrame(), adBlockingEnabled)) {
-                    return new android.webkit.WebResourceResponse("text/plain", "UTF-8", 204, "No Content",
-                            Collections.singletonMap("Cache-Control", "no-store"), new java.io.ByteArrayInputStream(new byte[0]));
+                if(adBlockingEnabled&&!request.isForMainFrame()&&!AdBlocker.excepted(tab.url,adBlockExceptions))AdBlockResources.ensureLoaded(MainActivity.this);
+                if (AdBlocker.shouldBlock(request.getUrl().toString(), request.isForMainFrame(), adBlockingEnabled&&!AdBlocker.excepted(tab.url,adBlockExceptions))) {
+                    tab.blockedRequests.incrementAndGet();
+                    return BlockedResource.response();
                 }
                 if ("GET".equals(request.getMethod())) tab.videos.observe(request.getUrl().toString(),request.getRequestHeaders());
                 if ("GET".equals(request.getMethod())) recordVideo(tab,tab.videoPage,request.getUrl().toString(),"",request.getRequestHeaders());
@@ -260,11 +268,14 @@ public class MainActivity extends Activity {
             @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap favicon) {
                 if(passwords!=null)passwords.pageStarted(view);
                 tab.videoPage++;tab.videos.clear();tab.url=url; cancelPermissionFor(tab); if(active()==tab)updateToolbar();
+                tab.blockedRequests.set(0);
+                if(adBlockingEnabled)view.evaluateJavascript(AdBlockResources.cosmeticScript(MainActivity.this,adBlockExceptions),null);
             }
             @Override public void onPageFinished(WebView view,String url) {
                 tab.url=url; tab.title=view.getTitle()==null?url:view.getTitle();
                 store.visit(url,tab.title); if(active()==tab)updateToolbar(); persist();
                 if(passwords!=null)passwords.pageFinished(view);
+                if(adBlockingEnabled)view.evaluateJavascript(AdBlockResources.cosmeticScript(MainActivity.this,adBlockExceptions),null);
                 view.evaluateJavascript(VideoCatalog.HOOKS,null);
                 if(YouTubeSources.originAllowed(url))view.evaluateJavascript(YouTubeSources.script(MainActivity.this),null);
                 int page=tab.videoPage;view.postDelayed(() -> {if(!destroyed && tab.videoPage==page && tab.view==view)scanVideos(tab,()->{});},1000);
@@ -273,7 +284,7 @@ public class MainActivity extends Activity {
                 if(request.isForMainFrame() && active()==tab)toast("Seite konnte nicht geladen werden. Internetverbindung und Adresse prüfen.");
             }
             @Override public boolean onRenderProcessGone(WebView view,android.webkit.RenderProcessGoneDetail detail) {
-                pages.removeView(view); view.destroy(); tab.view=null; tab.state=null;
+                pages.removeView(view); clearAdBlockScript(tab); view.destroy(); tab.view=null; tab.state=null;
                 if(active()==tab) { toast("Die Seite wurde beendet. Sie wird neu geladen."); pages.post(() -> { if(!destroyed && tabs.contains(tab))switchTab(tabs.indexOf(tab)); }); }
                 return true;
             }
@@ -315,6 +326,7 @@ public class MainActivity extends Activity {
             String target=hit.getExtra(); if(!Address.isWeb(target))return false;
             new AlertDialog.Builder(this).setTitle(target).setItems(new String[]{"In neuem Tab öffnen","Link kopieren","Link teilen"},(dialog,which) -> { if(which==0)newTab(target,true);else if(which==1)copy(target);else share(target); }).show(); return true;
         });
+        configureAdBlocking(tab,web);
         if((tab.state==null || web.restoreState(tab.state)==null) && !"about:blank".equals(tab.url))web.loadUrl(Address.isWeb(tab.url)?tab.url:Address.HOME);
         tab.state=null; return web;
     }
@@ -358,6 +370,7 @@ public class MainActivity extends Activity {
         if(passwords!=null)popup.getMenu().add(0,16,0,"Passwörter");
         popup.getMenu().add(0,17,0,"Einstellungen");
         popup.getMenu().add(0,18,0,"Werbeblocker").setCheckable(true).setChecked(adBlockingEnabled);
+        popup.getMenu().add(0,19,0,"VPN");
         popup.getMenu().add(0,12,0,"Neuer privater Tab");
         popup.getMenu().add(0,13,1,isPrivateMode()?"Zu normalen Tabs":"Zu privaten Tabs");
         if (isPrivateMode()) {
@@ -378,14 +391,15 @@ public class MainActivity extends Activity {
                 case 8: tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: new AlertDialog.Builder(this).setTitle("BestBrowser · 0.4.4").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Eingebauter Werbeblocker mit Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenz: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: new AlertDialog.Builder(this).setTitle("BestBrowser · 0.4.5").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: endPrivate(); break;
                 case 15: showVideos(); break;
                 case 16: if(passwords!=null)passwords.menu(); break;
                 case 17: settings(); break;
-                case 18: setAdBlockingEnabled(!adBlockingEnabled); break;
+                case 18: showAdBlockingSettings(); break;
+                case 19: showVpn(); break;
             } return true;
         }); popup.show();
     }
@@ -564,10 +578,10 @@ public class MainActivity extends Activity {
         root.postDelayed(() -> { if(!destroyed)PrivateSession.cleanIfStopped(this); },1000);
     }}
     @Override public void onTrimMemory(int level){
-        super.onTrimMemory(level);if(level>=TRIM_MEMORY_RUNNING_LOW){for(Tab tab:tabs)if(tab!=active() && tab.view!=null){tab.state=new Bundle();tab.view.saveState(tab.state);tab.view.destroy();tab.view=null;}}
+        super.onTrimMemory(level);if(level>=TRIM_MEMORY_RUNNING_LOW){for(Tab tab:tabs)if(tab!=active() && tab.view!=null){tab.state=new Bundle();tab.view.saveState(tab.state);clearAdBlockScript(tab);tab.view.destroy();tab.view=null;}}
     }
     @Override protected void onDestroy(){
-        destroyed=true;if(passwords!=null)passwords.destroy();if(videoResolver!=null)videoResolver.cancel();if(videoSearch!=null)videoSearch.dismiss();videoWorker.shutdownNow();cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs)if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}super.onDestroy();
+        destroyed=true;if(passwords!=null)passwords.destroy();if(videoResolver!=null)videoResolver.cancel();if(videoSearch!=null)videoSearch.dismiss();videoWorker.shutdownNow();cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs){clearAdBlockScript(tab);if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}}super.onDestroy();
         if (isPrivateMode() && !isChangingConfigurations()) {
             VideoDownloadService.cancelAll();
             try { if(Build.VERSION.SDK_INT>=28)PrivateSession.wipe(this); } catch(java.io.IOException ignored) { }
@@ -655,17 +669,77 @@ public class MainActivity extends Activity {
         LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(24),dp(8),dp(24),dp(8));
         Switch toggle=new Switch(this);toggle.setText("Werbeblocker");toggle.setTextColor(INK);toggle.setTextSize(16);toggle.setMinHeight(dp(48));toggle.setChecked(adBlockingEnabled);
         content.addView(toggle,new LinearLayout.LayoutParams(-1,-2));
-        String message="Blockiert bekannte Werbeserver. Manche Werbung, etwa in YouTube-Videos, bleibt sichtbar. Beim Umschalten wird die aktuelle Seite neu geladen.";
+        String host=active()==null?"":AdBlocker.host(active().url);
+        if(!host.isEmpty()){
+            String inherited=AdBlocker.exceptionHost(active().url,adBlockExceptions);final String settingHost=inherited.isEmpty()?host:inherited;
+            Switch site=new Switch(this);site.setText("Auf "+settingHost+" blockieren");site.setTextColor(INK);site.setTextSize(15);site.setMinHeight(dp(48));
+            site.setChecked(!AdBlocker.excepted(active().url,adBlockExceptions));site.setEnabled(adBlockingEnabled);
+            site.setOnCheckedChangeListener((button,enabled)->setAdBlockSiteException(settingHost,!enabled));
+            content.addView(site,new LinearLayout.LayoutParams(-1,-2));
+            toggle.setOnCheckedChangeListener((button,enabled)->{setAdBlockingEnabled(enabled);site.setEnabled(enabled);});
+        }else toggle.setOnCheckedChangeListener((button,enabled)->setAdBlockingEnabled(enabled));
+        String message="Blockiert Werbe- und Trackingserver und blendet Werbeflächen aus. Die aktuelle Seite wird nach Änderungen neu geladen. YouTube-Videoanzeigen werden nicht zuverlässig entfernt.\n\n"+AdBlockResources.status();
+        if(active()!=null&&!host.isEmpty())message+="\n"+active().blockedRequests.get()+" Anfragen auf dieser Seite blockiert";
         if(isPrivateMode())message+="\n\nDie Änderung gilt nur für diese private Sitzung.";
         TextView explanation=text(message,14);explanation.setPadding(0,dp(12),0,dp(8));content.addView(explanation);
-        toggle.setOnCheckedChangeListener((button,enabled)->setAdBlockingEnabled(enabled));
-        new AlertDialog.Builder(this).setTitle("Werbeblocker").setView(content).setPositiveButton("Fertig",null).show();
+        ScrollView scroll=new ScrollView(this);scroll.addView(content);
+        AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("Werbeblocker").setView(scroll).setPositiveButton("Fertig",null);
+        if(!isPrivateMode())dialog.setNeutralButton(adBlockUpdating?"Aktualisierung läuft …":"Serverliste aktualisieren",(d,w)->updateAdBlockFilters());
+        dialog.show();
     }
     private void setAdBlockingEnabled(boolean enabled){
         if(adBlockingEnabled==enabled)return;
         store.adBlockingEnabled(enabled);adBlockingEnabled=enabled;
-        WebView view=activeView();if(view!=null)view.reload();
+        refreshAdBlocking();
         toast("Werbeblocker "+(enabled?"eingeschaltet":"ausgeschaltet")+(isPrivateMode()?" · nur für diese private Sitzung":""));
+    }
+    private void setAdBlockSiteException(String host,boolean excepted){
+        store.adBlockException(host,excepted);adBlockExceptions=Collections.unmodifiableSet(store.adBlockExceptions());refreshAdBlocking();
+    }
+    private void clearAdBlockScript(Tab tab){
+        if(tab.adBlockScript!=null){try{tab.adBlockScript.remove();}catch(RuntimeException ignored){}tab.adBlockScript=null;}
+    }
+    private void configureAdBlocking(Tab tab,WebView web){
+        clearAdBlockScript(tab);
+        String script=adBlockingEnabled?AdBlockResources.cosmeticScript(this,adBlockExceptions):AdBlockResources.CLEANUP_SCRIPT;
+        try{
+            if(adBlockingEnabled&&androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT))
+                tab.adBlockScript=androidx.webkit.WebViewCompat.addDocumentStartJavaScript(web,script,Collections.singleton("*"));
+        }catch(RuntimeException|LinkageError ignored){ /* Page callbacks still apply cosmetic filtering. */ }
+        web.evaluateJavascript(script,null);
+    }
+    private void refreshAdBlocking(){
+        for(Tab tab:tabs)if(tab.view!=null)configureAdBlocking(tab,tab.view);
+        WebView view=activeView();if(view!=null)view.reload();
+    }
+    private void updateAdBlockFilters(){
+        if(adBlockUpdating)return;adBlockUpdating=true;toast("Werbefilter werden aktualisiert …");
+        Context app=getApplicationContext();
+        Thread worker=new Thread(()->{
+            String error="";try{AdBlockResources.update(app);}catch(java.io.IOException|RuntimeException failure){error="Filter konnten nicht aktualisiert werden. Die bisherigen Filter bleiben aktiv.";}
+            final String result=error;
+            runOnUiThread(()->{adBlockUpdating=false;if(destroyed)return;if(result.isEmpty()){WebView view=activeView();if(view!=null)view.reload();toast("Werbefilter aktualisiert.");}else toast(result);});
+        },"adblock-update");worker.setDaemon(true);worker.start();
+    }
+    private void showVpn(){
+        String message=VpnSupport.statusText(this)+"\n\nDie VPN-Verbindung wird von einer VPN-App aufgebaut. BestBrowser nutzt diese Android-Verbindung. Prüfe in der VPN-App, dass BestBrowser nicht vom VPN ausgeschlossen ist. Der erkannte Status allein bestätigt weder die Erreichbarkeit eines Servers noch eine geänderte öffentliche IP-Adresse.";
+        new AlertDialog.Builder(this).setTitle("VPN").setMessage(message).setPositiveButton("Auswählen",(d,w)->{
+            new AlertDialog.Builder(this).setTitle("VPN auswählen").setItems(new String[]{"Kostenloses VPN · Proton VPN","Vorhandener VPN-Zugang","VPN-Status aktualisieren","Öffentliche IP prüfen"},(dialog,which)->{
+                if(which==0)new AlertDialog.Builder(this).setTitle("Proton VPN Free").setMessage("Proton VPN bietet einen kostenlosen Tarif ohne Datenlimit. Ein Proton-Konto und die separate Proton-VPN-App sind nötig. Anmeldung, Serverwahl und Verbinden erfolgen dort. BestBrowser betreibt selbst keinen VPN-Server und aktiviert keine kostenpflichtige Option.").setPositiveButton("Proton VPN öffnen / installieren",(a,b)->openVpnClient(VpnSupport.PROTON_PACKAGE,"https://protonvpn.com/free-vpn/android")).setNegativeButton("Abbrechen",null).show();
+                else if(which==1)showOwnVpn();else if(which==2)showVpn();else newTab("https://ipleak.net/",true);
+            }).setNegativeButton("Schließen",null).show();
+        }).setNegativeButton("Schließen",null).show();
+    }
+    private void showOwnVpn(){
+        new AlertDialog.Builder(this).setTitle("Vorhandener VPN-Zugang").setItems(new String[]{"WireGuard-App öffnen / installieren","OpenVPN-Connect-App öffnen / installieren","Android-VPN-Einstellungen"},(d,which)->{
+            if(which==0)openVpnClient(VpnSupport.WIREGUARD_PACKAGE,"https://www.wireguard.com/install/");
+            else if(which==1)openVpnClient(VpnSupport.OPENVPN_PACKAGE,"https://openvpn.net/client/");
+            else try{startActivity(VpnSupport.settings());}catch(ActivityNotFoundException error){toast("Die Android-VPN-Einstellungen sind auf diesem Gerät nicht verfügbar.");}
+        }).setNegativeButton("Zurück",(d,w)->showVpn()).show();
+    }
+    private void openVpnClient(String packageName,String fallback){
+        try{startActivity(VpnSupport.openClient(this,packageName));}
+        catch(ActivityNotFoundException error){newTab(fallback,true);}
     }
     private void pickDownloadFolder(){
         Intent choose=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION|Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);

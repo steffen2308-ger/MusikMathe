@@ -6,6 +6,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Collections;
 
 final class BrowserStore {
     static final int MAX_TABS = 20;
@@ -22,12 +25,14 @@ final class BrowserStore {
     private final boolean privateMode;
     private String privateEngine;
     private boolean privateAdBlocking;
+    private final Set<String> privateAdBlockExceptions;
     BrowserStore(Context context) { this(context, false); }
     BrowserStore(Context context, boolean privateMode) {
         prefs = context.getSharedPreferences("browser", Context.MODE_PRIVATE);
         this.privateMode = privateMode;
         privateEngine = prefs.getString("engine", "google");
         privateAdBlocking = prefs.getBoolean("ad_blocking", true);
+        privateAdBlockExceptions = new HashSet<>(prefs.getStringSet("ad_block_exceptions",Collections.emptySet()));
     }
     List<Entry> read(String key) {
         ArrayList<Entry> result = new ArrayList<>();
@@ -79,6 +84,15 @@ final class BrowserStore {
     void adBlockingEnabled(boolean enabled) {
         if (privateMode) privateAdBlocking = enabled;
         else prefs.edit().putBoolean("ad_blocking", enabled).apply();
+    }
+    Set<String> adBlockExceptions(){
+        return new HashSet<>(privateMode?privateAdBlockExceptions:prefs.getStringSet("ad_block_exceptions",Collections.emptySet()));
+    }
+    void adBlockException(String host,boolean excepted){
+        if(host.isEmpty())return;
+        Set<String> next=adBlockExceptions();if(excepted)next.add(host);else next.remove(host);
+        if(privateMode){privateAdBlockExceptions.clear();privateAdBlockExceptions.addAll(next);}
+        else prefs.edit().putStringSet("ad_block_exceptions",next).apply();
     }
 }
 

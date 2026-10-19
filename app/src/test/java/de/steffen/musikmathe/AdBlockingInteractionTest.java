@@ -44,7 +44,8 @@ public class AdBlockingInteractionTest {
             MainActivity activity=controller.get();WebView first=web(activity);
             WebResourceRequest ad=request("https://ads.doubleclick.net/banner.js",false);
             WebResourceResponse response=first.getWebViewClient().shouldInterceptRequest(first,ad);
-            assertNotNull(response);assertEquals(204,response.getStatusCode());assertEquals(-1,response.getData().read());
+            assertNotNull(response);assertEquals(403,response.getStatusCode());
+            try{response.getData().available();fail("Blocked responses must fail instead of looking successful");}catch(java.io.IOException expected){}
             assertEquals("no-store",response.getResponseHeaders().get("Cache-Control"));
             assertNull(first.getWebViewClient().shouldInterceptRequest(first,request("https://doubleclick.net/",true)));
             assertNull(first.getWebViewClient().shouldInterceptRequest(first,request("https://example.org/script.js",false)));
@@ -67,5 +68,19 @@ public class AdBlockingInteractionTest {
             WebView view=web(next.get());
             assertNull(view.getWebViewClient().shouldInterceptRequest(view,request("https://doubleclick.net/banner.js",false)));
         } finally { next.pause().stop().destroy(); }
+    }
+    @Test public void siteExceptionBypassesFilteringAndCanBeRemoved()throws Exception {
+        ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();
+        try{
+            MainActivity activity=controller.get();
+            invoke(activity,"navigate",new Class<?>[]{String.class},"https://example.org/");
+            // Robolectric does not run WebView navigation callbacks; navigate updates the tab URL.
+            WebView view=web(activity);WebResourceRequest ad=request("https://doubleclick.net/banner.js",false);
+            assertNotNull(view.getWebViewClient().shouldInterceptRequest(view,ad));
+            invoke(activity,"setAdBlockSiteException",new Class<?>[]{String.class,boolean.class},"example.org",true);
+            assertNull(view.getWebViewClient().shouldInterceptRequest(view,ad));
+            invoke(activity,"setAdBlockSiteException",new Class<?>[]{String.class,boolean.class},"example.org",false);
+            assertNotNull(view.getWebViewClient().shouldInterceptRequest(view,ad));
+        }finally{controller.pause().stop().destroy();}
     }
 }

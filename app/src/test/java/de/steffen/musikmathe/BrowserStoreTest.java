@@ -42,5 +42,14 @@ public class BrowserStoreTest {
         assertTrue(privateStore.adBlockingEnabled());assertFalse(new BrowserStore(context).adBlockingEnabled());
         assertFalse(new BrowserStore(context,true).adBlockingEnabled());
     }
+    @Test public void siteExceptionsPersistButPrivateChangesDoNot(){
+        Context context=RuntimeEnvironment.getApplication();
+        store.adBlockException("example.org",true);
+        assertTrue(new BrowserStore(context).adBlockExceptions().contains("example.org"));
+        BrowserStore privateStore=new BrowserStore(context,true);privateStore.adBlockException("example.org",false);privateStore.adBlockException("private.example",true);
+        assertFalse(privateStore.adBlockExceptions().contains("example.org"));
+        assertEquals(java.util.Collections.singleton("example.org"),new BrowserStore(context).adBlockExceptions());
+        assertEquals(java.util.Collections.singleton("example.org"),new BrowserStore(context,true).adBlockExceptions());
+    }
 }
 

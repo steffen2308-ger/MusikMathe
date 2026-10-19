@@ -13,6 +13,11 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.location" android:required="false" />
+    <queries>
+        <package android:name="ch.protonvpn.android" />
+        <package android:name="com.wireguard.android" />
+        <package android:name="net.openvpn.openvpn" />
+    </queries>
     <application android:name=".BrowserApplication" android:label="BestBrowser" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:theme="@style/AppTheme" android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="true" android:hardwareAccelerated="true">
         <service android:name=".VideoDownloadService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name=".PrivateVideoDownloadService" android:exported="false" android:process=":private" android:foregroundServiceType="dataSync" />

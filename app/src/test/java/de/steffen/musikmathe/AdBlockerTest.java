@@ -4,6 +4,23 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class AdBlockerTest {
+    @Test public void parsesHostListAndRejectsNonDomainInput()throws Exception{
+        java.util.Set<String> hosts=AdBlocker.readHosts(new java.io.StringReader("# comment\n ads.publisher.example \nADS.PUBLISHER.EXAMPLE\n"));
+        assertEquals(1,hosts.size());assertTrue(hosts.contains("ads.publisher.example"));
+        try{AdBlocker.readHosts(new java.io.StringReader("<html>error</html>"));fail("Not a domain list");}catch(java.io.IOException expected){}
+    }
+    @Test public void siteExceptionsRespectHostBoundaries(){
+        java.util.Set<String> allowed=java.util.Collections.singleton("example.org");
+        assertTrue(AdBlocker.excepted("https://news.example.org/page",allowed));
+        assertFalse(AdBlocker.excepted("https://example.org.evil.test/page",allowed));
+        assertFalse(AdBlocker.excepted("file:///example.org",allowed));
+    }
+    @Test public void blocksConservativeSameOriginAdScriptPaths(){
+        assertTrue(AdBlocker.shouldBlock("https://publisher.example/widget/ads.js",false,true));
+        assertTrue(AdBlocker.shouldBlock("https://publisher.example/pagead.js?cache=1",false,true));
+        assertFalse(AdBlocker.shouldBlock("https://publisher.example/pagead.js",true,true));
+        assertFalse(AdBlocker.shouldBlock("https://publisher.example/article?file=pagead.js",false,true));
+    }
     @Test public void blocksAdHostsAndSubdomainsOverHttpAndHttps() {
         assertTrue(AdBlocker.shouldBlock("https://securepubads.g.doubleclick.net/tag/js/gpt.js", false, true));
         assertTrue(AdBlocker.shouldBlock("http://pagead2.googlesyndication.com/pagead/show_ads.js", false, true));
