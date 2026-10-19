@@ -44,7 +44,7 @@ final class BrowserMenu {
     }
     private int dp(float value){return Math.round(value*activity.getResources().getDisplayMetrics().density);}
     BrowserMenu quick(int id,String kind,String label,boolean enabled){
-        BrowserIcon icon=new BrowserIcon(activity,kind,label);icon.tint=INK;icon.setEnabled(enabled);
+        BrowserIcon icon=new BrowserIcon(activity,kind,label);icon.tint="star-filled".equals(kind)?ACCENT:INK;icon.setEnabled(enabled);
         if(Build.VERSION.SDK_INT>=26)icon.setTooltipText(label);
         quick.addView(icon,new LinearLayout.LayoutParams(0,dp(48),1));icon.setOnClickListener(v->select(id));return this;
     }
@@ -102,7 +102,7 @@ final class BrowserMenu {
         settings.measure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));desired+=settings.getMeasuredHeight();
         int height=Math.min(desired,Math.max(1,location[1]-bounds.top-dp(8)));
         popup.setWidth(width);popup.setHeight(height);
-        popup.showAsDropDown(anchor,anchor.getWidth()-width,-height-anchor.getHeight(),Gravity.LEFT);
+        popup.showAsDropDown(anchor,anchor.getWidth()-width-dp(8),-height-anchor.getHeight(),Gravity.LEFT);
         list.setSelection(0);
     }
     private void select(int id){popup.dismiss();action.accept(id);}
