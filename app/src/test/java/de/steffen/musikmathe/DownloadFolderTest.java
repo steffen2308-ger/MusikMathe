@@ -131,6 +131,6 @@ public class DownloadFolderTest {
             if(!writable)throw new java.io.FileNotFoundException("Folder unavailable");try{File file=new File(root,parent+"/"+name);if(!file.createNewFile())throw new java.io.IOException("Exists");return parent+"/"+name;}catch(Exception e){throw new java.io.FileNotFoundException(e.getMessage());}
         }
         @Override public ParcelFileDescriptor openDocument(String id,String mode,CancellationSignal signal)throws java.io.FileNotFoundException{return ParcelFileDescriptor.open(new File(root,id),ParcelFileDescriptor.parseMode(mode));}
-        @Override public void deleteDocument(String id){assertTrue(new File(root,id).delete());}
+        @Override public void deleteDocument(String id){File file=new File(root,id);if(file.exists())assertTrue(file.delete());}
     }
 }

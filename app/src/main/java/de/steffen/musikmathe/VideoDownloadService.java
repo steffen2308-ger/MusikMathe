@@ -114,15 +114,15 @@ public class VideoDownloadService extends Service {
     @Override public int onStartCommand(Intent intent,int flags,int startId){
         lastStartId=startId;
         if(intent==null){if(running.isEmpty()&&waiting.isEmpty())stopSelfResult(startId);return START_NOT_STICKY;}
-        if("cancel".equals(intent.getAction())){cancelCurrent();return START_NOT_STICKY;}
-        if("cancel-job".equals(intent.getAction())){cancelActive(intent.getStringExtra("job"));return START_NOT_STICKY;}
+        if("cancel".equals(intent.getAction())){cancelCurrent();if(running.isEmpty()&&waiting.isEmpty())stopQueue();return START_NOT_STICKY;}
+        if("cancel-job".equals(intent.getAction())){cancelActive(intent.getStringExtra("job"));if(running.isEmpty()&&waiting.isEmpty())stopQueue();return START_NOT_STICKY;}
         if("cancel-all".equals(intent.getAction())){clearAll();return START_NOT_STICKY;}
         current=this;publish(true);main.removeCallbacks(heartbeat);main.postDelayed(heartbeat,1000);
         try{
             Job job=new Job(intent);
             if(running.values().stream().anyMatch(row->row.destination.equals(job.destination))||waiting.stream().anyMatch(row->row.destination.equals(job.destination))){Toast.makeText(this,"Diese Zieldatei wird bereits gespeichert.",Toast.LENGTH_LONG).show();return START_NOT_STICKY;}
             waiting.addLast(job);advance();
-        }catch(Exception error){String raw=intent.getStringExtra("destination");if(raw!=null)discard(Uri.parse(raw));status="Videospeicherung konnte nicht vorgemerkt werden.";Toast.makeText(this,status,Toast.LENGTH_LONG).show();advance();}
+        }catch(Exception error){String raw=intent.getStringExtra("destination");if(raw!=null){Uri destination=Uri.parse(raw);if(running.values().stream().noneMatch(row->row.destination.equals(destination))&&waiting.stream().noneMatch(row->row.destination.equals(destination)))discard(destination);}status="Videospeicherung konnte nicht vorgemerkt werden.";Toast.makeText(this,status,Toast.LENGTH_LONG).show();advance();}
         return START_NOT_STICKY;
     }
     private void advance(){
@@ -199,7 +199,7 @@ public class VideoDownloadService extends Service {
         if(job.cancelled){success=false;message="Videospeicherung abgebrochen.";}job.cancelled=true;
         if(job.exporter!=null)job.exporter.cancel();if(success)release(job.destination);else discard(job.destination);
         if(job.temporary!=null)job.temporary.delete();running.remove(job.id);status=message;
-        if(destroyed)return;Toast.makeText(this,message,Toast.LENGTH_LONG).show();advance();
+        if(destroyed){if(running.isEmpty())notifySettled();return;}Toast.makeText(this,message,Toast.LENGTH_LONG).show();advance();
     }
     private void cancelJob(Job job){
         synchronized(job){if(job.cancelled)return;job.cancelled=true;if(job.thread!=null)job.thread.interrupt();}
@@ -211,6 +211,9 @@ public class VideoDownloadService extends Service {
     private void clearAll(){for(Job job:waiting)discard(job.destination);waiting.clear();for(Job job:new ArrayList<>(running.values()))cancelJob(job);if(running.isEmpty())stopQueue();}
     private void stopQueue(){
         main.removeCallbacks(heartbeat);if(current==this)current=null;stopForeground(true);stopSelfResult(lastStartId);
+        notifySettled();
+    }
+    private void notifySettled(){
         List<Runnable> callbacks=new ArrayList<>(settled);settled.clear();for(Runnable callback:callbacks)callback.run();
     }
     private void release(Uri uri){if(DownloadFolder.isTree(uri))return;try{getContentResolver().releasePersistableUriPermission(uri,Intent.FLAG_GRANT_WRITE_URI_PERMISSION);}catch(Exception ignored){}}
@@ -220,9 +223,9 @@ public class VideoDownloadService extends Service {
         try{DocumentsContract.getDocumentId(uri);if(DocumentsContract.deleteDocument(getContentResolver(),uri))return;}catch(Exception ignored){}
         try{getContentResolver().delete(uri,null,null);}catch(Exception ignored){}
     }
-    @Override public void onTimeout(int startId,int fgsType){clearAll();}
+    @Override public void onTimeout(int startId,int fgsType){clearAll();stopForeground(true);stopSelf();}
     @Override public void onDestroy(){
         destroyed=true;main.removeCallbacks(heartbeat);for(Job job:waiting)discard(job.destination);waiting.clear();for(Job job:new ArrayList<>(running.values()))cancelJob(job);
-        settled.clear();if(current==this)current=null;workers.shutdown();aborts.shutdown();super.onDestroy();
+        if(current==this)current=null;workers.shutdown();aborts.shutdown();if(running.isEmpty())notifySettled();super.onDestroy();
     }
 }
