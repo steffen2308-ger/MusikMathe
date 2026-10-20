@@ -19,6 +19,15 @@ import static org.junit.Assert.*;
 @RunWith(org.robolectric.RobolectricTestRunner.class)
 @Config(sdk=28)
 public class BrowserInteractionTest {
+    @Test public void completedNavigationCountsOnceEvenWithRepeatedFinishCallbacks()throws Exception{
+        clear();ActivityController<MainActivity> c=Robolectric.buildActivity(MainActivity.class).setup();
+        try{
+            WebView view=web(c.get());android.webkit.WebViewClient client=view.getWebViewClient();
+            client.onPageStarted(view,"https://visits.example/",null);client.onPageFinished(view,"https://visits.example/");client.onPageFinished(view,"https://visits.example/");
+            BrowserStore store=new BrowserStore(c.get());assertEquals(1,store.read("history").get(0).visits);
+            client.onPageStarted(view,"https://visits.example/",null);client.onPageFinished(view,"https://visits.example/");assertEquals(2,store.read("history").get(0).visits);
+        }finally{c.pause().stop().destroy();}
+    }
     private void clear(){RuntimeEnvironment.getApplication().getSharedPreferences("browser",0).edit().clear().commit();}
     private Object invoke(MainActivity activity,String name,Class<?>[] types,Object...args)throws Exception{Method m=MainActivity.class.getDeclaredMethod(name,types);m.setAccessible(true);return m.invoke(activity,args);}
     @SuppressWarnings("unchecked") private List<MainActivity.Tab> tabs(MainActivity a)throws Exception{Field f=MainActivity.class.getDeclaredField("tabs");f.setAccessible(true);return (List<MainActivity.Tab>)f.get(a);}

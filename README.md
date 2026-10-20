@@ -204,3 +204,10 @@ Verwendet wird das Google Cast Android Sender SDK 22.3.1 mit dem Default Media R
 ## Startseiten-Kacheln mit Icons (0.4.16)
 
 Die Startseite enthält zusätzlich **Joyn**, **RTL** und **ZDF**. Antippen öffnet direkt `https://www.joyn.de/`, `https://www.rtl.de/` beziehungsweise `https://www.zdf.de/`. Alle Schnellzugriffe und die Einträge unter Deutschland entdecken haben lokal eingebettete Vektor-Icons. Die Icons laden ohne Netzwerkanfrage und bleiben im Nachtmodus lesbar.
+
+
+## Kleine Kacheln und persönliche Top 3 (0.4.17)
+
+Die Startseite zeigt kompakte Kacheln mit Icon und Beschriftung in drei Spalten. Unter **Meistbesucht** stehen bis zu drei Websites aus dem gespeicherten normalen Verlauf. Besuche mehrerer Unterseiten derselben Website werden zusammengezählt; `www.` und die übliche HTTP-/HTTPS-Adresse zählen zusammen. Bei gleicher Häufigkeit entscheidet der jüngste Besuch. Die Kachel öffnet die am häufigsten besuchte gespeicherte Unterseite, bei Gleichstand die jüngste. Bekannte Websites verwenden ihr vorhandenes Icon, andere ein lokales Buchstaben-Icon. Es gibt keine Favicon-Abfragen.
+
+Besuchszahlen werden ab diesem Update pro abgeschlossener Navigation mitgespeichert; wiederholte Abschlussmeldungen derselben Navigation zählen nicht zusätzlich. Alte Verlaufseinträge beginnen mit einem bekannten Besuch, da frühere Wiederholungen nicht gespeichert wurden. Die Auswertung gilt für die maximal 500 aufbewahrten Verlaufseinträge. Das Löschen des Verlaufs entfernt auch die Häufigkeiten und die persönlichen Kacheln auf bereits geöffneten Startseiten. In privaten Tabs werden weder normale Top-Seiten angezeigt noch Besuche mitgezählt.

@@ -15,10 +15,14 @@ final class BrowserStore {
     static final class Entry {
         final String url, title;
         final long time;
+        final long visits;
         final boolean desktop;
         Entry(String url, String title, long time) { this(url, title, time, false); }
         Entry(String url, String title, long time, boolean desktop) {
-            this.url = url; this.title = title == null || title.isEmpty() ? url : title; this.time = time; this.desktop = desktop;
+            this(url,title,time,desktop,1);
+        }
+        Entry(String url,String title,long time,boolean desktop,long visits){
+            this.url = url; this.title = title == null || title.isEmpty() ? url : title; this.time = time; this.desktop = desktop; this.visits=Math.max(1,visits);
         }
     }
     private final SharedPreferences prefs;
@@ -45,7 +49,7 @@ final class BrowserStore {
                 if (row == null) continue;
                 String url = row.optString("url");
                 if (!Address.isWeb(url) && !("tabs".equals(key) && Address.HOME.equals(url))) continue;
-                result.add(new Entry(url, row.optString("title"), row.optLong("time"), row.optBoolean("desktop")));
+                result.add(new Entry(url, row.optString("title"), row.optLong("time"), row.optBoolean("desktop"),row.optLong("visits",1)));
             }
         } catch (Exception ignored) { }
         return result;
@@ -54,7 +58,7 @@ final class BrowserStore {
         if (privateMode) return;
         JSONArray array = new JSONArray();
         for (Entry row : rows) {
-            try { array.put(new JSONObject().put("url", row.url).put("title", row.title).put("time", row.time).put("desktop", row.desktop)); }
+            try { JSONObject item=new JSONObject().put("url", row.url).put("title", row.title).put("time", row.time).put("desktop", row.desktop);if("history".equals(key))item.put("visits",row.visits);array.put(item); }
             catch (Exception ignored) { }
         }
         prefs.edit().putString(key, array.toString()).apply();
@@ -62,11 +66,13 @@ final class BrowserStore {
     void visit(String url, String title) {
         if (privateMode || !Address.isWeb(url)) return;
         List<Entry> history = read("history");
-        for (int i = history.size() - 1; i >= 0; i--) if (history.get(i).url.equals(url)) history.remove(i);
-        history.add(0, new Entry(url, title, System.currentTimeMillis()));
+        long visits=1;
+        for (int i = history.size() - 1; i >= 0; i--) if (history.get(i).url.equals(url)){visits=FrequentSites.add(visits,history.get(i).visits);history.remove(i);}
+        history.add(0, new Entry(url, title, System.currentTimeMillis(),false,visits));
         while (history.size() > 500) history.remove(history.size() - 1);
         write("history", history);
     }
+    List<Entry> frequentSites(){return privateMode?Collections.emptyList():FrequentSites.top(read("history"));}
     boolean bookmarked(String url) { for (Entry row : read("bookmarks")) if (row.url.equals(url)) return true; return false; }
     boolean toggleBookmark(String url, String title) {
         if (privateMode || !Address.isWeb(url)) return false;
