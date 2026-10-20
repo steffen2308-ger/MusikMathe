@@ -27,14 +27,17 @@ final class BrowserStore {
     }
     private final SharedPreferences prefs;
     private final boolean privateMode;
+    private final String tabPrefix;
     final PrivateProfiles.Session profile;
     private String privateEngine;
     private boolean privateAdBlocking;
     private final Set<String> privateAdBlockExceptions;
     BrowserStore(Context context) { this(context, false); }
-    BrowserStore(Context context, boolean privateMode) {
+    BrowserStore(Context context, boolean privateMode) { this(context,privateMode,""); }
+    BrowserStore(Context context,boolean privateMode,String window) {
         prefs = context.getSharedPreferences("browser", Context.MODE_PRIVATE);
         this.privateMode = privateMode;
+        tabPrefix=!privateMode&&"second".equals(window)?"second_window_":"";
         profile=privateMode?PrivateProfiles.active:null;
         privateEngine = profile==null?prefs.getString("engine", "google"):profile.string("engine","google");
         privateAdBlocking = profile==null?prefs.getBoolean("ad_blocking", true):profile.bool("ad_blocking",true);
@@ -46,7 +49,7 @@ final class BrowserStore {
         ArrayList<Entry> result = new ArrayList<>();
         if (privateMode && profile==null) return result;
         try {
-            JSONArray array = new JSONArray(profile==null?prefs.getString(key, "[]"):profile.string(key,"[]"));
+            JSONArray array = new JSONArray(profile==null?prefs.getString("tabs".equals(key)?tabPrefix+key:key, "[]"):profile.string(key,"[]"));
             int limit = "tabs".equals(key) ? MAX_TABS : 500;
             for (int i = 0; i < array.length() && result.size() < limit; i++) {
                 JSONObject row = array.optJSONObject(i);
@@ -65,7 +68,7 @@ final class BrowserStore {
             try { JSONObject item=new JSONObject().put("url", row.url).put("title", row.title).put("time", row.time).put("desktop", row.desktop);if("history".equals(key))item.put("visits",row.visits);array.put(item); }
             catch (Exception ignored) { }
         }
-        if(profile!=null)profile.put(key,array.toString());else prefs.edit().putString(key, array.toString()).apply();
+        if(profile!=null)profile.put(key,array.toString());else prefs.edit().putString("tabs".equals(key)?tabPrefix+key:key, array.toString()).apply();
     }
     void visit(String url, String title) {
         if ((privateMode&&profile==null) || !Address.isWeb(url)) return;
@@ -86,8 +89,8 @@ final class BrowserStore {
         if (!removed) rows.add(0, new Entry(url, title, System.currentTimeMillis()));
         write("bookmarks", rows); return !removed;
     }
-    int selected() { return profile!=null?profile.integer("selected",0):privateMode ? 0 : prefs.getInt("selected", 0); }
-    void selected(int index) { if(profile!=null)profile.put("selected",index);else if (!privateMode) prefs.edit().putInt("selected", index).apply(); }
+    int selected() { return profile!=null?profile.integer("selected",0):privateMode ? 0 : prefs.getInt(tabPrefix+"selected", 0); }
+    void selected(int index) { if(profile!=null)profile.put("selected",index);else if (!privateMode) prefs.edit().putInt(tabPrefix+"selected", index).apply(); }
     String engine() { return privateMode ? privateEngine : prefs.getString("engine", "google"); }
     boolean linkPreloadingEnabled(){return !privateMode&&prefs.getBoolean("wifi_link_preloading",true);}
     void linkPreloadingEnabled(boolean enabled){if(!privateMode)prefs.edit().putBoolean("wifi_link_preloading",enabled).apply();}

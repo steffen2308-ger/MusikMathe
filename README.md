@@ -278,3 +278,20 @@ Im Browser-Vollbild sitzt die verkleinerte Adressleiste links neben dem mittigen
 Die Aufteilung verwendet die tatsächlichen Android-Kameragrenzen. Im Querformat bleiben die Tasten außerhalb einer seitlichen Aussparung. Bei einer sehr breiten oder seitlichen oberen Aussparung mit zu wenig Platz liegen die Bedienelemente direkt darunter. Ohne Aussparung teilen sie sich eine schmale obere Zeile. HTML-Video-Vollbild behält die gesamte Bildschirmfläche ohne Browserleiste.
 
 Die Zurück-Schaltfläche in der kompakten Leiste navigiert im Verlauf und bleibt im Vollbild. Die Android-Zurück-Taste, ein erneuter Doppeltipp auf freie Fläche oder Menü → Vollbild beenden stellen die normalen Leisten wieder her. Tests prüfen die fünf Schaltflächen, die Adressnavigation, den Erhalt der WebView und echte emulierte Kameraaussparungen im Hoch- und Querformat auf Android 9 und 15.
+
+
+## Zweites Fenster und schwebende Videos (0.4.24)
+
+Menü → **Zweites Fenster öffnen** öffnet ein eigenes Browserfenster. Beide Fenster behalten ihre eigenen Tabs und den jeweils ausgewählten Tab, auch beim erneuten Öffnen. Verlauf, Lesezeichen, normale Cookies, Website-Daten und Einstellungen werden gemeinsam genutzt. In der Android-App-Übersicht lassen sich beide Fenster auswählen.
+
+Für ein schwebendes Video:
+
+1. Ein Video abspielen und direkt im Videoplayer auf Vollbild schalten.
+2. Oben rechts auf **Video schweben lassen** (kleines Fenstersymbol) tippen.
+3. Im automatisch geöffneten anderen Browserfenster weitersurfen.
+
+Das bereits laufende Video bleibt in derselben WebView; es wird nicht neu geladen oder über einen Download-Extractor erneut gestartet. Androids Bild-in-Bild-Fenster lässt sich verschieben und über die Systemsteuerung vergrößern oder schließen. Die eigenen Aktionen pausieren das Video, setzen es fort oder bringen das andere Browserfenster nach vorn. Beim Schließen beziehungsweise Entfernen des Videofensters endet die Wiedergabe. Android 8 oder neuer, Geräteunterstützung und die aktivierte Bild-in-Bild-Erlaubnis sind erforderlich. Es wird keine Berechtigung zum Überlagern anderer Apps benötigt. Die Wiedergabemöglichkeiten von YouTube und anderen Anbietern richten sich weiterhin nach deren Webseite.
+
+Private Bereiche bieten diese Funktionen nicht an und sind im Manifest nicht für Bild-in-Bild freigegeben. Beim Öffnen eines privaten Bereichs aus dem zweiten Fenster führt das Schließen zurück zu diesem Fenster. Pro App kann ein Video schweben; ein weiteres Video beendet die laufende Wiedergabe nicht automatisch.
+
+Gerätetests auf Android 9 und 15 prüfen mit einer echten H.264-Datei die fortlaufende Wiedergabe während des Surfens, getrennte Aufgaben und Tabs, gemeinsame normale Cookies, die nativen Bild-in-Bild-Aktionen sowie das Schließen des Videofensters ohne Verlust der anderen Sitzung. Separate Tests prüfen die privaten Manifestgrenzen und gültige Video-Seitenverhältnisse.

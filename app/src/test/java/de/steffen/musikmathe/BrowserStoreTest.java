@@ -40,6 +40,16 @@ public class BrowserStoreTest {
     @Test public void corruptStorageIsRecoverable(){
         RuntimeEnvironment.getApplication().getSharedPreferences("browser",0).edit().putString("tabs","not json").commit();assertTrue(store.read("tabs").isEmpty());
     }
+    @Test public void secondWindowHasIndependentTabsAndSharesOnlyNormalProfileData(){
+        Context context=RuntimeEnvironment.getApplication();BrowserStore second=new BrowserStore(context,false,"second");
+        store.write("tabs",Arrays.asList(new BrowserStore.Entry("https://example.org/video","Video",0)));store.selected(0);
+        second.write("tabs",Arrays.asList(new BrowserStore.Entry(Address.HOME,"Start",0),new BrowserStore.Entry("https://example.org/browse","Surfen",0)));second.selected(1);
+        assertEquals("https://example.org/video",new BrowserStore(context).read("tabs").get(0).url);
+        assertEquals(0,new BrowserStore(context).selected());assertEquals(2,new BrowserStore(context,false,"second").read("tabs").size());assertEquals(1,new BrowserStore(context,false,"second").selected());
+        second.visit("https://example.org/shared","Gemeinsamer Verlauf");assertEquals("Gemeinsamer Verlauf",store.read("history").get(0).title);
+        store.engine("brave");assertEquals("brave",second.engine());
+        assertTrue(new BrowserStore(context,true,"second").read("tabs").isEmpty());
+    }
     @Test public void preloadingDefaultsOnPersistsAndIsAlwaysOffInPrivateTabs(){
         Context context=RuntimeEnvironment.getApplication();assertTrue(store.linkPreloadingEnabled());
         store.linkPreloadingEnabled(false);assertFalse(new BrowserStore(context).linkPreloadingEnabled());

@@ -71,6 +71,8 @@ final class BrowserIcon extends View {
                 canvas.drawArc(new RectF(-2,21,24,47),-90,90,false,paint);canvas.drawArc(new RectF(3,26,19,42),-90,90,false,paint);paint.setStyle(Paint.Style.FILL);canvas.drawCircle(11,34,2,paint);break;
             case "fullscreen":
                 Path corners=new Path();corners.moveTo(20,13);corners.lineTo(13,13);corners.lineTo(13,20);corners.moveTo(28,13);corners.lineTo(35,13);corners.lineTo(35,20);corners.moveTo(35,28);corners.lineTo(35,35);corners.lineTo(28,35);corners.moveTo(20,35);corners.lineTo(13,35);corners.lineTo(13,28);canvas.drawPath(corners,paint);break;
+            case "pip":
+                canvas.drawRoundRect(new RectF(11,13,37,35),2,2,paint);paint.setStyle(Paint.Style.FILL);canvas.drawRoundRect(new RectF(24,24,34,32),1,1,paint);break;
             case "shield":
                 Path shield=new Path();shield.moveTo(24,11);shield.lineTo(35,16);shield.lineTo(34,27);shield.quadTo(33,33,24,38);shield.quadTo(15,33,14,27);shield.lineTo(13,16);shield.close();canvas.drawPath(shield,paint);canvas.drawLine(19,24,23,28,paint);canvas.drawLine(23,28,30,20,paint);break;
             case "key": case "vpn":
