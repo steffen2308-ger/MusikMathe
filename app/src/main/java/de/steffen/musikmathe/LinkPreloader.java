@@ -84,7 +84,9 @@ final class LinkPreloader {
     private void scan(){
         if(!allowed()||scanning)return;
         if(!page.equals(view.getUrl())){navigation(null);return;}
-        if(script==null)try(java.io.InputStream input=context.getAssets().open("preload-links.js")){script=new String(input.readAllBytes(),StandardCharsets.UTF_8);}catch(java.io.IOException unavailable){return;}
+        if(script==null)try(java.io.InputStream input=context.getAssets().open("preload-links.js");java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream()){
+            byte[] buffer=new byte[8192];int count;while((count=input.read(buffer))!=-1)bytes.write(buffer,0,count);script=new String(bytes.toByteArray(),StandardCharsets.UTF_8);
+        }catch(java.io.IOException unavailable){return;}
         scanning=true;int epoch=generation;String source=page;WebView owner=view;
         owner.evaluateJavascript(script,value->{
             if(destroyed||epoch!=generation)return;scanning=false;

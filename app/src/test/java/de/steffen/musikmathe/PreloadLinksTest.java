@@ -11,7 +11,7 @@ public class PreloadLinksTest {
         for(String url:new String[]{"http://site.example/news","javascript:alert(1)","file:///secret","mailto:a@example.org","https://user:secret@site.example/","https://site.example:99999/","https://musikmathe.invalid/wikipedia-de","https://site.example/current#same"})assertEquals(url,"",link(url));
     }
     @Test public void downloadsAndRecognisableActionsNeverBecomeCandidates(){
-        for(String url:new String[]{"https://site.example/logout","https://site.example/sign-out?action=delete","https://site.example/account?do=%64elete","https://site.example/download/123","https://site.example/api/items","https://site.example/movie.mp4","https://site.example/file.pdf","https://site.example/action?csrf=123"})assertEquals(url,"",link(url));
+        for(String url:new String[]{"https://site.example/logout","https://site.example/sign-out","https://site.example/log_out","https://site.example/sign-in","https://site.example/account?do=%64elete","https://site.example/download/123","https://site.example/api/items","https://site.example/movie.mp4","https://site.example/file.pdf","https://site.example/action?csrf=123"})assertEquals(url,"",link(url));
         assertEquals("",PreloadLinks.eligible("","https://site.example/neutral","Abmelden",false,""));
         assertEquals("",PreloadLinks.eligible("","https://site.example/neutral","Read",true,""));
         assertEquals("",PreloadLinks.eligible("","https://site.example/neutral","Read",false,"external sponsored"));

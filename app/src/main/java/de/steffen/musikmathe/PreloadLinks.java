@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 /** Conservative page-link policy. GET is not a guarantee that a server has no side effects. */
 final class PreloadLinks {
     static final int MAX_LINKS=512;
-    private static final Pattern ACTION=Pattern.compile("(?i)(^|[^a-z])(logout|logoff|signout|signoff|abmelden|ausloggen|delete|remove|loeschen|löschen|unsubscribe|unfollow|checkout|purchase|buy|kaufen|cart|warenkorb|basket|submit|confirm|revoke|reset|activate|deactivate|download|export|token|csrf|nonce|auth|oauth|login|signin|anmelden|payment|pay|vote|like|unlike)([^a-z]|$)");
+    private static final Pattern ACTION=Pattern.compile("(?i)(^|[^a-z])(log[\\s_-]?out|log[\\s_-]?off|sign[\\s_-]?out|sign[\\s_-]?off|abmelden|ausloggen|delete|remove|loeschen|löschen|unsubscribe|unfollow|checkout|purchase|buy|kaufen|cart|warenkorb|basket|submit|confirm|revoke|reset|activate|deactivate|download|export|token|csrf|nonce|auth|oauth|log[\\s_-]?in|sign[\\s_-]?in|anmelden|payment|pay|vote|like|unlike)([^a-z]|$)");
     static String eligible(String current,String href,String label,boolean download,String rel){
         if(download||href==null||href.length()>4096||rel!=null&&rel.matches("(?is).*(?:\\bsponsored\\b|\\bnofollow\\b).*"))return "";
         try{
