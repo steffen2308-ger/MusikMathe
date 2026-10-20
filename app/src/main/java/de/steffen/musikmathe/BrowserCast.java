@@ -49,7 +49,7 @@ final class BrowserCast {
         dialog.setOnDismissListener(d->{dialog=null;status=null;});dialog.show();
         if(!started){started=true;transport.start(this::changed,this::failed);}render();
     }
-    private Button button(LinearLayout body,String label,Runnable action){Button button=new Button(activity);button.setText(label);button.setOnClickListener(v->action.run());body.addView(button,new LinearLayout.LayoutParams(-1,-2));return button;}
+    private Button button(LinearLayout body,String label,Runnable action){Button button=new Button(activity);button.setText(label);button.setAllCaps(false);button.setOnClickListener(v->action.run());body.addView(button,new LinearLayout.LayoutParams(-1,-2));return button;}
     void select(CastVideo source,BooleanSupplier stillValid){
         select(source,stillValid,()->{});
     }
