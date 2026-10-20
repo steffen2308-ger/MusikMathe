@@ -4,14 +4,16 @@ import android.content.Context;
 import android.content.res.Configuration;
 import androidx.appcompat.app.AppCompatDelegate;
 
-/** A single explicit appearance preference shared by normal and private browser processes. */
+/** Normal appearance preference; unlocked private areas keep an independent encrypted choice. */
 final class BrowserAppearance {
     private BrowserAppearance(){}
     @SuppressWarnings("deprecation") static boolean savedNight(Context context){
-        // Only this independent boolean is shared; no browsing data is written here.
+        PrivateProfiles.Session profile=PrivateProfiles.forContext(context);if(profile!=null)return profile.bool("night",false);
+        // The normal preference also supplies the neutral lock-screen appearance.
         return context.getSharedPreferences("appearance",Context.MODE_MULTI_PROCESS).getBoolean("night",false);
     }
     static void saveNight(Context context,boolean enabled){
+        PrivateProfiles.Session profile=PrivateProfiles.forContext(context);if(profile!=null){profile.put("night",enabled);return;}
         context.getSharedPreferences("appearance",0).edit().putBoolean("night",enabled).commit();
     }
     static void sync(Context context){

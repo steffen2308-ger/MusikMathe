@@ -89,6 +89,16 @@ public class DownloadFolderTest {
             assertNotNull(DownloadFolder.create(app,first,"video/mp4","next.mp4"));
         }finally{controller.destroy();shadowOf(Looper.getMainLooper()).idle();}
     }
+    @Test public void eachPrivateAreaRemembersItsOwnGrantedVideoFolder()throws Exception{
+        DownloadFolder.remember(app,first,FLAGS);
+        try{
+            BrowserApplication.privateProcess=true;
+            PrivateProfiles.Session a=PrivateProfiles.probe(app,"Folder-A-password".toCharArray());PrivateProfiles.active=a;assertNull(DownloadFolder.selected(app));DownloadFolder.remember(app,second,FLAGS);assertEquals(second,DownloadFolder.selected(app));a.close();
+            PrivateProfiles.Session b=PrivateProfiles.probe(app,"Folder-B-password".toCharArray());PrivateProfiles.active=b;assertNull(DownloadFolder.selected(app));DownloadFolder.remember(app,first,FLAGS);assertEquals(first,DownloadFolder.selected(app));b.close();
+            PrivateProfiles.Session again=PrivateProfiles.probe(app,"Folder-A-password".toCharArray());PrivateProfiles.active=again;assertEquals(second,DownloadFolder.selected(app));assertNotNull(DownloadFolder.create(app,second,"video/mp4","Private A video.mp4"));again.close();
+        }finally{if(PrivateProfiles.active!=null)PrivateProfiles.active.close();BrowserApplication.privateProcess=false;}
+        assertEquals(first,DownloadFolder.selected(app));
+    }
     private void choose(MainActivity activity,VideoCatalog.Item item)throws Exception{
         Method method=MainActivity.class.getDeclaredMethod("chooseVideoFile",VideoCatalog.Item.class,boolean.class,long.class);method.setAccessible(true);method.invoke(activity,item,false,0L);
     }

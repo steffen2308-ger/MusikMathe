@@ -112,6 +112,7 @@ public class AddressSuggestionsDeviceTest {
         try{
             type("schutztest");assertTrue("Normal history available",device.wait(Until.hasObject(By.text("Normaler Verlauf Schutztest")),6000));
             app.startActivity(new Intent(app,PrivateActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT|Intent.FLAG_ACTIVITY_SINGLE_TOP));
+            PrivateTestSupport.unlock(device);
             assertTrue("Private process visible",device.wait(Until.hasObject(By.descStartsWith("Privater Tab")),12000));
             type("schutztest");assertTrue("Private tab must not expose normal title",device.wait(Until.gone(By.text("Normaler Verlauf Schutztest")),6000));
             assertFalse("Private tab must not expose normal URL",device.hasObject(By.text("https://normal-history.example/")));

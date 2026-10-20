@@ -150,7 +150,7 @@ public class BrowserInteractionTest {
         }finally{c.pause().stop().destroy();}
     }
     @Test public void privateTabsAlsoRequireTheirOwnProtectedMediaConsent()throws Exception{
-        clear();BrowserApplication.privateReady=true;ActivityController<PrivateActivity> c=Robolectric.buildActivity(PrivateActivity.class).setup();MainActivity a=c.get();
+        clear();BrowserApplication.privateReady=true;ActivityController<PrivateActivity> c=Robolectric.buildActivity(PrivateActivity.class).setup();MainActivity a=c.get();PrivateUnitSupport.authenticated(a);
         try{
             invoke(a,"navigate",new Class<?>[]{String.class},"https://media.example/");WebsiteRequest request=protectedRequest("https://media.example");request(a,tabs(a).get(0),request);assertNull(request.granted);
             choose(org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog(),android.app.AlertDialog.BUTTON_POSITIVE);assertNotNull(request.granted);

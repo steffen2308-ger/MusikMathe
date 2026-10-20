@@ -29,3 +29,8 @@ https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md
 Brand names and marks belong to their respective owners.
 The Yandex, SearXNG, Brave Search and Mojeek start-page symbols are locally drawn
 vector representations; no third-party favicon service is contacted.
+
+Google Tink Android 1.15.0 — Google and contributors, Apache-2.0.
+https://github.com/tink-crypto/tink-java/tree/v1.15.0
+Used for authenticated streaming encryption of private website archives.
+https://github.com/tink-crypto/tink-java/blob/v1.15.0/LICENSE

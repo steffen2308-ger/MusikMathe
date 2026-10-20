@@ -68,7 +68,7 @@ public class HomePageDeviceTest {
             });});
             js("document.querySelector('#frequent-links a').click();true");expect("location.href","\"https://alpha.example/one\"");expect("document.title","\"Alpha\"");assertTrue("Selected page navigation completed",visited.await(12,TimeUnit.SECONDS));
             main(()->invoke("navigate",new Class<?>[]{String.class},Address.HOME));expect("!!document.getElementById('frequent-links')&&document.getElementById('frequent-links').children.length===3","true");
-            main(()->invoke("openPrivate",new Class<?>[]{boolean.class},true));privateOpen=true;assertTrue(device.wait(Until.hasObject(By.descStartsWith("Privater Tab")),15000));text("Joyn");assertFalse("Normal top sites stay hidden in private tabs",device.hasObject(By.text("Meistbesucht")));
+            main(()->invoke("openPrivate",new Class<?>[]{boolean.class},true));privateOpen=true;PrivateTestSupport.unlock(device);assertTrue(device.wait(Until.hasObject(By.descStartsWith("Privater Tab")),15000));assertFalse("Normal top sites stay hidden in private areas",device.hasObject(By.textContains("Alpha <img")));
             UiObject2 menu=device.wait(Until.findObject(By.desc("Menü")),8000);assertNotNull(menu);menu.click();text("Alle privaten Tabs schließen").click();assertTrue(device.wait(Until.gone(By.descStartsWith("Privater Tab")),15000));privateOpen=false;
             expect("document.getElementById('frequent-links').children.length","3");text("Meistbesucht");instrumentation.waitForIdleSync();preview();
             assertEquals("Private home does not contribute visits",6,new BrowserStore(instrumentation.getTargetContext()).frequentSites().get(0).visits);

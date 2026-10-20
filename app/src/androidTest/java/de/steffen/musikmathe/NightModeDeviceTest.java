@@ -105,14 +105,14 @@ public class NightModeDeviceTest {
             JSONArray centre=new JSONArray(new JSONArray("["+js(original,"JSON.stringify((function(){var r=document.getElementById('media').getBoundingClientRect();return [(r.left+r.width/2)/innerWidth,(r.top+r.height/2)/innerHeight];})())")+"]").getString(0));
             int red=pixel(original,centre.getDouble(0),centre.getDouble(1));assertTrue("Canvas/media colours stay red: "+Integer.toHexString(red),Color.red(red)>200&&Color.green(red)<60&&Color.blue(red)<60);
             open();scroll("Nachtmodus");assertNotNull("Night checkmark",device.findObject(By.desc("Nachtmodus").checked(true)));device.pressBack();closed();
-            // A private process must start dark, save only the appearance option, and
+            // A new private area inherits the initial appearance and then keeps its own choice;
             // return to the same normal WebView when its tabs are closed.
-            open();text("Neuer privater Tab").click();privateOpen=true;assertTrue(device.wait(Until.hasObject(By.descStartsWith("Privater Tab")),15000));
+            open();text("Neuer privater Tab").click();privateOpen=true;PrivateTestSupport.unlock(device);assertTrue(device.wait(Until.hasObject(By.descStartsWith("Privater Tab")),15000));
             open();scroll("Nachtmodus");assertNotNull("Private process shares night appearance",device.findObject(By.desc("Nachtmodus").checked(true)));text("Nachtmodus").click();closed();
-            open();text("Alle privaten Tabs schließen").click();assertTrue(device.wait(Until.gone(By.descStartsWith("Privater Tab")),15000));privateOpen=false;night(false);
+            open();text("Alle privaten Tabs schließen").click();assertTrue(device.wait(Until.gone(By.descStartsWith("Privater Tab")),15000));privateOpen=false;night(true);
             assertSame(original,web());expect(original,"document.getElementById('kept').value","\"keep-this\"");assertEquals(1,requests.get());
-            if(WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING))expect(original,"matchMedia('(prefers-color-scheme:dark)').matches","false");
-            toggle();night(true);stage="Navigate home before relaunch";
+            if(WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING))expect(original,"matchMedia('(prefers-color-scheme:dark)').matches","true");
+            night(true);stage="Navigate home before relaunch";
             UiObject2 homeButton=device.wait(Until.findObject(By.desc("Startseite")),8000);assertNotNull(homeButton);homeButton.click();
             expect(original,"location.href==="+org.json.JSONObject.quote(Address.HOME),"true");expect(original,"document.documentElement.classList.contains('bestbrowser-night')","true");
             // Persist through the actual browser navigation/lifecycle. Writing test
