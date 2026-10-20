@@ -13,14 +13,17 @@ final class VideoCatalog {
     static final class Item {
         final String url, type, audioUrl, youtubeId, description,thumbnail;
         final Map<String,String> headers;
+        VideoMetadata metadata=new VideoMetadata();
         Item(String url,String type,Map<String,String> headers){this(url,type,headers,"","","");}
         Item(String url,String type,Map<String,String> headers,String audioUrl,String youtubeId,String description){this(url,type,headers,audioUrl,youtubeId,description,youtubeId.matches("[A-Za-z0-9_-]{11}")?"https://i.ytimg.com/vi/"+youtubeId+"/hqdefault.jpg":"");}
         Item(String url,String type,Map<String,String> headers,String audioUrl,String youtubeId,String description,String thumbnail){this.url=url;this.type=type;this.headers=new LinkedHashMap<>(headers);this.audioUrl=audioUrl;this.youtubeId=youtubeId;this.description=description;this.thumbnail=safeThumbnail(thumbnail);}
         String label(){if(!description.isEmpty())return description;String path=Uri.parse(url).getLastPathSegment();return type+" · "+Address.host(url)+"\n"+(path==null?"Videostream":path);}
     }
     static String safeThumbnail(String value){if(value==null)return "";if(Address.isWeb(value)&&value.length()<=8192)return value;if(value.length()<=150000&&value.matches("data:image/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+"))return value;return "";}
-    synchronized void describe(String url,String title,String thumbnail){Item old=items.get(url);if(old==null||!old.youtubeId.isEmpty())return;String preview=safeThumbnail(thumbnail);String label=title==null?"":title.trim();if(label.length()>300)label=label.substring(0,300);items.put(url,new Item(old.url,old.type,old.headers,old.audioUrl,old.youtubeId,label.isEmpty()?old.description:label+"\n"+old.type,preview.isEmpty()?old.thumbnail:preview));}
-    static final String HOOKS="(function(){try{if(window.__mmVideoHook)return;window.__mmVideoHook=true;window.__mmVideos=[];function put(u,t){if(u&&t&&(/video\\/|mpegurl|dash\\+xml/i).test(t)){var a=window.__mmVideos;if(a.length<80)a.push({url:u,type:t});}}if(window.fetch){var f=window.fetch;window.fetch=function(){return f.apply(this,arguments).then(function(r){try{put(r.url,r.headers.get('content-type'));}catch(e){}return r;});};}var x=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(){this.addEventListener('load',function(){try{put(this.responseURL,this.getResponseHeader('Content-Type'));}catch(e){}},{once:true});return x.apply(this,arguments);};}catch(e){}})()";
+    synchronized void describe(String url,String title,String thumbnail){Item old=items.get(url);if(old==null||!old.youtubeId.isEmpty())return;String preview=safeThumbnail(thumbnail);String label=title==null?"":title.trim();if(label.length()>2000)label=label.substring(0,2000);items.put(url,copy(old,new Item(old.url,old.type,old.headers,old.audioUrl,old.youtubeId,label.isEmpty()?old.description:label+"\n"+old.type,preview.isEmpty()?old.thumbnail:preview)));}
+    private static Item copy(Item old,Item next){next.metadata=old.metadata;return next;}
+    synchronized void metadata(String url,org.json.JSONObject values){Item item=items.get(url);if(item!=null&&item.youtubeId.isEmpty())item.metadata.merge(VideoMetadata.fromPlayer(values));}
+    static final String HOOKS="(function(){try{if(window.__mmVideoHook)return;window.__mmVideoHook=true;window.__mmVideos=[];function put(u,t,n,r,s){if(u&&t&&(/video\\/|mpegurl|dash\\+xml/i).test(t)){var a=window.__mmVideos,z=0,m=String(r||'').match(/\\/(\\d+)$/);if(m)z=Number(m[1]);else if(s===200)z=Number(n)||0;if(a.length<80)a.push({url:u,type:t,size:z});}}if(window.fetch){var f=window.fetch;window.fetch=function(){return f.apply(this,arguments).then(function(r){try{put(r.url,r.headers.get('content-type'),r.headers.get('content-length'),r.headers.get('content-range'),r.status);}catch(e){}return r;});};}var x=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(){this.addEventListener('load',function(){try{put(this.responseURL,this.getResponseHeader('Content-Type'),this.getResponseHeader('Content-Length'),this.getResponseHeader('Content-Range'),this.status);}catch(e){}},{once:true});return x.apply(this,arguments);};}catch(e){}})()";
     private final LinkedHashMap<String,Map<String,String>> requests=new LinkedHashMap<>();
     synchronized void observe(String url,Map<String,String> headers){if(!Address.isWeb(url))return;if(requests.size()>=220)requests.remove(requests.keySet().iterator().next());requests.put(url,safeHeaders(headers));}
     private final LinkedHashMap<String,Item> items=new LinkedHashMap<>();
@@ -28,7 +31,7 @@ final class VideoCatalog {
     private String resolvedId="";
     private long resolvedAt;
     private final List<Item> resolvedItems=new ArrayList<>();
-    synchronized void resolved(YouTubeDownloadResolver.Result result){resolvedId=result.id;resolvedAt=android.os.SystemClock.elapsedRealtime();resolvedItems.clear();resolvedItems.addAll(result.items);}
+    synchronized void resolved(YouTubeDownloadResolver.Result result){resolvedId=result.id;resolvedAt=android.os.SystemClock.elapsedRealtime();resolvedItems.clear();resolvedItems.addAll(result.items);if(youtube!=null&&youtube.videoId.equals(result.id))for(Item item:resolvedItems)item.metadata.fill(youtube.metadata);}
     synchronized void clearResolved(){resolvedItems.clear();resolvedId="";}
     synchronized boolean hasResolved(String id){return id.equals(resolvedId)&&!resolvedItems.isEmpty()&&android.os.SystemClock.elapsedRealtime()-resolvedAt<10*60*1000;}
     synchronized YouTubeSources.Result youtube(){return youtube;}
@@ -45,7 +48,7 @@ final class VideoCatalog {
     synchronized boolean add(String url,String mime,Map<String,String> headers){
         String type=classify(url,mime,headers);if(type==null)return false;
         Map<String,String> combined=safeHeaders(headers);Map<String,String> actual=requests.get(url);if(actual!=null)combined.putAll(actual);headers=combined;
-        if(items.containsKey(url)){Item old=items.get(url);Map<String,String> merged=new LinkedHashMap<>(old.headers);merged.putAll(safeHeaders(headers));items.put(url,new Item(url,old.type,merged,old.audioUrl,old.youtubeId,old.description,old.thumbnail));return false;}
+        if(items.containsKey(url)){Item old=items.get(url);Map<String,String> merged=new LinkedHashMap<>(old.headers);merged.putAll(safeHeaders(headers));items.put(url,copy(old,new Item(url,old.type,merged,old.audioUrl,old.youtubeId,old.description,old.thumbnail)));return false;}
         if(items.size()>=60)return false;items.put(url,new Item(url,type,safeHeaders(headers)));return true;
     }
     static Map<String,String> safeHeaders(Map<String,String> input){

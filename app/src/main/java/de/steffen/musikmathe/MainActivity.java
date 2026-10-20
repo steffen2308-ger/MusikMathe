@@ -440,7 +440,7 @@ public class MainActivity extends AppCompatActivity {
                 case 8: if(linkPreloader!=null)linkPreloader.clear();tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: BrowserDialogs.builder(this).setTitle("BestBrowser · 0.4.21").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPasswortgeschützte private Bereiche speichern Verlauf, Tabs, Website-Daten und Einstellungen getrennt und verschlüsselt. Videos in gewählten Android-Ordnern sind separat zugänglich. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: BrowserDialogs.builder(this).setTitle("BestBrowser · 0.4.22").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPasswortgeschützte private Bereiche speichern Verlauf, Tabs, Website-Daten und Einstellungen getrennt und verschlüsselt. Videos in gewählten Android-Ordnern sind separat zugänglich. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: discardPrivateTabs=true;endPrivate(); break;
@@ -719,7 +719,7 @@ public class MainActivity extends AppCompatActivity {
                 java.util.Map<String,String> headers=new java.util.LinkedHashMap<>();if(Address.isWeb(referer))headers.put("Referer",referer);if(userAgent!=null)headers.put("User-Agent",userAgent);
                 for(int i=0;i<rows.length();i++){org.json.JSONObject row=rows.getJSONObject(i);String url=row.optString("url");java.util.Map<String,String> scoped=new java.util.LinkedHashMap<>(headers);
                     if(Address.isWeb(referer)&&Address.isWeb(url)&&!VideoCatalog.origin(referer).equals(VideoCatalog.origin(url)))scoped.put("Referer",Uri.parse(referer).buildUpon().path("/").clearQuery().fragment(null).build().toString());
-                    recordVideo(tab,page,url,row.optString("type"),scoped);tab.videos.describe(url,row.optString("title"),row.optString("thumbnail"));}
+                    recordVideo(tab,page,url,row.optString("type"),scoped);tab.videos.describe(url,row.optString("title"),row.optString("thumbnail"));tab.videos.metadata(url,row);}
             }catch(Exception ignored){}completed.run();
         });
     }
@@ -758,7 +758,7 @@ public class MainActivity extends AppCompatActivity {
         }
         VideoPreviewAdapter previews=new VideoPreviewAdapter(this,videos,tab.url);
         AlertDialog dialog=BrowserDialogs.builder(this).setTitle("Videos · "+videos.size()).setAdapter(previews,(d,i)->videoOptions(videos.get(i))).setNegativeButton("Schließen",null).setPositiveButton("Neu suchen",(d,w)->{tab.videos.clearResolved();showVideos();}).setNeutralButton("Download-Fortschritt",(d,w)->showVideoQueue()).create();
-        dialog.setOnDismissListener(d->previews.close());dialog.show();
+        previews.information=item->{dialog.dismiss();videoInformation(item);};dialog.setOnDismissListener(d->previews.close());dialog.show();
     }
     private void showVideoQueue(){
         if(destroyed||privateLocked())return;if(videoDownloads!=null)videoDownloads.dismiss();videoDownloads=new VideoDownloadsDialog(this);videoDownloads.show();
@@ -769,11 +769,19 @@ public class MainActivity extends AppCompatActivity {
         String[] choices=stream?new String[]{"Als MP4 speichern","MP4-Ausschnitt: 1 Minute","MP4-Ausschnitt: 5 Minuten","MP4-Ausschnitt: 10 Minuten"}:new String[]{"Als MP4 speichern","Originaldatei speichern"};
         int castIndex=choices.length;if(!isPrivateMode()){choices=java.util.Arrays.copyOf(choices,choices.length+1);choices[castIndex]="Auf Fernseher übertragen";}
         VideoPreviewAdapter preview=new VideoPreviewAdapter(this,java.util.Collections.singletonList(item),sourceUrl);
-        AlertDialog options=BrowserDialogs.builder(this).setCustomTitle(preview.row(item)).setItems(choices,(d,i)->{
+        AlertDialog options=BrowserDialogs.builder(this).setCustomTitle(preview.row(item,true)).setItems(choices,(d,i)->{
             if(i==castIndex){castVideo(sourceTab,sourcePage,sourceUrl,item);return;}
             boolean original=!stream && i==1;long clip=stream&&i>0?new long[]{0,60000,300000,600000}[i]:0;
             chooseVideoFile(item,original,clip);
-        }).setNegativeButton("Abbrechen",null).create();options.setOnDismissListener(d->preview.close());options.show();
+        }).setNeutralButton("Informationen",(d,w)->videoInformation(item)).setNegativeButton("Abbrechen",null).create();options.setOnDismissListener(d->preview.close());options.show();
+    }
+    private void videoInformation(VideoCatalog.Item item){
+        if(destroyed||privateLocked())return;
+        VideoPreviewAdapter preview=new VideoPreviewAdapter(this,java.util.Collections.singletonList(item),active()==null?"":active().url);
+        LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.addView(preview.row(item,true));
+        TextView details=new TextView(this);details.setTextColor(ink());details.setTextSize(15);details.setTextIsSelectable(true);details.setPadding(dp(20),dp(8),dp(20),dp(20));details.setText(item.metadata.details(item));content.addView(details);
+        preview.metadataChanged=()->details.setText(item.metadata.details(item));ScrollView scroll=new ScrollView(this);scroll.addView(content);
+        AlertDialog dialog=BrowserDialogs.builder(this).setTitle("Videoinformationen").setView(scroll).setPositiveButton("Video speichern",(d,w)->videoOptions(item)).setNegativeButton("Schließen",null).create();dialog.setOnDismissListener(d->preview.close());dialog.show();
     }
     private void showCast(){
         if(isPrivateMode()){toast("Übertragen ist nur in normalen Tabs verfügbar.");return;}

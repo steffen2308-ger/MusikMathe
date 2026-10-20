@@ -36,6 +36,10 @@ final class VideoPreviewAdapter extends BaseAdapter implements AutoCloseable {
     private final OkHttpClient http=new OkHttpClient.Builder().connectTimeout(5,TimeUnit.SECONDS).readTimeout(5,TimeUnit.SECONDS).callTimeout(8,TimeUnit.SECONDS).followRedirects(false).followSslRedirects(false).build();
     private final Map<String,Bitmap> cache=new HashMap<>();
     private final Map<String,List<ImageView>> waiting=new HashMap<>();
+    private final Map<String,List<Runnable>> metadataRows=new HashMap<>();
+    private final java.util.Set<String> probes=new java.util.HashSet<>();
+    java.util.function.Consumer<VideoCatalog.Item> information;
+    Runnable metadataChanged;
     private volatile boolean closed;
     VideoPreviewAdapter(Context context,List<VideoCatalog.Item> items,String page){this.context=context;this.items=items;this.page=page;}
     @Override public int getCount(){return items.size();}
@@ -44,15 +48,27 @@ final class VideoPreviewAdapter extends BaseAdapter implements AutoCloseable {
     private int dp(int value){return Math.round(value*context.getResources().getDisplayMetrics().density);}
     @Override public View getView(int position,View convertView,ViewGroup parent){return row(getItem(position));}
     View row(VideoCatalog.Item item){
-        LinearLayout row=new LinearLayout(context);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(20),dp(12),dp(20),dp(12));row.setMinimumHeight(dp(80));
+        return row(item,false);
+    }
+    View row(VideoCatalog.Item item,boolean compact){
+        LinearLayout row=new LinearLayout(context);row.setGravity(Gravity.TOP);row.setPadding(dp(20),dp(12),dp(20),dp(12));row.setMinimumHeight(dp(80));
         ImageView image=new ImageView(context);image.setScaleType(ImageView.ScaleType.CENTER_INSIDE);image.setImageResource(android.R.drawable.ic_media_play);image.setBackgroundColor(context.getColor(R.color.browser_field));image.setContentDescription("Kein Vorschaubild verfügbar");row.addView(image,new LinearLayout.LayoutParams(dp(80),dp(48)));
-        TextView title=new TextView(context);title.setText(item.label());title.setTextColor(context.getColor(R.color.browser_ink));title.setTextSize(15);title.setMaxLines(4);title.setEllipsize(android.text.TextUtils.TruncateAt.END);LinearLayout.LayoutParams label=new LinearLayout.LayoutParams(0,-2,1);label.leftMargin=dp(12);row.addView(title,label);
+        LinearLayout text=new LinearLayout(context);text.setOrientation(LinearLayout.VERTICAL);LinearLayout.LayoutParams label=new LinearLayout.LayoutParams(0,-2,1);label.leftMargin=dp(12);row.addView(text,label);
+        TextView title=new TextView(context);title.setText(item.label());title.setTextColor(context.getColor(R.color.browser_ink));title.setTextSize(15);title.setMaxLines(3);title.setEllipsize(android.text.TextUtils.TruncateAt.END);text.addView(title);
+        TextView facts=new TextView(context);facts.setTextColor(context.getColor(R.color.browser_ink));facts.setTextSize(13);facts.setPadding(0,dp(6),0,0);text.addView(facts);
+        Runnable update=()->facts.setText(item.metadata.summary(compact));update.run();metadataRows.computeIfAbsent(item.url,key->new ArrayList<>()).add(update);
+        if(!compact&&information!=null){TextView more=new TextView(context);more.setText("Alle Informationen");more.setTextColor(context.getColor(R.color.browser_accent));more.setTextSize(14);more.setGravity(Gravity.CENTER_VERTICAL);more.setMinHeight(dp(48));more.setContentDescription("Videoinformationen: "+item.label());more.setFocusable(false);more.setOnClickListener(v->information.accept(item));text.addView(more);}
+        probe(item);
         String url=item.thumbnail;if(closed||url.isEmpty())return row;
         if(cache.containsKey(url)){display(image,cache.get(url));return row;}
         List<ImageView> views=waiting.get(url);if(views!=null){views.add(image);return row;}
         views=new ArrayList<>();views.add(image);waiting.put(url,views);
         worker.execute(()->{Bitmap bitmap=null;try{bitmap=decode(bytes(url));}catch(IOException|RuntimeException ignored){}Bitmap result=bitmap;main.post(()->{if(closed)return;cache.put(url,result);List<ImageView> targets=waiting.remove(url);if(targets!=null)for(ImageView target:targets)display(target,result);});});
         return row;
+    }
+    private void probe(VideoCatalog.Item item){
+        if(closed||probes.size()>=12||probes.contains(item.url)||(item.metadata.probedAt>0&&android.os.SystemClock.elapsedRealtime()-item.metadata.probedAt<30000))return;probes.add(item.url);
+        worker.execute(()->{VideoMetadata result=null;try{result=VideoMetadataProbe.read(item,http);}catch(IOException|RuntimeException ignored){}VideoMetadata found=result;main.post(()->{if(closed)return;if(found!=null){item.metadata.merge(found);item.metadata.probedAt=android.os.SystemClock.elapsedRealtime();List<Runnable> updates=metadataRows.get(item.url);if(updates!=null)for(Runnable update:updates)update.run();if(metadataChanged!=null)metadataChanged.run();}});});
     }
     private void display(ImageView image,Bitmap bitmap){if(bitmap==null)return;image.setImageBitmap(bitmap);image.setScaleType(ImageView.ScaleType.CENTER_CROP);image.setContentDescription("Video-Vorschaubild");}
     private byte[] bytes(String source)throws IOException{
@@ -83,5 +99,5 @@ final class VideoPreviewAdapter extends BaseAdapter implements AutoCloseable {
         options.inJustDecodeBounds=false;options.inSampleSize=1;while(options.outWidth/options.inSampleSize>320||options.outHeight/options.inSampleSize>180)options.inSampleSize*=2;
         return BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
     }
-    @Override public void close(){closed=true;http.dispatcher().cancelAll();worker.shutdownNow();waiting.clear();cache.clear();}
+    @Override public void close(){closed=true;http.dispatcher().cancelAll();worker.shutdownNow();waiting.clear();cache.clear();metadataRows.clear();}
 }
