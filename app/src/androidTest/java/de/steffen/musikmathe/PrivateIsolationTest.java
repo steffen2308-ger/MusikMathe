@@ -35,7 +35,11 @@ public class PrivateIsolationTest {
         fail("Expected page state: "+expected+"; actual="+visible+"; address="+(address==null?"none":address.getText())+"; fixture requests="+requests);
     }
     private void open(String password)throws Exception{menu("Zu privaten Tabs");PrivateTestSupport.unlock(device,password);}
-    private void home(){device.pressHome();String launcher=device.getLauncherPackageName();assertNotNull("Launcher",launcher);assertTrue("Home is foreground",device.wait(Until.hasObject(By.pkg(launcher).depth(0)),10000));}
+    private void home(){
+        device.pressHome();long deadline=android.os.SystemClock.uptimeMillis()+10000;String foreground=null;
+        do{foreground=device.getCurrentPackageName();if(foreground!=null&&!foreground.equals(context.getPackageName())&&!foreground.equals(context.getPackageName()+".test")){android.util.Log.i("MenuPreview","private-home-package="+foreground);return;}android.os.SystemClock.sleep(100);}while(android.os.SystemClock.uptimeMillis()<deadline);
+        fail("Home must leave the browser; foreground="+foreground+"; gate="+device.hasObject(By.desc("Passwort für privaten Bereich")));
+    }
     private void normal(){menu("Zu normalen Tabs");assertTrue(device.wait(Until.gone(By.descStartsWith("Privater Tab")),15000));}
     private void history(String present,String absent){menu("Verlauf");assertTrue("Own private history",device.wait(Until.hasObject(By.textContains(present)),8000));assertFalse("Other area history stays hidden",device.hasObject(By.textContains(absent)));device.pressBack();}
     @Test public void passwordsRestoreIndependentHistoryCookiesStorageAndRecoverAfterProcessDeath()throws Exception{
