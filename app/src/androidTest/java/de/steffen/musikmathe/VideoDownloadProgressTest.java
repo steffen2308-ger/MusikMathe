@@ -50,55 +50,41 @@ public class VideoDownloadProgressTest {
         Bitmap full=InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();if(full==null)return;
         Bitmap scaled=Bitmap.createScaledBitmap(full,480,Math.round(full.getHeight()*480f/full.getWidth()),true);ByteArrayOutputStream bytes=new ByteArrayOutputStream();scaled.compress(Bitmap.CompressFormat.JPEG,85,bytes);
         String encoded=Base64.encodeToString(bytes.toByteArray(),Base64.NO_WRAP);int chunks=(encoded.length()+1799)/1800;
-        for(int i=0;i<chunks;i++)Log.i("MenuPreview","queue "+i+"/"+chunks+" "+encoded.substring(i*1800,Math.min(encoded.length(),(i+1)*1800)));
+        for(int i=0;i<chunks;i++)Log.i("MenuPreview","parallel-downloads "+i+"/"+chunks+" "+encoded.substring(i*1800,Math.min(encoded.length(),(i+1)*1800)));
         if(scaled!=full)scaled.recycle();full.recycle();
     }
-    @Test public void settingsShowLiveKnownAndUnknownSizeAndKeepCancelResultsVisible()throws Exception{
+    private VideoDownloadService.ActiveVideo active(String title){return snapshot().active.stream().filter(row->row.title.equals(title+".mp4")).findFirst().orElse(null);}
+    private UiObject2 scrollTo(UiDevice device,androidx.test.uiautomator.BySelector selector,androidx.test.uiautomator.UiSelector target)throws Exception{
+        UiObject2 found=device.findObject(selector);if(found==null)new androidx.test.uiautomator.UiScrollable(new androidx.test.uiautomator.UiSelector().className("android.widget.ScrollView")).scrollIntoView(target);found=device.wait(Until.findObject(selector),6000);assertNotNull("Download control",found);return found;
+    }
+    @Test public void settingsShowThreeIndependentDownloadsAndCancelOnlyTheSelectedVideo()throws Exception{
         UiDevice device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());device.wakeUp();device.executeShellCommand("wm dismiss-keyguard");
         Activity activity=InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(app,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));
-        // A progress screen deliberately never becomes idle. Observe its live tree directly.
         long idleTimeout=Configurator.getInstance().getWaitForIdleTimeout();Configurator.getInstance().setWaitForIdleTimeout(0);
-        CountDownLatch knownRelease=new CountDownLatch(1),unknownRelease=new CountDownLatch(1);
+        java.util.Map<String,CountDownLatch> gates=new java.util.concurrent.ConcurrentHashMap<>();for(String name:new String[]{"known","unknown","held","waiting"})gates.put(name,new CountDownLatch(1));
         List<String> requests=Collections.synchronizedList(new ArrayList<>());
         try(ServerSocket server=new ServerSocket(0)){
-            Thread responses=new Thread(()->{while(!server.isClosed())try(Socket socket=server.accept()){
-                socket.setSoTimeout(5000);BufferedReader in=new BufferedReader(new InputStreamReader(socket.getInputStream(),StandardCharsets.US_ASCII));String request=in.readLine(),line;while((line=in.readLine())!=null&&!line.isEmpty()){}
-                requests.add(request.split(" ")[1]);boolean known=request.contains("/known");String headers="HTTP/1.1 200 OK\r\nConnection: close\r\n"+(known?"Content-Length: 262144\r\n":"")+"\r\n";
-                socket.getOutputStream().write(headers.getBytes(StandardCharsets.US_ASCII));socket.getOutputStream().write(new byte[65536]);socket.getOutputStream().flush();
-                if(known){knownRelease.await(45,TimeUnit.SECONDS);socket.getOutputStream().write(new byte[196608]);}else unknownRelease.await(45,TimeUnit.SECONDS);
-            }catch(Exception ignored){}});responses.setDaemon(true);responses.start();
+            Thread responses=new Thread(()->{while(!server.isClosed())try{Socket socket=server.accept();Thread response=new Thread(()->{try(Socket close=socket){
+                socket.setSoTimeout(5000);BufferedReader in=new BufferedReader(new InputStreamReader(socket.getInputStream(),StandardCharsets.US_ASCII));String request=in.readLine(),line;if(request==null)return;while((line=in.readLine())!=null&&!line.isEmpty()){}
+                String name=request.split(" ")[1].substring(1);requests.add(name);boolean known=!name.equals("unknown");String headers="HTTP/1.1 200 OK\r\nConnection: close\r\n"+(known?"Content-Length: 262144\r\n":"")+"\r\n";
+                socket.getOutputStream().write(headers.getBytes(StandardCharsets.US_ASCII));socket.getOutputStream().write(new byte[65536]);socket.getOutputStream().flush();CountDownLatch gate=gates.get(name);if(gate!=null)gate.await(90,TimeUnit.SECONDS);if(known)socket.getOutputStream().write(new byte[196608]);
+            }catch(Exception ignored){}});response.setDaemon(true);response.start();}catch(Exception ignored){}});responses.setDaemon(true);responses.start();
             try(java.io.OutputStream reserved=app.getContentResolver().openOutputStream(uri("removed"))){assertNotNull(reserved);}
-            enqueue(server.getLocalPort(),"known");enqueue(server.getLocalPort(),"removed");enqueue(server.getLocalPort(),"unknown");
-            await(()->snapshot().progress!=null&&snapshot().progress.bytes==65536);
-            assertEquals(25,snapshot().progress.percent);assertEquals(262144,snapshot().progress.total);
+            enqueue(server.getLocalPort(),"known");enqueue(server.getLocalPort(),"unknown");enqueue(server.getLocalPort(),"held");
+            await(()->snapshot().active.size()==3&&snapshot().active.stream().allMatch(row->row.progress!=null&&row.progress.bytes==65536));
+            assertEquals(3,requests.size());assertEquals(25,active("known").progress.percent);assertEquals(262144,active("known").progress.total);assertEquals(-1,active("unknown").progress.percent);assertEquals(-1,active("unknown").progress.eta);
+            enqueue(server.getLocalPort(),"removed");enqueue(server.getLocalPort(),"waiting");await(()->snapshot().waiting.size()==2);assertFalse(requests.contains("removed"));assertFalse(requests.contains("waiting"));
             UiObject2 menu=device.wait(Until.findObject(By.desc("Menü")),6000);assertNotNull(menu);menu.click();click(device,"Einstellungen");click(device,"Video-Downloads · Fortschritt und Warteschlange");
-            assertTrue("Active filename missing",device.wait(Until.hasObject(By.text("known.mp4")),6000));
-            assertTrue("Live percentage missing",device.wait(Until.hasObject(By.textContains("25 %")),6000));
-            assertTrue("Per-step ETA missing: "+snapshot().progress.detail(),device.wait(Until.hasObject(By.textContains("Restzeit für diesen Schritt: ca.")),6000));
-            assertTrue(device.hasObject(By.textContains("In Warteschlange: 2")));
-            assertTrue("Close button must remain visible",device.hasObject(By.text(java.util.regex.Pattern.compile("Schließen",java.util.regex.Pattern.CASE_INSENSITIVE|java.util.regex.Pattern.UNICODE_CASE))));
-            assertTrue("Cancel-all button must remain visible",device.hasObject(By.text(java.util.regex.Pattern.compile("Alle abbrechen",java.util.regex.Pattern.CASE_INSENSITIVE|java.util.regex.Pattern.UNICODE_CASE))));
-            UiObject2 remove=device.wait(Until.findObject(By.desc("Video aus Warteschlange entfernen: removed.mp4")),6000);assertNotNull("Individual queued cancel missing",remove);
-            preview();Thread.sleep(1100);remove.click();
-            await(()->snapshot().waiting.size()==1);assertEquals("unknown.mp4",snapshot().waiting.get(0).title);assertEquals("known.mp4",snapshot().title);assertEquals(65536,snapshot().progress.bytes);
-            assertTrue(device.wait(Until.hasObject(By.textContains("In Warteschlange: 1")),6000));
-            assertFalse(device.hasObject(By.desc("Video aus Warteschlange entfernen: removed.mp4")));
-            try(InputStream removed=app.getContentResolver().openInputStream(uri("removed"))){fail("Cancelled queued destination must be deleted");}catch(FileNotFoundException expected){}
-            click(device,"Schließen");app.startActivity(new Intent(app,MainActivity.class).setAction(VideoDownloadService.SHOW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT|Intent.FLAG_ACTIVITY_SINGLE_TOP));
-            assertTrue(device.wait(Until.hasObject(By.text("Video-Downloads")),6000));
-            knownRelease.countDown();await(()->snapshot().title.equals("unknown.mp4")&&snapshot().progress!=null&&snapshot().progress.bytes==65536);
-            assertEquals(-1,snapshot().progress.percent);assertEquals(-1,snapshot().progress.eta);
-            assertEquals(java.util.Arrays.asList("/known","/unknown"),requests);
-            assertTrue(device.wait(Until.hasObject(By.text("unknown.mp4")),6000));assertTrue(device.wait(Until.hasObject(By.textContains("Gesamtgröße unbekannt")),6000));
+            assertTrue(device.wait(Until.hasObject(By.text("Gleichzeitig aktiv: 3 von 3")),6000));assertTrue(device.wait(Until.hasObject(By.textContains("25 %")),6000));assertTrue(device.wait(Until.hasObject(By.textContains("Restzeit für diesen Schritt: ca.")),6000));preview();
+            String removed="Video aus Warteschlange entfernen: removed.mp4";scrollTo(device,By.desc(removed),new androidx.test.uiautomator.UiSelector().description(removed)).click();await(()->snapshot().waiting.size()==1);assertEquals("waiting.mp4",snapshot().waiting.get(0).title);
+            try(InputStream deleted=app.getContentResolver().openInputStream(uri("removed"))){fail("Cancelled waiting destination must be deleted");}catch(FileNotFoundException expected){}
+            String held="Video-Download abbrechen: held.mp4";scrollTo(device,By.desc(held),new androidx.test.uiautomator.UiSelector().description(held)).click();gates.get("held").countDown();
+            await(()->active("held")==null&&active("waiting")!=null&&active("waiting").progress.bytes==65536);assertNotNull(active("known"));assertNotNull(active("unknown"));assertFalse(requests.contains("removed"));
+            gates.get("known").countDown();await(()->active("known")==null);assertNotNull(active("unknown"));assertEquals(-1,active("unknown").progress.total);
             try(InputStream saved=app.getContentResolver().openInputStream(uri("known"))){byte[] buffer=new byte[8192];int n;long total=0;while((n=saved.read(buffer))!=-1)total+=n;assertEquals(262144,total);}
-            enqueue(server.getLocalPort(),"waiting");await(()->snapshot().waiting.size()==1);
-            // The service updates before the dialog grows; wait for its new layout
-            // before locating the footer button's tap coordinates.
-            assertTrue(device.wait(Until.hasObject(By.textContains("In Warteschlange: 1")),6000));click(device,"Alle abbrechen");
-            await(()->!snapshot().running);assertTrue(snapshot().waiting.isEmpty());assertNull(snapshot().progress);
-            assertTrue(device.wait(Until.hasObject(By.text("Keine laufenden Video-Downloads")),6000));assertTrue(device.hasObject(By.text("Videospeicherung abgebrochen.")));
-        }finally{
-            Configurator.getInstance().setWaitForIdleTimeout(idleTimeout);knownRelease.countDown();unknownRelease.countDown();main(VideoDownloadService::cancelAll);for(String name:new String[]{"known","removed","unknown","waiting"})app.getContentResolver().delete(uri(name),null,null);main(activity::finish);
-        }
+            click(device,"Schließen");app.startActivity(new Intent(app,MainActivity.class).setAction(VideoDownloadService.SHOW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT|Intent.FLAG_ACTIVITY_SINGLE_TOP));assertTrue(device.wait(Until.hasObject(By.text("Video-Downloads")),6000));
+            scrollTo(device,By.text("unknown.mp4"),new androidx.test.uiautomator.UiSelector().text("unknown.mp4"));assertTrue(device.wait(Until.hasObject(By.textContains("Gesamtgröße unbekannt")),6000));
+            click(device,"Alle abbrechen");gates.values().forEach(CountDownLatch::countDown);await(()->!snapshot().running);assertTrue(snapshot().waiting.isEmpty());assertTrue(device.wait(Until.hasObject(By.text("Keine laufenden Video-Downloads")),6000));assertTrue(device.hasObject(By.text("Videospeicherung abgebrochen.")));
+        }finally{Configurator.getInstance().setWaitForIdleTimeout(idleTimeout);gates.values().forEach(CountDownLatch::countDown);main(VideoDownloadService::cancelAll);await(()->!snapshot().running);for(String name:new String[]{"known","removed","unknown","held","waiting"})app.getContentResolver().delete(uri(name),null,null);main(activity::finish);}
     }
 }
