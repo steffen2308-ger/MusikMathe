@@ -77,6 +77,12 @@ public class VideoWindowDeviceTest {
         }
         fail("Native PiP action: "+label);return null;
     }
+    private void moveVideo(MainActivity activity)throws Exception{
+        int[] center={0,0};main(()->{View view=(View)field(activity,"customView");int[] position=new int[2];view.getLocationOnScreen(position);center[0]=position[0]+view.getWidth()/2;center[1]=position[1]+view.getHeight()/2;});
+        // PiP is positioned by Android. Also exercise moving it away from the
+        // navigation bar before tapping the system's expanded action menu.
+        assertTrue(device.swipe(center[0],center[1],center[0],device.getDisplayHeight()/3,40));Thread.sleep(900);
+    }
     private void preview(String name){
         Bitmap full=instrumentation.getUiAutomation().takeScreenshot();assertNotNull(full);Bitmap small=Bitmap.createScaledBitmap(full,480,Math.round(full.getHeight()*480f/full.getWidth()),true);
         ByteArrayOutputStream bytes=new ByteArrayOutputStream();small.compress(Bitmap.CompressFormat.JPEG,85,bytes);String data=Base64.encodeToString(bytes.toByteArray(),Base64.NO_WRAP);int chunks=(data.length()+1799)/1800;
@@ -113,7 +119,7 @@ public class VideoWindowDeviceTest {
             expect(movie,"window.videoWindowIdentity","same live video");expect(browse,"String(!window.beforeFilterReload&&document.readyState==='complete'&&!!document.getElementById('work'))","true");
             js(browse,"document.getElementById('work').value='Arbeit bleibt';true");
             int before=Integer.parseInt(js(movie,"String(window.updates)"));Thread.sleep(1600);assertTrue("Real video continues while browsing",Integer.parseInt(js(movie,"String(window.updates)"))>before);expect(movie,"String(document.querySelector('video').paused)","false");preview("floating-video-browsing");
-            pipAction(owner,"Video pausieren").click();expect(movie,"String(document.querySelector('video').paused)","true");preview("floating-video-controls");
+            moveVideo(owner);UiObject2 pause=pipAction(owner,"Video pausieren");Log.i("VideoWindow","Pause action bounds: "+pause.getVisibleBounds());preview("floating-video-action-menu");pause.click();expect(movie,"String(document.querySelector('video').paused)","true");preview("floating-video-controls");
             pipAction(owner,"Video fortsetzen").click();expect(movie,"String(document.querySelector('video').paused)","false");
             pipAction(owner,"Im Browser weitersurfen").click();await(()->second()==browser,"Return to existing browser window");expect(browse,"document.getElementById('work').value","Arbeit bleibt");assertTrue(pip(owner));
             main(original::finishAndRemoveTask);await(original::isDestroyed,"Closing the video destroys its WebView");expect(browse,"location.pathname","/browse");expect(browse,"document.getElementById('work').value","Arbeit bleibt");
