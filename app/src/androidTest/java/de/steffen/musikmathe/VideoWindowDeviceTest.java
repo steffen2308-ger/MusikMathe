@@ -121,7 +121,9 @@ public class VideoWindowDeviceTest {
     }
     @Test public void privateActivityAndUntrustedAppsCannotOpenVideoWindowControls()throws Exception{
         ActivityInfo privateInfo=app.getPackageManager().getActivityInfo(new ComponentName(app,PrivateActivity.class),0);
-        assertEquals(0,privateInfo.flags&ActivityInfo.FLAG_SUPPORTS_PICTURE_IN_PICTURE);
+        // AOSP stores supportsPictureInPicture in this installed-manifest bit;
+        // its named constant is hidden from the public SDK (no hidden API call).
+        assertEquals(0,privateInfo.flags&0x00400000);
         assertFalse(app.getPackageManager().getActivityInfo(new ComponentName(app,SecondBrowserActivity.class),0).exported);
         assertFalse(app.getPackageManager().getReceiverInfo(new ComponentName(app,VideoWindowReceiver.class),0).exported);
     }

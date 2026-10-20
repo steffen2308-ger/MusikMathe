@@ -423,7 +423,7 @@ public class MainActivity extends AppCompatActivity {
             .quick(5,"share","Seite teilen",webpage)
             .quick(22,web!=null&&web.getProgress()<100?"stop":"reload",web!=null&&web.getProgress()<100?"Laden stoppen":"Neu laden",web!=null)
             .item(0,"plus","Neuer Tab");
-        if(!isPrivateMode())browserMenu.item(26,"switch-tabs","Zweites Fenster öffnen").item(27,"pip","Schwebendes Video");
+        if(!isPrivateMode())browserMenu.item(26,"switch-tabs",this instanceof SecondBrowserActivity?"Zum ersten Fenster":"Zweites Fenster öffnen").item(27,"pip","Schwebendes Video");
         browserMenu.item(12,"private","Neuer privater Tab")
             .item(13,"switch-tabs",isPrivateMode()?"Zu normalen Tabs":"Zu privaten Tabs");
         if(isPrivateMode())browserMenu.item(25,"key","Privaten Bereich sperren").item(14,"close","Alle privaten Tabs schließen");
