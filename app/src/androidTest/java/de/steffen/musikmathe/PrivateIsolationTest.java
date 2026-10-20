@@ -60,7 +60,7 @@ public class PrivateIsolationTest {
             history("Area B private history","Area A private history");normal();
             open(passwordA);state("cookie:marker=A storage:A");history("Area A private history","Area B private history");
             // Home/background must hide the area and Back must not bypass its native password gate.
-            device.pressHome();context.startActivity(new Intent(context,PrivateActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT|Intent.FLAG_ACTIVITY_SINGLE_TOP));
+            device.pressHome();assertTrue("Browser left foreground",device.wait(Until.gone(By.desc("Menü")),10000));context.startActivity(new Intent(context,PrivateActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT|Intent.FLAG_ACTIVITY_SINGLE_TOP));
             assertNotNull(device.wait(Until.findObject(By.desc("Passwort für privaten Bereich")),15000));assertFalse(device.hasObject(By.textContains("cookie:marker=A")));device.pressBack();assertTrue(device.hasObject(By.desc("Passwort für privaten Bereich")));PrivateTestSupport.unlock(device,passwordA);state("cookie:marker=A storage:A");
             // Kill only the separate private PID. Its Keystore lease must recover the closed databases.
             device.pressHome();String pid=device.executeShellCommand("pidof de.steffen.musikmathe:private").trim();assertTrue("Separate private PID",pid.matches("[0-9]+"));device.executeShellCommand("run-as de.steffen.musikmathe kill -9 "+pid);
