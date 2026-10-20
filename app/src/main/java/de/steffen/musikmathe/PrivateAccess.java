@@ -28,14 +28,14 @@ final class PrivateAccess {
     private Button open;
     private android.app.Dialog dialog;
     private int generation;
-    private boolean locked=true,busy,destroyed;
+    private boolean locked=true,busy,destroyed,foreground=true;
     PrivateAccess(MainActivity activity,Runnable unlocked,Runnable cancel){this.activity=activity;this.unlocked=unlocked;this.cancel=cancel;}
     boolean locked(){return locked;}
     void show(){show(false);}
     private int dp(int n){return Math.round(n*activity.getResources().getDisplayMetrics().density);}
     private TextView text(String value,int size){TextView v=new TextView(activity);v.setText(value);v.setTextSize(size);v.setTextColor(activity.getColor(R.color.browser_ink));return v;}
     private void show(boolean confirmation){
-        if(destroyed||activity.isFinishing())return;locked=true;
+        if(destroyed||!foreground||activity.isFinishing())return;locked=true;
         LinearLayout body=new LinearLayout(activity);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(24),dp(40),dp(24),dp(24));body.setBackgroundColor(activity.getColor(R.color.browser_surface));body.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
         TextView title=text(confirmation?"Neuen privaten Bereich anlegen":"Privater Bereich",25);body.addView(title);
         String explanation=confirmation?"Dieses Passwort gehört noch zu keinem gespeicherten Bereich. Bitte zur Bestätigung nochmals eingeben. Ein Tippfehler öffnet keinen vorhandenen Bereich.":PrivateProfiles.active==null?"Gleiches Passwort: deinen gespeicherten Bereich öffnen. Neues Passwort: einen eigenen Bereich anlegen.\n\nVerlauf, Tabs, Lesezeichen, Website-Anmeldungen, Einstellungen und Videoordner werden getrennt gespeichert.":"Dein privater Bereich ist gesperrt. Gib sein Passwort ein, um fortzufahren.";
@@ -77,8 +77,9 @@ final class PrivateAccess {
         });
     }
     void background(){
-        if(destroyed)return;generation++;if(pending!=null){pending.close();pending=null;}show();
+        if(destroyed)return;foreground=false;locked=true;generation++;if(pending!=null){pending.close();pending=null;}if(input!=null)input.getText().clear();if(dialog!=null)dialog.dismiss();
     }
+    void foreground(){foreground=true;if(!destroyed&&locked&&(dialog==null||!dialog.isShowing()))show();}
     void defer(Runnable action){if(locked)deferred.add(action);else action.run();}
     void destroy(){destroyed=true;generation++;if(pending!=null)pending.close();pending=null;deferred.clear();if(input!=null)input.getText().clear();if(dialog!=null)dialog.dismiss();worker.shutdownNow();}
 }

@@ -119,7 +119,7 @@ public class MainActivity extends AppCompatActivity {
             @Override public void handleOnBackPressed(){goBack();}
         });
         if(isPrivateMode()){
-            privateAccess=new PrivateAccess(this,()->{if(store==null)initializeBrowser(null);else{if(activeView()!=null)activeView().onResume();refreshHomeTabs();applyAppearance();}},this::endPrivate);
+            privateAccess=new PrivateAccess(this,()->{if(store==null)initializeBrowser(null);else{root.setVisibility(View.VISIBLE);if(activeView()!=null)activeView().onResume();refreshHomeTabs();applyAppearance();}},this::endPrivate);
             privateAccess.show();return;
         }
         initializeBrowser(saved);
@@ -683,8 +683,8 @@ public class MainActivity extends AppCompatActivity {
         closingPrivate=true;openNormal();finish();
     }
     @Override protected void onSaveInstanceState(Bundle state){state.putBoolean("browser_fullscreen",browserFullscreen);persist();super.onSaveInstanceState(state);}
-    @Override protected void onPause(){browserResumed=false;if(linkPreloader!=null)linkPreloader.pause();if(browserMenu!=null)browserMenu.dismiss();if(addressSuggestions!=null)addressSuggestions.dismiss();if(videoDownloads!=null)videoDownloads.pause();if(passwords!=null)passwords.pause();persist();if(store!=null)CookieManager.getInstance().flush();if(activeView()!=null)activeView().onPause();super.onPause();if(isPrivateMode()&&!closingPrivate&&!isFinishing()&&!isChangingConfigurations()&&privateAccess!=null){cancelPermission();hideFullscreen();browserFullscreen=false;applyFullscreenUi();if(videoSearch!=null)videoSearch.dismiss();if(videoDownloads!=null)videoDownloads.dismiss();privateAccess.background();}}
-    @Override protected void onResume(){super.onResume();browserResumed=true;BrowserAppearance.sync(this);applyAppearance();if(videoDownloads!=null)videoDownloads.resume();if(passwords!=null)passwords.resume();if(store==null)return;refreshHomeTabs();if(activeView()!=null&&!privateLocked())activeView().onResume();refreshPreloading();if(!isPrivateMode()){
+    @Override protected void onPause(){browserResumed=false;if(linkPreloader!=null)linkPreloader.pause();if(browserMenu!=null)browserMenu.dismiss();if(addressSuggestions!=null)addressSuggestions.dismiss();if(videoDownloads!=null)videoDownloads.pause();if(passwords!=null)passwords.pause();persist();if(store!=null)CookieManager.getInstance().flush();if(activeView()!=null)activeView().onPause();super.onPause();if(isPrivateMode()&&!closingPrivate&&!isFinishing()&&!isChangingConfigurations()&&privateAccess!=null){privateAccess.background();if(root!=null)root.setVisibility(View.INVISIBLE);BrowserDialogs.hidePrivate(this);cancelPermission();hideFullscreen();browserFullscreen=false;applyFullscreenUi();if(videoSearch!=null)videoSearch.dismiss();if(videoDownloads!=null)videoDownloads.dismiss();}}
+    @Override protected void onResume(){super.onResume();if(privateAccess!=null)privateAccess.foreground();browserResumed=true;BrowserAppearance.sync(this);applyAppearance();if(videoDownloads!=null)videoDownloads.resume();if(passwords!=null)passwords.resume();if(store==null)return;refreshHomeTabs();if(activeView()!=null&&!privateLocked())activeView().onResume();refreshPreloading();if(!isPrivateMode()){
         PrivateSession.cleanIfStopped(this);
         root.postDelayed(() -> { if(!destroyed)PrivateSession.cleanIfStopped(this); },1000);
     }}
