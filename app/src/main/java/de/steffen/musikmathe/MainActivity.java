@@ -113,6 +113,7 @@ public class MainActivity extends AppCompatActivity {
     @Override public void onCreate(Bundle saved) {
         BrowserAppearance.sync(this);
         super.onCreate(saved);
+        if(isPrivateMode()&&Build.VERSION.SDK_INT<28){finish();return;}
         if (isPrivateMode()) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         getOnBackPressedDispatcher().addCallback(this,new androidx.activity.OnBackPressedCallback(true){
             @Override public void handleOnBackPressed(){goBack();}

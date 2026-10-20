@@ -16,6 +16,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /** Native authentication surface. No password or key enters an Intent, Bundle, WebView or log. */
+@android.annotation.TargetApi(28)
 final class PrivateAccess {
     private final MainActivity activity;
     private final Runnable unlocked,cancel;
