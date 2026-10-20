@@ -27,3 +27,5 @@ ZDF vector icon — Simple Icons contributors, CC0-1.0.
 https://github.com/simple-icons/simple-icons/blob/develop/icons/zdf.svg
 https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md
 Brand names and marks belong to their respective owners.
+The Yandex, SearXNG, Brave Search and Mojeek start-page symbols are locally drawn
+vector representations; no third-party favicon service is contacted.

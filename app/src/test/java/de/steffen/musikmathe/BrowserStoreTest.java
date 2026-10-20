@@ -40,6 +40,12 @@ public class BrowserStoreTest {
     @Test public void corruptStorageIsRecoverable(){
         RuntimeEnvironment.getApplication().getSharedPreferences("browser",0).edit().putString("tabs","not json").commit();assertTrue(store.read("tabs").isEmpty());
     }
+    @Test public void preloadingDefaultsOnPersistsAndIsAlwaysOffInPrivateTabs(){
+        Context context=RuntimeEnvironment.getApplication();assertTrue(store.linkPreloadingEnabled());
+        store.linkPreloadingEnabled(false);assertFalse(new BrowserStore(context).linkPreloadingEnabled());
+        BrowserStore secret=new BrowserStore(context,true);secret.linkPreloadingEnabled(true);assertFalse(secret.linkPreloadingEnabled());assertFalse(new BrowserStore(context).linkPreloadingEnabled());
+        store.linkPreloadingEnabled(true);assertTrue(new BrowserStore(context).linkPreloadingEnabled());assertFalse(new BrowserStore(context,true).linkPreloadingEnabled());
+    }
     @Test public void adBlockChoicePersistsAndPrivateChangesStayInMemory(){
         Context context=RuntimeEnvironment.getApplication();
         assertTrue(store.adBlockingEnabled());store.adBlockingEnabled(false);

@@ -85,6 +85,8 @@ final class BrowserStore {
     int selected() { return privateMode ? 0 : prefs.getInt("selected", 0); }
     void selected(int index) { if (!privateMode) prefs.edit().putInt("selected", index).apply(); }
     String engine() { return privateMode ? privateEngine : prefs.getString("engine", "google"); }
+    boolean linkPreloadingEnabled(){return !privateMode&&prefs.getBoolean("wifi_link_preloading",true);}
+    void linkPreloadingEnabled(boolean enabled){if(!privateMode)prefs.edit().putBoolean("wifi_link_preloading",enabled).apply();}
     void engine(String engine) { if (privateMode) privateEngine = engine; else prefs.edit().putString("engine", engine).apply(); }
     boolean adBlockingEnabled() { return privateMode ? privateAdBlocking : prefs.getBoolean("ad_blocking", true); }
     void adBlockingEnabled(boolean enabled) {
