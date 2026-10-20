@@ -80,6 +80,11 @@ public class BrowserInteractionTest {
     private void request(MainActivity activity,MainActivity.Tab tab,WebsiteRequest request)throws Exception{
         invoke(activity,"requestWebsitePermission",new Class<?>[]{MainActivity.Tab.class,android.webkit.PermissionRequest.class},tab,request);
     }
+    private void choose(android.app.AlertDialog dialog,int button){
+        dialog.getButton(button).performClick();
+        // AlertDialog delivers button callbacks through its main-thread Handler.
+        Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+    }
     @Test public void protectedMediaNeedsConsentAndGrantsWithoutCameraOrMicrophonePermission()throws Exception{
         clear();ActivityController<MainActivity> c=Robolectric.buildActivity(MainActivity.class).setup();MainActivity a=c.get();
         try{
@@ -88,7 +93,7 @@ public class BrowserInteractionTest {
             android.app.AlertDialog dialog=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
             assertEquals("Geschützte Inhalte",Shadows.shadowOf(dialog).getTitle());assertTrue(Shadows.shadowOf(dialog).getMessage().toString().contains("www.netflix.com"));
             assertNull(Shadows.shadowOf(a).getLastRequestedPermission());
-            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();
+            choose(dialog,android.app.AlertDialog.BUTTON_POSITIVE);
             assertArrayEquals(new String[]{android.webkit.PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID},request.granted);assertFalse(request.denied);
             assertNull(Shadows.shadowOf(a).getLastRequestedPermission());
             invoke(a,"navigate",new Class<?>[]{String.class},"https://other.example/");assertFalse("Completed grant must not be denied later",request.denied);
@@ -98,9 +103,9 @@ public class BrowserInteractionTest {
         clear();ActivityController<MainActivity> c=Robolectric.buildActivity(MainActivity.class).setup();MainActivity a=c.get();
         try{
             invoke(a,"navigate",new Class<?>[]{String.class},"https://www.netflix.com/watch/1");WebsiteRequest denied=protectedRequest("https://www.netflix.com");request(a,tabs(a).get(0),denied);
-            org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog().getButton(android.app.AlertDialog.BUTTON_NEGATIVE).performClick();assertTrue(denied.denied);assertNull(denied.granted);
+            choose(org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog(),android.app.AlertDialog.BUTTON_NEGATIVE);assertTrue(denied.denied);assertNull(denied.granted);
             WebsiteRequest stale=protectedRequest("https://www.netflix.com");request(a,tabs(a).get(0),stale);android.app.AlertDialog old=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
-            invoke(a,"navigate",new Class<?>[]{String.class},"https://other.example/");old.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();assertTrue(stale.denied);assertNull(stale.granted);
+            invoke(a,"navigate",new Class<?>[]{String.class},"https://other.example/");choose(old,android.app.AlertDialog.BUTTON_POSITIVE);assertTrue(stale.denied);assertNull(stale.granted);
         }finally{c.pause().stop().destroy();}
     }
     @Test public void protectedMediaRejectsHttpOtherOriginsInactiveTabsAndUnknownResources()throws Exception{
@@ -120,7 +125,7 @@ public class BrowserInteractionTest {
             invoke(a,"navigate",new Class<?>[]{String.class},"https://media.example/");
             Shadows.shadowOf(RuntimeEnvironment.getApplication()).denyPermissions(android.Manifest.permission.CAMERA,android.Manifest.permission.RECORD_AUDIO);
             WebsiteRequest mixed=new WebsiteRequest("https://media.example",android.webkit.PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID,android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE,"future-resource");request(a,tabs(a).get(0),mixed);
-            org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog().getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();
+            choose(org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog(),android.app.AlertDialog.BUTTON_POSITIVE);
             assertNull(mixed.granted);assertArrayEquals(new String[]{android.Manifest.permission.CAMERA},Shadows.shadowOf(a).getLastRequestedPermission().requestedPermissions);
             a.onRequestPermissionsResult(11,new String[]{android.Manifest.permission.CAMERA},new int[]{android.content.pm.PackageManager.PERMISSION_DENIED});
             assertArrayEquals(new String[]{android.webkit.PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID},mixed.granted);
@@ -132,14 +137,14 @@ public class BrowserInteractionTest {
             invoke(a,"navigate",new Class<?>[]{String.class},"https://media.example/");MainActivity.Tab tab=tabs(a).get(0);
             WebsiteRequest old=protectedRequest("https://media.example"),fresh=protectedRequest("https://media.example");request(a,tab,old);request(a,tab,fresh);assertTrue(old.denied);
             web(a).getWebChromeClient().onPermissionRequestCanceled(old);Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
-            assertFalse(fresh.denied);org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog().getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();assertNotNull(fresh.granted);
+            assertFalse(fresh.denied);choose(org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog(),android.app.AlertDialog.BUTTON_POSITIVE);assertNotNull(fresh.granted);
         }finally{c.pause().stop().destroy();}
     }
     @Test public void privateTabsAlsoRequireTheirOwnProtectedMediaConsent()throws Exception{
         clear();BrowserApplication.privateReady=true;ActivityController<PrivateActivity> c=Robolectric.buildActivity(PrivateActivity.class).setup();MainActivity a=c.get();
         try{
             invoke(a,"navigate",new Class<?>[]{String.class},"https://media.example/");WebsiteRequest request=protectedRequest("https://media.example");request(a,tabs(a).get(0),request);assertNull(request.granted);
-            org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog().getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();assertNotNull(request.granted);
+            choose(org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog(),android.app.AlertDialog.BUTTON_POSITIVE);assertNotNull(request.granted);
         }finally{c.pause().stop().destroy();BrowserApplication.privateReady=false;}
     }
 }
