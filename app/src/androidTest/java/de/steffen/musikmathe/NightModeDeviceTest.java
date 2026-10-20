@@ -60,6 +60,11 @@ public class NightModeDeviceTest {
         if(small!=full)small.recycle();full.recycle();
     }
     private int pixel(WebView web,double x,double y){int[] point={0,0};main(()->{web.getLocationOnScreen(point);point[0]+=(int)(web.getWidth()*x);point[1]+=(int)(web.getHeight()*y);});Bitmap image=instrumentation.getUiAutomation().takeScreenshot();assertNotNull("Rendered screenshot",image);try{return image.getPixel(point[0],point[1]);}finally{image.recycle();}}
+    private void homePreview(WebView home,String name)throws Exception{
+        CountDownLatch painted=new CountDownLatch(1);
+        main(()->home.postVisualStateCallback(2,new WebView.VisualStateCallback(){@Override public void onComplete(long id){home.postOnAnimation(()->home.postOnAnimation(painted::countDown));}}));
+        painted.await(8,TimeUnit.SECONDS);preview(name);
+    }
     private void darkPagePainted(WebView web)throws Exception{
         // JavaScript/configuration callbacks can finish before the compositor paints.
         CountDownLatch ready=new CountDownLatch(1);
@@ -114,8 +119,10 @@ public class NightModeDeviceTest {
             // preferences while an Activity is still finishing races its onPause save.
             main(activity::finish);instrumentation.waitForIdleSync();stage="Relaunch dark home";
             activity=launch();night(true);WebView home=web();expect(home,"document.documentElement.classList.contains('bestbrowser-night')","true");expect(home,"getComputedStyle(document.body).backgroundColor","\"rgb(20, 41, 37)\"");preview("home");
+            js(home,"document.querySelector('a[href=\"https://www.joyn.de/\"]').scrollIntoView({block:'center'});true");homePreview(home,"tv-night");
             open();preview("menu");text("Einstellungen").click();text("Über BestBrowser");preview("settings");scroll("Nachtmodus: Ein");text("Nachtmodus: Ein").click();night(false);
             expect(home,"document.documentElement.classList.contains('bestbrowser-light')","true");expect(home,"getComputedStyle(document.body).backgroundColor","\"rgb(248, 250, 249)\"");
+            homePreview(home,"tv-light");
         }catch(Throwable error){if(!privateOpen)try{preview("failure");}catch(Exception ignored){}throw new AssertionError("Night mode stage: "+stage,error);
         }finally{
             if(privateOpen)try{device.pressBack();open();text("Alle privaten Tabs schließen").click();}catch(Exception ignored){}

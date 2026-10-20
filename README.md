@@ -199,3 +199,8 @@ Die erste Version unterstützt direkt erreichbare MP4-, WebM-, HLS- und DASH-Que
 Cast wird erst nach einer bewussten Aktion in einem normalen Tab initialisiert. In privaten Tabs bleibt es ausgeschaltet. Gespeicherte Cast-Sitzungen werden nicht automatisch wiederhergestellt. Wird während der Geräteauswahl die Seite oder der Tab gewechselt, startet eine veraltete Auswahl nicht. Ohne Google Play-Dienste bleibt der Browser nutzbar und erklärt die fehlende Voraussetzung.
 
 Verwendet wird das Google Cast Android Sender SDK 22.3.1 mit dem Default Media Receiver. Tests prüfen Quellenfilter, tatsächliche SDK-Medienmetadaten, private Tabs, Seitenwechsel, Steuerbefehle und verspätete Ergebnisse. Gerätetests prüfen Menü, Videoaktion und fehlende Play-Dienste auf Android 9 und 15. Die CI besitzt keinen Cast-Empfänger; eine echte Geräteverbindung oder TV-Wiedergabe ist damit nicht nachgewiesen. [Google-Cast-Integration](https://developers.google.com/cast/docs/android_sender/integrate), [Standardempfänger](https://developers.google.com/cast/docs/web_receiver).
+
+
+## Startseiten-Kacheln mit Icons (0.4.16)
+
+Die Startseite enthält zusätzlich **Joyn**, **RTL** und **ZDF**. Antippen öffnet direkt `https://www.joyn.de/`, `https://www.rtl.de/` beziehungsweise `https://www.zdf.de/`. Alle Schnellzugriffe und die Einträge unter Deutschland entdecken haben lokal eingebettete Vektor-Icons. Die Icons laden ohne Netzwerkanfrage und bleiben im Nachtmodus lesbar.

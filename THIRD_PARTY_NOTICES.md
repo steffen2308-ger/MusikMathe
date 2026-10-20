@@ -22,3 +22,8 @@ EasyList cosmetic selectors — The EasyList authors (https://easylist.to/).
 https://github.com/easylist/easylist — used under GPL-3.0-or-later.
 Upstream sources are retained in filters/; scripts/compile-adblock.py creates the data-only CSS rules.
 The full GPL-3.0 license is in LICENSE and APK assets/extractor-license.txt.
+
+ZDF vector icon — Simple Icons contributors, CC0-1.0.
+https://github.com/simple-icons/simple-icons/blob/develop/icons/zdf.svg
+https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md
+Brand names and marks belong to their respective owners.
