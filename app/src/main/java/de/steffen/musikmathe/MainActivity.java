@@ -757,7 +757,12 @@ public class MainActivity extends AppCompatActivity {
             empty.setNeutralButton("Fortschritt",(d,w)->showVideoQueue());empty.show();return;
         }
         VideoPreviewAdapter previews=new VideoPreviewAdapter(this,videos,tab.url);
-        AlertDialog dialog=BrowserDialogs.builder(this).setTitle("Videos · "+videos.size()).setAdapter(previews,(d,i)->videoOptions(videos.get(i))).setNegativeButton("Schließen",null).setPositiveButton("Neu suchen",(d,w)->{tab.videos.clearResolved();showVideos();}).setNeutralButton("Fortschritt",(d,w)->showVideoQueue()).create();
+        LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);
+        android.widget.ListView list=new android.widget.ListView(this);list.setAdapter(previews);list.setDividerHeight(0);content.addView(list,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout actions=new LinearLayout(this);actions.setPadding(dp(8),dp(4),dp(8),dp(4));content.addView(actions,new LinearLayout.LayoutParams(-1,-2));
+        AlertDialog dialog=BrowserDialogs.builder(this).setTitle("Videos · "+videos.size()).setView(content).create();
+        list.setOnItemClickListener((parent,view,i,id)->{dialog.dismiss();videoOptions(videos.get(i));});
+        String[] labels={"Neu suchen","Fortschritt","Schließen"};for(int i=0;i<labels.length;i++){final int action=i;android.widget.Button button=new android.widget.Button(this,null,android.R.attr.borderlessButtonStyle);button.setText(labels[i]);button.setAllCaps(false);button.setTextSize(14);button.setTextColor(getColor(R.color.browser_accent));button.setMinHeight(dp(48));button.setMinimumHeight(dp(48));button.setMinWidth(0);button.setMinimumWidth(0);button.setPadding(dp(4),dp(4),dp(4),dp(4));button.setMaxLines(2);button.setOnClickListener(v->{dialog.dismiss();if(action==0){tab.videos.clearResolved();showVideos();}else if(action==1)showVideoQueue();});actions.addView(button,new LinearLayout.LayoutParams(0,-2,1));}
         View.OnLayoutChangeListener fit=(view,l,t,r,b,ol,ot,or,ob)->{if(dialog.isShowing()&&b-t>0)dialog.getWindow().setLayout(WindowManager.LayoutParams.WRAP_CONTENT,Math.round((b-t)*0.9f));};
         root.addOnLayoutChangeListener(fit);previews.information=item->{dialog.dismiss();videoInformation(item);};dialog.setOnDismissListener(d->{root.removeOnLayoutChangeListener(fit);previews.close();});dialog.show();
         int available=root.getHeight()>0?root.getHeight():getResources().getDisplayMetrics().heightPixels;dialog.getWindow().setLayout(WindowManager.LayoutParams.WRAP_CONTENT,Math.round(available*0.9f));
