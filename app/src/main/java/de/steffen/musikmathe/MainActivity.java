@@ -60,6 +60,7 @@ public class MainActivity extends AppCompatActivity {
         Bundle state;
         final VideoCatalog videos=new VideoCatalog();
         volatile int videoPage;
+        boolean protectedMedia;
         final java.util.concurrent.atomic.AtomicInteger blockedRequests=new java.util.concurrent.atomic.AtomicInteger();
         androidx.webkit.ScriptHandler adBlockScript;
         Tab(String url, String title, boolean desktop) { this.url = url; this.title = title; this.desktop = desktop; }
@@ -96,6 +97,7 @@ public class MainActivity extends AppCompatActivity {
     private YouTubeDownloadResolver videoResolver;
     private AlertDialog videoSearch;
     private VideoDownloadsDialog videoDownloads;
+    private BrowserCast browserCast;
     private boolean closingPrivate;
     private VideoCatalog.Item pendingVideo;
     private boolean pendingVideoOriginal;
@@ -280,7 +282,7 @@ public class MainActivity extends AppCompatActivity {
             }
             @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap favicon) {
                 if(passwords!=null)passwords.pageStarted(view);
-                tab.videoPage++;tab.videos.clear();tab.url=url; cancelPermissionFor(tab); if(active()==tab)updateToolbar();
+                tab.videoPage++;tab.protectedMedia=false;tab.videos.clear();tab.url=url; cancelPermissionFor(tab); if(active()==tab)updateToolbar();
                 tab.blockedRequests.set(0);
                 if(adBlockingEnabled)view.evaluateJavascript(AdBlockResources.cosmeticScript(MainActivity.this,adBlockExceptions),null);
             }
@@ -392,8 +394,9 @@ public class MainActivity extends AppCompatActivity {
         if(isPrivateMode())browserMenu.item(14,"close","Alle privaten Tabs schließen");
         browserMenu.divider().item(2,"bookmarks","Lesezeichen").item(3,"history","Verlauf").item(4,"download","Downloads");
         if(passwords!=null)browserMenu.item(16,"key","Passwörter");
-        browserMenu.item(15,"video","Videos erkennen und speichern")
-            .divider().item(7,"find","Auf Seite suchen").item(6,"copy","Link kopieren")
+        browserMenu.item(15,"video","Videos erkennen und speichern");
+        if(!isPrivateMode())browserMenu.item(24,"cast","Auf Fernseher übertragen");
+        browserMenu.divider().item(7,"find","Auf Seite suchen").item(6,"copy","Link kopieren")
             .checked(8,"desktop","Desktopwebsite",tab.desktop).item(20,"fullscreen","Vollbild")
             .divider().checked(23,"night","Nachtmodus",BrowserAppearance.night(this))
             .status(18,"shield","Werbeblocker",adBlockingEnabled?"Ein":"Aus").item(19,"vpn","VPN");
@@ -413,7 +416,7 @@ public class MainActivity extends AppCompatActivity {
                 case 8: tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: new AlertDialog.Builder(this).setTitle("BestBrowser · 0.4.14").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: new AlertDialog.Builder(this).setTitle("BestBrowser · 0.4.15").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: endPrivate(); break;
@@ -424,6 +427,7 @@ public class MainActivity extends AppCompatActivity {
                 case 19: showVpn(); break;
                 case 20: setBrowserFullscreen(true); break;
                 case 23: setNightMode(!BrowserAppearance.night(this));break;
+                case 24: showCast();break;
                 case 21: if(tab.view!=null&&tab.view.canGoForward())tab.view.goForward();break;
                 case 22: if(tab.view!=null){if(tab.view.getProgress()<100)tab.view.stopLoading();else tab.view.reload();}break;
         }
@@ -507,7 +511,7 @@ public class MainActivity extends AppCompatActivity {
             if(resources.contains(resource))continue;
             if(PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)){runtime.add(Manifest.permission.RECORD_AUDIO);resources.add(resource);purposes.add("das Mikrofon verwenden");}
             if(PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)){runtime.add(Manifest.permission.CAMERA);resources.add(resource);purposes.add("die Kamera verwenden");}
-            if(PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID.equals(resource)){resources.add(resource);purposes.add("geschützte Videos und Musik wiedergeben");}
+            if(PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID.equals(resource)){tab.protectedMedia=true;resources.add(resource);purposes.add("geschützte Videos und Musik wiedergeben");}
         }
         if(resources.isEmpty()){request.deny();return;}
         permissionTab=tab;permissionOrigin=origin(request.getOrigin().toString());permissionCancel=request::deny;websitePermissionRequest=request;
@@ -651,6 +655,7 @@ public class MainActivity extends AppCompatActivity {
         super.onTrimMemory(level);if(level>=TRIM_MEMORY_RUNNING_LOW){for(Tab tab:tabs)if(tab!=active() && tab.view!=null){tab.state=new Bundle();tab.view.saveState(tab.state);clearAdBlockScript(tab);tab.view.destroy();tab.view=null;}}
     }
     @Override protected void onDestroy(){
+        if(browserCast!=null)browserCast.destroy();
         destroyed=true;if(browserMenu!=null)browserMenu.dismiss();if(addressSuggestions!=null)addressSuggestions.destroy();if(videoDownloads!=null)videoDownloads.dismiss();if(passwords!=null)passwords.destroy();if(videoResolver!=null)videoResolver.cancel();if(videoSearch!=null)videoSearch.dismiss();videoWorker.shutdownNow();cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs){clearAdBlockScript(tab);if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}}super.onDestroy();
         if (isPrivateMode() && !isChangingConfigurations()) {
             VideoDownloadService.cancelAll();
@@ -718,12 +723,42 @@ public class MainActivity extends AppCompatActivity {
         if(destroyed)return;if(videoDownloads!=null)videoDownloads.dismiss();videoDownloads=new VideoDownloadsDialog(this);videoDownloads.show();
     }
     private void videoOptions(VideoCatalog.Item item){
+        Tab sourceTab=active();int sourcePage=sourceTab==null?-1:sourceTab.videoPage;String sourceUrl=sourceTab==null?"":sourceTab.url;
         boolean stream="HLS".equals(item.type)||"DASH".equals(item.type)||!item.audioUrl.isEmpty();
         String[] choices=stream?new String[]{"Als MP4 speichern","MP4-Ausschnitt: 1 Minute","MP4-Ausschnitt: 5 Minuten","MP4-Ausschnitt: 10 Minuten"}:new String[]{"Als MP4 speichern","Originaldatei speichern"};
-        new AlertDialog.Builder(this).setTitle(item.type+" speichern").setItems(choices,(d,i)->{
+        int castIndex=choices.length;if(!isPrivateMode()){choices=java.util.Arrays.copyOf(choices,choices.length+1);choices[castIndex]="Auf Fernseher übertragen";}
+        new AlertDialog.Builder(this).setTitle(item.type+" · Videoaktionen").setItems(choices,(d,i)->{
+            if(i==castIndex){castVideo(sourceTab,sourcePage,sourceUrl,item);return;}
             boolean original=!stream && i==1;long clip=stream&&i>0?new long[]{0,60000,300000,600000}[i]:0;
             chooseVideoFile(item,original,clip);
         }).setNegativeButton("Abbrechen",null).show();
+    }
+    private void showCast(){
+        if(isPrivateMode()){toast("Übertragen ist nur in normalen Tabs verfügbar.");return;}
+        if(browserCast==null)browserCast=new BrowserCast(this,this::chooseCastVideo);
+        browserCast.show();
+    }
+    private void chooseCastVideo(){
+        Tab tab=active();if(tab==null||isPrivateMode()||destroyed)return;
+        int page=tab.videoPage;String url=tab.url;
+        scanVideos(tab,()->{
+            if(destroyed||active()!=tab||tab.videoPage!=page||!java.util.Objects.equals(url,tab.url))return;
+            ArrayList<VideoCatalog.Item> candidates=new ArrayList<>();String reason=CastVideo.problem(null,url,tab.protectedMedia,false);
+            for(VideoCatalog.Item item:tab.videos.list()){
+                String problem=CastVideo.problem(item,url,tab.protectedMedia,false);
+                if(problem.isEmpty())candidates.add(item);else reason=problem;
+            }
+            if(candidates.isEmpty()){new AlertDialog.Builder(this).setTitle("Kein übertragbares Video").setMessage(reason).setPositiveButton("OK",null).show();return;}
+            String[] labels=new String[candidates.size()];for(int i=0;i<labels.length;i++)labels[i]=candidates.get(i).label();
+            new AlertDialog.Builder(this).setTitle("Video zum Übertragen auswählen").setItems(labels,(d,i)->castVideo(tab,page,url,candidates.get(i))).setNegativeButton("Abbrechen",null).show();
+        });
+    }
+    private void castVideo(Tab tab,int page,String url,VideoCatalog.Item item){
+        if(destroyed||tab==null||active()!=tab||tab.videoPage!=page||!java.util.Objects.equals(url,tab.url)){toast("Die Seite wurde gewechselt. Bitte wähle das Video erneut aus.");return;}
+        String problem=CastVideo.problem(item,tab.url,tab.protectedMedia,isPrivateMode());
+        if(!problem.isEmpty()){new AlertDialog.Builder(this).setTitle("Video nicht übertragbar").setMessage(problem).setPositiveButton("OK",null).show();return;}
+        showCast();if(browserCast==null)return;
+        browserCast.select(CastVideo.from(item,tab.title),()->!destroyed&&active()==tab&&tab.videoPage==page&&java.util.Objects.equals(url,tab.url)&&CastVideo.problem(item,tab.url,tab.protectedMedia,isPrivateMode()).isEmpty());
     }
     private void setNightMode(boolean enabled){
         BrowserAppearance.saveNight(this,enabled);BrowserAppearance.sync(this);applyAppearance();

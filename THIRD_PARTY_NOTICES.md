@@ -6,6 +6,10 @@ OkHttp 4.12.0 — Square and contributors, Apache-2.0.
 https://github.com/square/okhttp/tree/parent-4.12.0
 
 The AndroidX, Media3 and WebKit libraries are Apache-2.0.
+Google Cast Android Sender SDK (play-services-cast-framework 22.3.1) — Google.
+https://developers.google.com/cast/docs/android_sender
+Google APIs / Android SDK terms apply to the Google Play services dependencies;
+their corresponding notices are retained in dependency metadata.
 NewPipeExtractor also includes NanoJSON (MIT), jsoup (MIT), Rhino (MPL-2.0),
 Protocol Buffers (BSD-3-Clause) and JSR-305 annotations (BSD).
 Their corresponding license notices are retained in dependency metadata.

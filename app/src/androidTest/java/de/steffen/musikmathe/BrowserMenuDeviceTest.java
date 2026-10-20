@@ -77,7 +77,7 @@ public class BrowserMenuDeviceTest {
             open();scroll("Desktopwebsite");assertNotNull("Desktop checkbox accessible state",device.findObject(By.desc("Desktopwebsite").checked(true)));
             scroll("VPN");text("Werbeblocker");text("Ein");preview("tools");
             // The settings action is outside the scrolled list and remains visible at its end.
-            text("Einstellungen").click();text("Browserdaten löschen");text("Suchmaschine");text("Über BestBrowser").click();text("BestBrowser · 0.4.14");text("OK").click();
+            text("Einstellungen").click();text("Browserdaten löschen");text("Suchmaschine");text("Über BestBrowser").click();text("BestBrowser · 0.4.15");text("OK").click();
             instrumentation.runOnMainSync(()->assertEquals("Menu dismissal and settings do not navigate",url,holder[0].getUrl()));
         }catch(Throwable error){
             try{preview("failure");}catch(Exception ignored){}

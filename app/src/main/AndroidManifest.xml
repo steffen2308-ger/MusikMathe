@@ -19,6 +19,7 @@
         <package android:name="net.openvpn.openvpn" />
     </queries>
     <application android:name=".BrowserApplication" android:label="BestBrowser" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:theme="@style/AppTheme" android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="true" android:hardwareAccelerated="true">
+        <meta-data android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME" android:value="de.steffen.musikmathe.BrowserCastOptions" />
         <service android:name=".VideoDownloadService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name=".PrivateVideoDownloadService" android:exported="false" android:process=":private" android:foregroundServiceType="dataSync" />
         <activity android:name=".PrivateActivity" android:exported="false" android:process=":private" android:excludeFromRecents="true" android:configChanges="orientation|screenSize|keyboardHidden|uiMode" android:windowSoftInputMode="adjustResize" />

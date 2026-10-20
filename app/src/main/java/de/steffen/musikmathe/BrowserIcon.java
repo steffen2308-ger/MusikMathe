@@ -66,6 +66,9 @@ final class BrowserIcon extends View {
                 canvas.drawCircle(21,21,8,paint);canvas.drawLine(27,27,36,36,paint);break;
             case "desktop":
                 canvas.drawRoundRect(new RectF(11,13,37,30),2,2,paint);canvas.drawLine(24,30,24,36,paint);canvas.drawLine(18,36,30,36,paint);break;
+            case "cast":
+                Path tv=new Path();tv.moveTo(12,21);tv.lineTo(12,13);tv.lineTo(37,13);tv.lineTo(37,34);tv.lineTo(28,34);canvas.drawPath(tv,paint);
+                canvas.drawArc(new RectF(-2,21,24,47),-90,90,false,paint);canvas.drawArc(new RectF(3,26,19,42),-90,90,false,paint);paint.setStyle(Paint.Style.FILL);canvas.drawCircle(11,34,2,paint);break;
             case "fullscreen":
                 Path corners=new Path();corners.moveTo(20,13);corners.lineTo(13,13);corners.lineTo(13,20);corners.moveTo(28,13);corners.lineTo(35,13);corners.lineTo(35,20);corners.moveTo(35,28);corners.lineTo(35,35);corners.lineTo(28,35);corners.moveTo(20,35);corners.lineTo(13,35);corners.lineTo(13,28);canvas.drawPath(corners,paint);break;
             case "shield":
