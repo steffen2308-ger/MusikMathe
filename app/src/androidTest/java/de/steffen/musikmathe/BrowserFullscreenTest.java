@@ -109,6 +109,18 @@ public class BrowserFullscreenTest {
     private void expectFullscreen(MainActivity activity,boolean expected)throws Exception{
         long deadline=SystemClock.uptimeMillis()+10000;
         while(fullscreen(activity)!=expected&&SystemClock.uptimeMillis()<deadline)Thread.sleep(50);
+        if(expected){
+            // The first immersive window on Android 15 displays a separate, focusable
+            // system tutorial. Acknowledge it through the real system window before
+            // testing native clicks or the IME; Activity dispatch cannot dismiss it.
+            UiDevice device=UiDevice.getInstance(instrumentation);
+            if(device.wait(androidx.test.uiautomator.Until.hasObject(androidx.test.uiautomator.By.res("android:id/immersive_cling_title")),2000)){
+                androidx.test.uiautomator.UiObject2 accept=device.findObject(androidx.test.uiautomator.By.res("android:id/ok"));
+                assertNotNull("Android fullscreen tutorial confirmation",accept);accept.click();
+                assertTrue(device.wait(androidx.test.uiautomator.Until.gone(androidx.test.uiautomator.By.res("android:id/immersive_cling_title")),5000));
+                instrumentation.waitForIdleSync();Thread.sleep(350);
+            }
+        }
         String[] details={""};instrumentation.runOnMainSync(()->{try{details[0]=FreeSpaceGesture.diagnostics((WebView)invoke(activity,"activeView",new Class<?>[0]))+"; custom="+(field(activity,"customView")!=null)+", destroyed="+field(activity,"destroyed");}catch(Exception error){throw new RuntimeException(error);}});
         assertEquals("Browser fullscreen after "+stage+"; "+details[0],expected,fullscreen(activity));
         instrumentation.runOnMainSync(()->{try{
