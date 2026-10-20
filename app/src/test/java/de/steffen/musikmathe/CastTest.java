@@ -44,7 +44,7 @@ public class CastTest {
         assertEquals("",CastVideo.problem(new VideoCatalog.Item(video.url,"MP4",Map.of("Referer","https://site.example/private","User-Agent","browser")),"https://page.example",false,false));
     }
     @Test public void excludesLocalAndNonNetworkUrlsAndDoesNotConfuseSimilarDomains(){
-        for(String url:new String[]{"blob:https://page.example/id","file:///movie.mp4","data:video/mp4,abc","http://localhost/x.mp4","http://127.0.0.5/x.mp4","http://[::1]/x.mp4","http://user:pass@cdn.example/movie.mp4"})
+        for(String url:new String[]{"blob:https://page.example/id","file:///movie.mp4","data:video/mp4,abc","http://localhost/x.mp4","http://127.0.0.5/x.mp4","http://[::1]/x.mp4","http://[0:0:0:0:0:0:0:1]/x.mp4","http://[::]/x.mp4","http://user:pass@cdn.example/movie.mp4"})
             assertFalse(url,CastVideo.problem(item(url,"MP4"),"https://page.example/",false,false).isEmpty());
         assertEquals("",CastVideo.problem(item("https://cdn.example/movie.mp4","MP4"),"https://netflix.com.example/",false,false));
     }
@@ -114,5 +114,13 @@ public class CastTest {
             java.lang.reflect.Method show=MainActivity.class.getDeclaredMethod("showCast");show.setAccessible(true);show.invoke(a.get());
             java.lang.reflect.Field field=MainActivity.class.getDeclaredField("browserCast");field.setAccessible(true);assertNull(field.get(a.get()));
         }finally{a.pause().stop().destroy();BrowserApplication.privateReady=false;}
+    }
+    @Test public void localVideoPausesOnlyAfterCurrentReceiverLoadSucceeds(){
+        ActivityController<MainActivity> a=Robolectric.buildActivity(MainActivity.class).setup();Fake fake=new Fake();fake.ready=true;fake.connected=true;BrowserCast cast=new BrowserCast(a.get(),()->{},fake);int[] paused={0};AtomicBoolean valid=new AtomicBoolean(true);
+        try{
+            cast.select(source("one"),valid::get,()->paused[0]++);assertEquals(0,paused[0]);fake.results.get(0).accept(false);assertEquals(0,paused[0]);
+            cast.select(source("two"),valid::get,()->paused[0]++);valid.set(false);fake.results.get(1).accept(true);assertEquals(0,paused[0]);
+            valid.set(true);cast.select(source("three"),valid::get,()->paused[0]++);fake.results.get(2).accept(true);assertEquals(1,paused[0]);
+        }finally{cast.destroy();a.pause().stop().destroy();}
     }
 }

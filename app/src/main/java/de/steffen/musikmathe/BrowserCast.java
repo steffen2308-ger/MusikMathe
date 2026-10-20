@@ -27,6 +27,7 @@ final class BrowserCast {
     private Button device,video,play,stop,disconnect;
     private CastVideo pending;
     private BooleanSupplier valid;
+    private Runnable localPause;
     private boolean started,destroyed,loading,wasConnected,chooseWhenReady;
     private int generation;
     private String message="";
@@ -50,21 +51,25 @@ final class BrowserCast {
     }
     private Button button(LinearLayout body,String label,Runnable action){Button button=new Button(activity);button.setText(label);button.setOnClickListener(v->action.run());body.addView(button,new LinearLayout.LayoutParams(-1,-2));return button;}
     void select(CastVideo source,BooleanSupplier stillValid){
-        if(destroyed)return;
-        clearPending();loading=false;pending=source;valid=stillValid;message="";chooseWhenReady=!transport.connected();show();changed();
+        select(source,stillValid,()->{});
     }
-    private void clearPending(){pending=null;valid=null;chooseWhenReady=false;generation++;}
+    void select(CastVideo source,BooleanSupplier stillValid,Runnable pauseOnReceiverStart){
+        if(destroyed)return;
+        clearPending();loading=false;pending=source;valid=stillValid;localPause=pauseOnReceiverStart;message="";chooseWhenReady=!transport.connected();show();changed();
+    }
+    private void clearPending(){pending=null;valid=null;localPause=null;chooseWhenReady=false;generation++;}
     private void changed(){
         if(destroyed)return;
         boolean connected=transport.connected();
         if(wasConnected&&!connected){clearPending();loading=false;message="Die Verbindung zum Fernseher wurde beendet.";}
         wasConnected=connected;
         if(connected&&pending!=null){
-            CastVideo source=pending;BooleanSupplier sourceValid=valid;clearPending();
+            CastVideo source=pending;BooleanSupplier sourceValid=valid;Runnable pause=localPause;clearPending();
             if(sourceValid==null||!sourceValid.getAsBoolean()){message="Die Seite oder der Tab wurde gewechselt. Bitte wähle das Video erneut aus.";render();return;}
             loading=true;message="Video wird auf dem Fernseher geladen …";int request=generation;
             transport.load(source,success->{
                 if(destroyed||request!=generation)return;
+                if(success&&pause!=null&&sourceValid.getAsBoolean())pause.run();
                 loading=false;message=success?"":"Der Fernseher konnte das Video nicht laden. Die Quelle muss dort ohne Website-Anmeldung erreichbar sein.";render();
             });
         }else if(chooseWhenReady&&transport.ready()&&!connected){chooseWhenReady=false;transport.chooseDevice();}
@@ -76,9 +81,10 @@ final class BrowserCast {
         boolean ready=transport.ready(),connected=transport.connected(),media=connected&&transport.hasMedia();
         String state=connected?"Verbunden mit "+transport.device():ready?"Kein Gerät verbunden":transport.unavailable();
         String title=media?transport.title():"";
+        if(pending!=null)state+="\n\nAusgewählt: "+pending.title;
         if(!title.isEmpty())state+="\n\n"+title+"\n"+(transport.playing()?"Wiedergabe läuft":"Wiedergabe pausiert oder beendet");
         if(!message.isEmpty())state+="\n\n"+message;
-        state+="\n\nHandy und Fernseher müssen im selben WLAN sein. Übertragen werden einzelne Videos, nicht die ganze Browserseite. Der Fernseher lädt die Quelle selbst; geschützte oder anmeldepflichtige Videos können nicht abgespielt werden.";
+        state+="\n\nGleiches WLAN erforderlich. Der Fernseher lädt das ausgewählte Video selbst. Geschützte und anmeldepflichtige Quellen werden nicht unterstützt.";
         status.setText(state);device.setEnabled(ready);video.setEnabled(ready&&!loading);play.setEnabled(media&&!loading);stop.setEnabled(connected&&(media||loading));disconnect.setEnabled(connected);
         play.setText(transport.playing()?"Pause":"Wiedergabe fortsetzen");
     }

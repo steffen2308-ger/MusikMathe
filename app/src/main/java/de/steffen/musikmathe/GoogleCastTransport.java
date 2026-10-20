@@ -53,7 +53,7 @@ final class GoogleCastTransport implements BrowserCast.Transport {
         this.changed=changed;this.failed=failed;
         try{
             if(GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(activity)!=ConnectionResult.SUCCESS){
-                unavailable="Für Chromecast werden aktuelle Google Play-Dienste benötigt. Aktualisiere sie im Play Store und öffne den Browser erneut.";changed.run();return;
+                unavailable="Google Play-Dienste fehlen oder sind veraltet. Bitte im Play Store aktualisieren und den Browser neu starten.";changed.run();return;
             }
             CastContext.getSharedInstance(activity,worker).addOnSuccessListener(value->{
                 if(destroyed)return;

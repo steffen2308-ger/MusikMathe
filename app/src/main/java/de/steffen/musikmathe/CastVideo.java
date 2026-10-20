@@ -1,6 +1,9 @@
 package de.steffen.musikmathe;
 
-import android.net.Uri;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.Locale;
 
 /** A receiver gets a media URL and title, never the browser's cookies or request headers. */
@@ -12,10 +15,10 @@ final class CastVideo {
         String host=host(page);
         if(protectedMedia||domain(host,"netflix.com"))return "Diese Seite verwendet geschützte Inhalte. Nutze die Cast-Funktion des Anbieters oder dessen TV-App.";
         if(item==null)return "Starte zuerst ein Video auf der Seite und suche erneut.";
-        Uri uri=Uri.parse(item.url);String mediaHost=host(item.url);
-        if(!("http".equalsIgnoreCase(uri.getScheme())||"https".equalsIgnoreCase(uri.getScheme()))||mediaHost.isEmpty()||uri.getUserInfo()!=null)
+        URI uri=parse(item.url);String mediaHost=host(item.url);
+        if(uri==null||!("http".equalsIgnoreCase(uri.getScheme())||"https".equalsIgnoreCase(uri.getScheme()))||mediaHost.isEmpty()||uri.getUserInfo()!=null)
             return "Diese Videoquelle lässt sich nicht direkt vom Fernseher laden.";
-        if(mediaHost.equals("localhost")||mediaHost.endsWith(".localhost")||mediaHost.equals("0.0.0.0")||mediaHost.startsWith("127.")||mediaHost.equals("::1")||mediaHost.equals("[::1]"))
+        if(localOnly(mediaHost))
             return "Diese Videoquelle ist nur auf dem Handy erreichbar.";
         if(!item.youtubeId.isEmpty()||domain(host,"youtube.com")||domain(host,"youtu.be")||domain(mediaHost,"googlevideo.com"))
             return "Nutze für YouTube die Cast-Funktion der YouTube-App.";
@@ -32,6 +35,13 @@ final class CastVideo {
     static String mime(String type){
         switch(type){case "MP4":return "video/mp4";case "WebM":return "video/webm";case "HLS":return "application/x-mpegURL";case "DASH":return "application/dash+xml";default:return "";}
     }
-    private static String host(String url){String host=url==null?null:Uri.parse(url).getHost();return host==null?"":host.toLowerCase(Locale.ROOT);}
+    private static URI parse(String url){try{return url==null?null:new URI(url);}catch(URISyntaxException invalid){return null;}}
+    private static String host(String url){URI uri=parse(url);String host=uri==null?null:uri.getHost();return host==null?"":host.toLowerCase(Locale.ROOT);}
+    private static boolean localOnly(String host){
+        if(host.equals("localhost")||host.endsWith(".localhost")||host.equals("0.0.0.0")||host.startsWith("127."))return true;
+        // Only numeric IPv6 literals enter this branch; there is no DNS lookup.
+        if(host.contains(":"))try{InetAddress address=InetAddress.getByName(host);return address.isLoopbackAddress()||address.isAnyLocalAddress();}catch(UnknownHostException invalid){return true;}
+        return false;
+    }
     private static boolean domain(String host,String domain){return host.equals(domain)||host.endsWith("."+domain);}
 }

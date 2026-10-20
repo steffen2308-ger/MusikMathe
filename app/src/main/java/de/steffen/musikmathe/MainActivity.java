@@ -758,7 +758,7 @@ public class MainActivity extends AppCompatActivity {
         String problem=CastVideo.problem(item,tab.url,tab.protectedMedia,isPrivateMode());
         if(!problem.isEmpty()){new AlertDialog.Builder(this).setTitle("Video nicht übertragbar").setMessage(problem).setPositiveButton("OK",null).show();return;}
         showCast();if(browserCast==null)return;
-        browserCast.select(CastVideo.from(item,tab.title),()->!destroyed&&active()==tab&&tab.videoPage==page&&java.util.Objects.equals(url,tab.url)&&CastVideo.problem(item,tab.url,tab.protectedMedia,isPrivateMode()).isEmpty());
+        browserCast.select(CastVideo.from(item,tab.title),()->!destroyed&&active()==tab&&tab.videoPage==page&&java.util.Objects.equals(url,tab.url)&&CastVideo.problem(item,tab.url,tab.protectedMedia,isPrivateMode()).isEmpty(),()->{if(tab.view!=null)tab.view.evaluateJavascript("(function pause(w,n){try{w.document.querySelectorAll(\"video\").forEach(function(v){v.pause();});if(n<2)for(var i=0;i<Math.min(w.frames.length,8);i++)pause(w.frames[i],n+1);}catch(e){}})(window,0)",null);});
     }
     private void setNightMode(boolean enabled){
         BrowserAppearance.saveNight(this,enabled);BrowserAppearance.sync(this);applyAppearance();
