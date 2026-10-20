@@ -24,7 +24,8 @@ import org.json.JSONObject;
 final class PrivateProfiles {
     private static final Object LOCK=new Object();
     private static final String LEASE_KEY="bestbrowser.private.active.v1";
-    private static final java.util.concurrent.ExecutorService RECOVERY=java.util.concurrent.Executors.newSingleThreadExecutor();
+    private static final java.util.concurrent.ScheduledExecutorService RECOVERY=java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+    private static final java.util.concurrent.atomic.AtomicBoolean RECOVERY_PENDING=new java.util.concurrent.atomic.AtomicBoolean();
     static volatile Session active;
     static volatile String recoveryError="";
     static File directory(Context c)throws IOException{File dir=new File(c.getNoBackupFilesDir(),"private-profiles");if(!dir.mkdirs()&&!dir.isDirectory())throw new IOException("Der private Speicher ist nicht verfügbar.");return dir;}
@@ -102,8 +103,18 @@ final class PrivateProfiles {
         recoveryError="";
     }
     static void recoverStopped(Context context){
-        if(Build.VERSION.SDK_INT<28)return;Context c=context.getApplicationContext();
-        RECOVERY.execute(()->{if(PrivateSession.running(c))return;try{locked(c,()->{if(!PrivateSession.running(c))recoverLocked(c);return null;});}catch(Exception error){recoveryError="Der letzte private Bereich konnte noch nicht sicher gesichert werden. Bitte freien Speicher prüfen und erneut öffnen.";}});
+        if(Build.VERSION.SDK_INT<28||!RECOVERY_PENDING.compareAndSet(false,true))return;
+        RECOVERY.execute(()->recoverAttempt(context.getApplicationContext(),0));
+    }
+    private static void recoverAttempt(Context c,int attempt){
+        if(PrivateSession.running(c)){
+            if(attempt<30)RECOVERY.schedule(()->recoverAttempt(c,attempt+1),500,java.util.concurrent.TimeUnit.MILLISECONDS);
+            else RECOVERY_PENDING.set(false);
+            return;
+        }
+        try{locked(c,()->{if(!PrivateSession.running(c))recoverLocked(c);return null;});}
+        catch(Exception error){recoveryError="Der letzte private Bereich konnte noch nicht sicher gesichert werden. Bitte freien Speicher prüfen und erneut öffnen.";}
+        finally{RECOVERY_PENDING.set(false);}
     }
     static Session forContext(Context context){return active!=null&&(BrowserApplication.privateProcess||context instanceof PrivateActivity)?active:null;}
 }

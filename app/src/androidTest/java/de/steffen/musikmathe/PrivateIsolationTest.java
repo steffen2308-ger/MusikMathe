@@ -23,10 +23,16 @@ import static org.junit.Assert.*;
 public class PrivateIsolationTest {
     private UiDevice device;
     private String base;
+    private final java.util.List<String> requests=java.util.Collections.synchronizedList(new java.util.ArrayList<>());
     private final Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
     private void menu(String label){UiObject2 button=device.wait(Until.findObject(By.desc("Menü")),10000);assertNotNull("Browser menu",button);button.click();UiObject2 item=device.findObject(By.text(label));if(item==null)try{new androidx.test.uiautomator.UiScrollable(new androidx.test.uiautomator.UiSelector().className("android.widget.ListView")).scrollIntoView(new androidx.test.uiautomator.UiSelector().text(label));}catch(Exception error){throw new AssertionError(label,error);}item=device.wait(Until.findObject(By.text(label)),5000);assertNotNull(label,item);item.click();}
     private void navigate(String path,String expected)throws Exception{UiObject2 input=device.wait(Until.findObject(By.desc("Adresse oder Suchbegriff")),10000);assertNotNull("Address field",input);input.click();input.setText(base+path);device.pressEnter();state(expected);}
-    private void state(String expected){assertTrue("Expected page state: "+expected,device.wait(Until.hasObject(By.textContains(expected)),25000));}
+    private void state(String expected){
+        if(device.wait(Until.hasObject(By.textContains(expected)),25000))return;
+        java.util.List<String> visible=new java.util.ArrayList<>();for(UiObject2 item:device.findObjects(By.textStartsWith("cookie:")))visible.add(item.getText());
+        UiObject2 address=device.findObject(By.desc("Adresse oder Suchbegriff"));
+        fail("Expected page state: "+expected+"; actual="+visible+"; address="+(address==null?"none":address.getText())+"; fixture requests="+requests);
+    }
     private void open(String password)throws Exception{menu("Zu privaten Tabs");PrivateTestSupport.unlock(device,password);}
     private void normal(){menu("Zu normalen Tabs");assertTrue(device.wait(Until.gone(By.descStartsWith("Privater Tab")),15000));}
     private void history(String present,String absent){menu("Verlauf");assertTrue("Own private history",device.wait(Until.hasObject(By.textContains(present)),8000));assertFalse("Other area history stays hidden",device.hasObject(By.textContains(absent)));device.pressBack();}
@@ -37,6 +43,7 @@ public class PrivateIsolationTest {
             base="http://127.0.0.1:"+server.getLocalPort();
             Thread responses=new Thread(()->{while(!server.isClosed())try(Socket socket=server.accept()){
                 socket.setSoTimeout(5000);BufferedReader reader=new BufferedReader(new InputStreamReader(socket.getInputStream(),StandardCharsets.US_ASCII));String first=reader.readLine();if(first==null)continue;String line;while((line=reader.readLine())!=null&&!line.isEmpty()){}
+                requests.add(first.split(" ")[1]);
                 String seed=first.contains("/normal")?"N":first.contains("/area-a")?"A":first.contains("/area-b")?"B":null;
                 String title="A".equals(seed)?"Area A private history":"B".equals(seed)?"Area B private history":"N".equals(seed)?"Normal browser history":"Probe state";
                 String script=seed==null?"":"localStorage.setItem('marker','"+seed+"');";
@@ -46,7 +53,11 @@ public class PrivateIsolationTest {
             context.getSharedPreferences("browser",0).edit().clear().commit();context.startActivity(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));
             navigate("/normal","cookie:marker=N storage:N");
             open(passwordA);navigate("/probe","cookie:none storage:none");navigate("/area-a","cookie:marker=A storage:A");navigate("/probe","cookie:marker=A storage:A");normal();navigate("/probe","cookie:marker=N storage:N");
-            open(passwordB);navigate("/probe","cookie:none storage:none");navigate("/area-b","cookie:marker=B storage:B");navigate("/probe","cookie:marker=B storage:B");history("Area B private history","Area A private history");normal();
+            open(passwordB);
+            navigate("/probe","cookie:none storage:none");
+            navigate("/area-b","cookie:marker=B storage:B");
+            navigate("/probe","cookie:marker=B storage:B");
+            history("Area B private history","Area A private history");normal();
             open(passwordA);state("cookie:marker=A storage:A");history("Area A private history","Area B private history");
             // Home/background must hide the area and Back must not bypass its native password gate.
             device.pressHome();context.startActivity(new Intent(context,PrivateActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT|Intent.FLAG_ACTIVITY_SINGLE_TOP));

@@ -35,7 +35,7 @@ final class PrivateAccess {
     private int dp(int n){return Math.round(n*activity.getResources().getDisplayMetrics().density);}
     private TextView text(String value,int size){TextView v=new TextView(activity);v.setText(value);v.setTextSize(size);v.setTextColor(activity.getColor(R.color.browser_ink));return v;}
     private void show(boolean confirmation){
-        if(destroyed)return;locked=true;
+        if(destroyed||activity.isFinishing())return;locked=true;
         LinearLayout body=new LinearLayout(activity);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(24),dp(40),dp(24),dp(24));body.setBackgroundColor(activity.getColor(R.color.browser_surface));body.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
         TextView title=text(confirmation?"Neuen privaten Bereich anlegen":"Privater Bereich",25);body.addView(title);
         String explanation=confirmation?"Dieses Passwort gehört noch zu keinem gespeicherten Bereich. Bitte zur Bestätigung nochmals eingeben. Ein Tippfehler öffnet keinen vorhandenen Bereich.":PrivateProfiles.active==null?"Gleiches Passwort: deinen gespeicherten Bereich öffnen. Neues Passwort: einen eigenen Bereich anlegen.\n\nVerlauf, Tabs, Lesezeichen, Website-Anmeldungen, Einstellungen und Videoordner werden getrennt gespeichert.":"Dein privater Bereich ist gesperrt. Gib sein Passwort ein, um fortzufahren.";

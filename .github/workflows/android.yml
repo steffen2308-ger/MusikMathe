@@ -100,7 +100,10 @@ jobs:
           target: default
           disable-animations: true
           script: |
-            bash scripts/device-tests.sh
+            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PrivateIsolationTest
+            mkdir -p private-profile-device-reports
+            cp -r app/build/reports/androidTests/. private-profile-device-reports/
+            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.notClass=de.steffen.musikmathe.PrivateIsolationTest
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             adb shell am instrument -w -e class de.steffen.musikmathe.YouTubeLiveProbeTest de.steffen.musikmathe.test/androidx.test.runner.AndroidJUnitRunner
@@ -113,6 +116,7 @@ jobs:
           name: private-isolation-device-reports
           path: |
             app/build/reports/androidTests/
+            private-profile-device-reports/
             app/build/outputs/androidTest-results/
             cutout-test.txt
           if-no-files-found: ignore
@@ -143,7 +147,10 @@ jobs:
           disable-animations: true
           script: |
             adb logcat -G 16M
-            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest,de.steffen.musikmathe.BrowserFullscreenTest,de.steffen.musikmathe.BrowserMenuDeviceTest,de.steffen.musikmathe.NightModeDeviceTest,de.steffen.musikmathe.ProtectedContentDeviceTest,de.steffen.musikmathe.CastDeviceTest,de.steffen.musikmathe.VideoDownloadProgressTest,de.steffen.musikmathe.AddressSuggestionsDeviceTest,de.steffen.musikmathe.HomePageDeviceTest,de.steffen.musikmathe.PreloadingDeviceTest,de.steffen.musikmathe.PrivateIsolationTest -Pandroid.testInstrumentationRunnerArguments.adblockLive=true
+            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PrivateIsolationTest
+            mkdir -p private-profile-device-reports
+            cp -r app/build/reports/androidTests/. private-profile-device-reports/
+            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest,de.steffen.musikmathe.BrowserFullscreenTest,de.steffen.musikmathe.BrowserMenuDeviceTest,de.steffen.musikmathe.NightModeDeviceTest,de.steffen.musikmathe.ProtectedContentDeviceTest,de.steffen.musikmathe.CastDeviceTest,de.steffen.musikmathe.VideoDownloadProgressTest,de.steffen.musikmathe.AddressSuggestionsDeviceTest,de.steffen.musikmathe.HomePageDeviceTest,de.steffen.musikmathe.PreloadingDeviceTest -Pandroid.testInstrumentationRunnerArguments.adblockLive=true
             bash scripts/cutout-test.sh
       - name: Upload password test results
         if: always()
@@ -152,6 +159,7 @@ jobs:
           name: password-device-reports
           path: |
             app/build/reports/androidTests/
+            private-profile-device-reports/
             app/build/outputs/androidTest-results/
             cutout-test.txt
           if-no-files-found: ignore
