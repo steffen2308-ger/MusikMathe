@@ -199,7 +199,8 @@ public class MainActivity extends AppCompatActivity {
         reload.setOnLongClickListener(v -> { WebView w=activeView();if(w!=null){w.clearCache(false);w.reload();}return true; });
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal); progress.setMax(100); progress.setProgressTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.browser_accent)));
         shell.addView(progress, new LinearLayout.LayoutParams(-1, dp(2))); progress.setVisibility(View.INVISIBLE);
-        pages = new FrameLayout(this); pages.setBackgroundColor(getColor(R.color.browser_page)); shell.addView(pages, new LinearLayout.LayoutParams(-1, 0, 1));
+        // Clearing the address focus must not focus a DOM field and scroll the page.
+        pages = new FrameLayout(this); pages.setFocusableInTouchMode(true); pages.setBackgroundColor(getColor(R.color.browser_page)); shell.addView(pages, new LinearLayout.LayoutParams(-1, 0, 1));
         bottom = new LinearLayout(this); bottom.setGravity(Gravity.CENTER_VERTICAL);
         shell.addView(bottom, new LinearLayout.LayoutParams(-1, dp(25)));
         back = icon(bottom, "back", "Zurück", () -> {if(browserFullscreen){WebView web=activeView();if(web!=null&&web.canGoBack())web.goBack();}else goBack();}, 25);

@@ -82,7 +82,8 @@ public class BrowserFullscreenTest {
         expect(holder[0],"String(window.fixtureReady)","true");Thread.sleep(250);return holder[0];
     }
     private float[] point(WebView web,String id)throws Exception{
-        JSONArray fraction=new JSONArray(js(web,"JSON.stringify((function(){var e=document.getElementById('"+id+"'),r=e.getBoundingClientRect();if(e.id==='text'){var range=document.createRange();range.selectNodeContents(e);r=range.getBoundingClientRect();}var v=window.visualViewport||{width:innerWidth,height:innerHeight,offsetLeft:0,offsetTop:0};return [(r.left+Math.min(r.width/2,30)-v.offsetLeft)/v.width,(r.top+r.height/2-v.offsetTop)/v.height];})())"));
+        JSONArray fraction=new JSONArray(js(web,"JSON.stringify((function(){var e=document.getElementById('"+id+"'),r=e.getBoundingClientRect();if(e.id==='text'){var range=document.createRange();range.selectNodeContents(e);r=range.getBoundingClientRect();}var v=window.visualViewport||{width:innerWidth,height:innerHeight,offsetLeft:0,offsetTop:0},l=Math.max(r.left,v.offsetLeft),t=Math.max(r.top,v.offsetTop),b=Math.min(r.bottom,v.offsetTop+v.height),right=Math.min(r.right,v.offsetLeft+v.width);return [(l+Math.min((right-l)/2,30)-v.offsetLeft)/v.width,(t+(b-t)/2-v.offsetTop)/v.height];})())"));
+        assertTrue("Target remains inside the visible viewport: "+id+" "+fraction,fraction.optDouble(0)>=0&&fraction.optDouble(0)<=1&&fraction.optDouble(1)>=0&&fraction.optDouble(1)<=1);
         float[] point={0,0};instrumentation.runOnMainSync(()->{int[] location=new int[2];web.getLocationOnScreen(location);point[0]=location[0]+web.getWidth()*(float)fraction.optDouble(0);point[1]=location[1]+web.getHeight()*(float)fraction.optDouble(1);});return point;
     }
     private void touch(long down,int action,float x,float y){
@@ -190,11 +191,25 @@ public class BrowserFullscreenTest {
         for(int i=0;i<chunks;i++)android.util.Log.i("MenuPreview",name+" "+i+"/"+chunks+" "+encoded.substring(i*1800,Math.min(encoded.length(),(i+1)*1800)));
         if(small!=full)small.recycle();full.recycle();
     }
+    private void keyboard(MainActivity activity,boolean shown)throws Exception{
+        if(Build.VERSION.SDK_INT<30)return;
+        long deadline=SystemClock.uptimeMillis()+10000;boolean[] ready={false};
+        do{
+            instrumentation.runOnMainSync(()->{try{
+                View root=(View)field(activity,"root");WindowInsets insets=root.getRootWindowInsets();
+                ready[0]=insets!=null&&insets.isVisible(WindowInsets.Type.ime())==shown&&(shown||root.getPaddingBottom()==0);
+            }catch(Exception error){throw new RuntimeException(error);}});
+            if(ready[0]){Thread.sleep(200);return;}Thread.sleep(50);
+        }while(SystemClock.uptimeMillis()<deadline);
+        fail("Keyboard should be "+(shown?"visible":"hidden"));
+    }
     @Test public void compactAddressAndAllFiveControlsWorkWithoutLeavingFullscreen()throws Exception{
         MainActivity activity=start();UiDevice device=UiDevice.getInstance(instrumentation);
         try{
             WebView web=load(activity);js(web,"document.getElementById('input').value='keep me';'ok'");
+            String originalScroll=js(web,"String(Math.round(scrollY))");
             doubleTap(web,"blank");expectFullscreen(activity,true);expect(web,"document.getElementById('input').value","keep me");
+            expect(web,"String(Math.round(scrollY))",originalScroll);
             instrumentation.runOnMainSync(()->{try{
                 FullscreenToolbar toolbar=(FullscreenToolbar)field(activity,"fullscreenToolbar");
                 assertEquals(5,toolbar.navigation.getChildCount());
@@ -206,12 +221,13 @@ public class BrowserFullscreenTest {
             tapControl(activity,"homeButton");expect(web,"location.href",Address.HOME);expectFullscreen(activity,true);
             tapControl(activity,"back");expect(web,"location.href","https://fullscreen.example/");expectFullscreen(activity,true);
             tapControl(activity,"forward");expect(web,"location.href",Address.HOME);expectFullscreen(activity,true);
-            tapControl(activity,"address");instrumentation.runOnMainSync(()->{try{
+            tapControl(activity,"address");keyboard(activity,true);instrumentation.runOnMainSync(()->{try{
                 android.widget.EditText address=(android.widget.EditText)field(activity,"address");
                 address.setText("https://fullscreen.example/typed");address.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_GO);
             }catch(Exception error){throw new RuntimeException(error);}});
             expect(web,"location.href","https://fullscreen.example/typed");expectFullscreen(activity,true);
             expect(web,"String(window.fixtureReady&&document.readyState==='complete')","true");
+            keyboard(activity,false);
             tapControl(activity,"videoButton");
             assertTrue("Video dialog title",device.wait(androidx.test.uiautomator.Until.hasObject(androidx.test.uiautomator.By.text("Videos auf dieser Seite")),6000));
             // Native Material buttons transform German ß into SS in all-caps labels.
@@ -228,6 +244,10 @@ public class BrowserFullscreenTest {
                 assertEquals(7,((android.view.ViewGroup)field(activity,"bottom")).getChildCount());
                 assertSame(web,invoke(activity,"activeView",new Class<?>[0]));
             }catch(Exception error){throw new RuntimeException(error);}});
+        }catch(AssertionError failure){
+            preview("fullscreen-compact-failure");
+            java.io.ByteArrayOutputStream hierarchy=new java.io.ByteArrayOutputStream();device.dumpWindowHierarchy(hierarchy);
+            android.util.Log.i("MenuPreview","fullscreen-failure-state "+hierarchy.toString("UTF-8"));throw failure;
         }finally{instrumentation.runOnMainSync(activity::finish);}
     }
     private String displayState(MainActivity activity,View content)throws Exception{
