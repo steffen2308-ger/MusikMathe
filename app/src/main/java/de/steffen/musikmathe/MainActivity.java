@@ -89,6 +89,7 @@ public class MainActivity extends AppCompatActivity {
     private int permissionGeneration;
     private boolean runtimePermissionPending;
     private AlertDialog permissionDialog;
+    private PermissionRequest websitePermissionRequest;
     private String[] pendingDownload;
     private boolean destroyed;
     private final java.util.concurrent.ExecutorService videoWorker=java.util.concurrent.Executors.newSingleThreadExecutor();
@@ -322,7 +323,7 @@ public class MainActivity extends AppCompatActivity {
                 return true;
             }
             @Override public void onPermissionRequest(PermissionRequest request) { runOnUiThread(() -> requestWebsitePermission(tab,request)); }
-            @Override public void onPermissionRequestCanceled(PermissionRequest request) { cancelPermissionFor(tab); }
+            @Override public void onPermissionRequestCanceled(PermissionRequest request) { runOnUiThread(()->{if(websitePermissionRequest==request)cancelPermission();}); }
             @Override public void onGeolocationPermissionsShowPrompt(String origin,GeolocationPermissions.Callback callback) { requestLocation(tab,origin,callback); }
             @Override public void onGeolocationPermissionsHidePrompt() { cancelPermissionFor(tab); }
             @Override public void onShowCustomView(View view,CustomViewCallback callback) {
@@ -412,7 +413,7 @@ public class MainActivity extends AppCompatActivity {
                 case 8: tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: new AlertDialog.Builder(this).setTitle("BestBrowser · 0.4.13").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: new AlertDialog.Builder(this).setTitle("BestBrowser · 0.4.14").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPrivate Tabs haben getrennte Website-Daten und werden nicht wiederhergestellt. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: endPrivate(); break;
@@ -500,19 +501,31 @@ public class MainActivity extends AppCompatActivity {
         }catch(Exception e){toast("Download konnte nicht gestartet werden.");}
     }
     private void requestWebsitePermission(Tab tab,PermissionRequest request) {
-        if(runtimePermissionPending || active()!=tab || !"https".equalsIgnoreCase(request.getOrigin().getScheme())){request.deny();return;}
-        cancelPermission();ArrayList<String> runtime=new ArrayList<>(),resources=new ArrayList<>();
+        if(runtimePermissionPending || active()!=tab || !"https".equalsIgnoreCase(request.getOrigin().getScheme()) || !origin(tab.url).equals(origin(request.getOrigin().toString()))){request.deny();return;}
+        cancelPermission();ArrayList<String> runtime=new ArrayList<>(),resources=new ArrayList<>(),purposes=new ArrayList<>();
         for(String resource:request.getResources()){
-            if(PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)){runtime.add(Manifest.permission.RECORD_AUDIO);resources.add(resource);}
-            if(PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)){runtime.add(Manifest.permission.CAMERA);resources.add(resource);}
+            if(resources.contains(resource))continue;
+            if(PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)){runtime.add(Manifest.permission.RECORD_AUDIO);resources.add(resource);purposes.add("das Mikrofon verwenden");}
+            if(PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)){runtime.add(Manifest.permission.CAMERA);resources.add(resource);purposes.add("die Kamera verwenden");}
+            if(PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID.equals(resource)){resources.add(resource);purposes.add("geschützte Videos und Musik wiedergeben");}
         }
         if(resources.isEmpty()){request.deny();return;}
-        permissionTab=tab;permissionOrigin=origin(request.getOrigin().toString());permissionCancel=request::deny;
+        permissionTab=tab;permissionOrigin=origin(request.getOrigin().toString());permissionCancel=request::deny;websitePermissionRequest=request;
         int version=permissionGeneration;
-        permissionResult=()->{ArrayList<String> allowed=new ArrayList<>();for(int i=0;i<runtime.size();i++)if(checkSelfPermission(runtime.get(i))==PackageManager.PERMISSION_GRANTED)allowed.add(resources.get(i));if(allowed.isEmpty())request.deny();else request.grant(allowed.toArray(new String[0]));};
-        permissionDialog=new AlertDialog.Builder(this).setTitle("Website-Berechtigung").setMessage(Address.host(request.getOrigin().toString())+" möchte "+(resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE)?"die Kamera":"")+(resources.size()==2?" und ":"")+(resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)?"das Mikrofon":"")+" verwenden.")
+        permissionResult=()->{
+            ArrayList<String> allowed=new ArrayList<>();
+            for(String resource:resources)if(PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID.equals(resource)
+                ||(PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)&&checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)
+                ||(PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)&&checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED))allowed.add(resource);
+            if(allowed.isEmpty())request.deny();else request.grant(allowed.toArray(new String[0]));
+        };
+        boolean protectedMedia=resources.contains(PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID);
+        String message=Address.host(request.getOrigin().toString())+" möchte:\n\n• "+android.text.TextUtils.join("\n• ",purposes);
+        if(protectedMedia)message+="\n\nDafür darf die Website eine Gerätekennung zur Lizenzprüfung verwenden. Die Freigabe gilt nur für diese Website in diesem Tab.";
+        permissionDialog=new AlertDialog.Builder(this).setTitle(protectedMedia&&resources.size()==1?"Geschützte Inhalte":"Website-Berechtigung").setMessage(message)
             .setNegativeButton("Ablehnen",(d,w)->cancelPermission()).setOnCancelListener(d->cancelPermission()).setPositiveButton("Erlauben",(d,w)->{
-                if(permissionTab!=tab || version!=permissionGeneration)return;runtimePermissionPending=true;requestPermissions(runtime.toArray(new String[0]),WEB_PERMISSION);
+                if(permissionTab!=tab || version!=permissionGeneration)return;
+                if(runtime.isEmpty())completeWebsitePermission();else{runtimePermissionPending=true;requestPermissions(runtime.toArray(new String[0]),WEB_PERMISSION);}
             }).show();
     }
     private void requestLocation(Tab tab,String requestedOrigin,GeolocationPermissions.Callback callback) {
@@ -526,21 +539,24 @@ public class MainActivity extends AppCompatActivity {
         }).show();
     }
     private String origin(String url) {
-        Uri uri=Uri.parse(url);return uri.getScheme()+"://"+uri.getHost()+":"+(uri.getPort()<0?443:uri.getPort());
+        return VideoCatalog.origin(url);
     }
     private void cancelPermissionFor(Tab tab) { if(permissionTab==tab)cancelPermission(); }
     private void cancelPermission() {
-        permissionGeneration++;if(permissionDialog!=null){permissionDialog.dismiss();permissionDialog=null;}Runnable cancel=permissionCancel;permissionCancel=null;permissionResult=null;permissionTab=null;permissionOrigin=null;if(cancel!=null)cancel.run();
+        permissionGeneration++;if(permissionDialog!=null){permissionDialog.dismiss();permissionDialog=null;}Runnable cancel=permissionCancel;permissionCancel=null;permissionResult=null;permissionTab=null;permissionOrigin=null;websitePermissionRequest=null;if(cancel!=null)cancel.run();
+    }
+    private void completeWebsitePermission(){
+        Runnable result=permissionResult;
+        if(result!=null && active()==permissionTab && origin(active().url).equals(permissionOrigin)){
+            permissionResult=null;permissionCancel=null;permissionTab=null;permissionOrigin=null;websitePermissionRequest=null;permissionDialog=null;result.run();
+        }else cancelPermission();
     }
     @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results) {
         super.onRequestPermissionsResult(code,permissions,results);
         if(code==DOWNLOAD_PERMISSION){if(results.length>0 && results[0]==PackageManager.PERMISSION_GRANTED)download();else{pendingDownload=null;toast("Download benötigt Zugriff auf den Downloadordner.");}}
         if(code==WEB_PERMISSION){
             runtimePermissionPending=false;
-            Runnable result=permissionResult;
-            if(result!=null && active()==permissionTab && origin(active().url).equals(permissionOrigin)){
-                permissionResult=null;permissionCancel=null;permissionTab=null;permissionOrigin=null;result.run();
-            }else cancelPermission();
+            completeWebsitePermission();
         }
     }
     private void cancelUpload(){ValueCallback<Uri[]> callback=upload;upload=null;if(callback!=null)callback.onReceiveValue(null);}
