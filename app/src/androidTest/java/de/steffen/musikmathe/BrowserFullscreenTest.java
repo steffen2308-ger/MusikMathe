@@ -113,6 +113,7 @@ public class BrowserFullscreenTest {
         instrumentation.runOnMainSync(()->{try{
             assertEquals(expected?View.GONE:View.VISIBLE,((View)field(activity,"top")).getVisibility());
             assertEquals(expected?View.GONE:View.VISIBLE,((View)field(activity,"bottom")).getVisibility());
+            assertEquals(expected?View.VISIBLE:View.GONE,((View)field(activity,"fullscreenToolbar")).getVisibility());
         }catch(Exception e){throw new RuntimeException(e);}});
     }
     @Test public void blankDoubleTapTogglesAndBackRestoresBrowserAfterVideo()throws Exception{
@@ -171,6 +172,59 @@ public class BrowserFullscreenTest {
             assertTrue("Native page scrolling remains usable",Integer.parseInt(js(web,"String(Math.round(scrollY))"))>0);expectFullscreen(activity,false);
         }finally{instrumentation.runOnMainSync(activity::finish);}
     }
+    private void tapControl(MainActivity activity,String name)throws Exception{
+        instrumentation.waitForIdleSync();Thread.sleep(200);float[] point={0,0};
+        instrumentation.runOnMainSync(()->{try{
+            View control=(View)field(activity,name);assertTrue(name+" visible",control.isShown());
+            int[] position=new int[2];control.getLocationOnScreen(position);
+            point[0]=position[0]+control.getWidth()/2f;point[1]=position[1]+control.getHeight()/2f;
+        }catch(Exception error){throw new RuntimeException(error);}});
+        long down=SystemClock.uptimeMillis();touch(down,MotionEvent.ACTION_DOWN,point[0],point[1]);Thread.sleep(30);touch(down,MotionEvent.ACTION_UP,point[0],point[1]);
+    }
+    private void preview(String name){
+        android.graphics.Bitmap full=instrumentation.getUiAutomation().takeScreenshot();if(full==null)return;
+        android.graphics.Bitmap small=android.graphics.Bitmap.createScaledBitmap(full,480,Math.round(full.getHeight()*480f/full.getWidth()),true);
+        java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();small.compress(android.graphics.Bitmap.CompressFormat.JPEG,85,bytes);
+        String encoded=android.util.Base64.encodeToString(bytes.toByteArray(),android.util.Base64.NO_WRAP);int chunks=(encoded.length()+1799)/1800;
+        for(int i=0;i<chunks;i++)android.util.Log.i("MenuPreview",name+" "+i+"/"+chunks+" "+encoded.substring(i*1800,Math.min(encoded.length(),(i+1)*1800)));
+        if(small!=full)small.recycle();full.recycle();
+    }
+    @Test public void compactAddressAndAllFiveControlsWorkWithoutLeavingFullscreen()throws Exception{
+        MainActivity activity=start();UiDevice device=UiDevice.getInstance(instrumentation);
+        try{
+            WebView web=load(activity);js(web,"document.getElementById('input').value='keep me';'ok'");
+            doubleTap(web,"blank");expectFullscreen(activity,true);expect(web,"document.getElementById('input').value","keep me");
+            instrumentation.runOnMainSync(()->{try{
+                FullscreenToolbar toolbar=(FullscreenToolbar)field(activity,"fullscreenToolbar");
+                assertEquals(5,toolbar.navigation.getChildCount());
+                String[] kinds={"home","back","forward","video","menu"};
+                for(int i=0;i<kinds.length;i++)assertEquals(kinds[i],((BrowserIcon)toolbar.navigation.getChildAt(i)).kind);
+                assertSame(web,invoke(activity,"activeView",new Class<?>[0]));
+            }catch(Exception error){throw new RuntimeException(error);}});
+            preview("fullscreen-compact");
+            tapControl(activity,"homeButton");expect(web,"location.href",Address.HOME);expectFullscreen(activity,true);
+            tapControl(activity,"back");expect(web,"location.href","https://fullscreen.example/");expectFullscreen(activity,true);
+            tapControl(activity,"forward");expect(web,"location.href",Address.HOME);expectFullscreen(activity,true);
+            tapControl(activity,"address");instrumentation.runOnMainSync(()->{try{
+                android.widget.EditText address=(android.widget.EditText)field(activity,"address");
+                address.setText("https://fullscreen.example/typed");address.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_GO);
+            }catch(Exception error){throw new RuntimeException(error);}});
+            expect(web,"location.href","https://fullscreen.example/typed");expectFullscreen(activity,true);
+            tapControl(activity,"videoButton");
+            androidx.test.uiautomator.UiObject2 close=device.wait(androidx.test.uiautomator.Until.findObject(androidx.test.uiautomator.By.text("Schließen")),6000);
+            assertNotNull("Video dialog opens from compact button",close);close.click();
+            tapControl(activity,"menuButton");
+            androidx.test.uiautomator.UiObject2 settings=device.wait(androidx.test.uiautomator.Until.findObject(androidx.test.uiautomator.By.text("Einstellungen")),6000);
+            assertNotNull("Menu opens below compact top bar",settings);assertTrue(settings.getVisibleBounds().height()>0);preview("fullscreen-compact-menu");settings.click();
+            assertNotNull(device.wait(androidx.test.uiautomator.Until.findObject(androidx.test.uiautomator.By.text("Browserdaten löschen")),6000));
+            device.pressBack();expectFullscreen(activity,true);
+            doubleTap(web,"blank");expectFullscreen(activity,false);
+            instrumentation.runOnMainSync(()->{try{
+                assertEquals(7,((android.view.ViewGroup)field(activity,"bottom")).getChildCount());
+                assertSame(web,invoke(activity,"activeView",new Class<?>[0]));
+            }catch(Exception error){throw new RuntimeException(error);}});
+        }finally{instrumentation.runOnMainSync(activity::finish);}
+    }
     private String displayState(MainActivity activity,View content)throws Exception{
         String[] state={""};instrumentation.runOnMainSync(()->{try{
             Point screen=new Point();activity.getWindowManager().getDefaultDisplay().getRealSize(screen);int[] position=new int[2];content.getLocationOnScreen(position);
@@ -185,7 +239,22 @@ public class BrowserFullscreenTest {
                 Point screen=new Point();activity.getWindowManager().getDefaultDisplay().getRealSize(screen);int[] position=new int[2];content.getLocationOnScreen(position);
                 View root=(View)field(activity,"root");WindowInsets insets=root.getRootWindowInsets();DisplayCutout cutout=insets==null?null:insets.getDisplayCutout();
                 boolean present=cutout!=null&&(cutout.getSafeInsetTop()>0||cutout.getSafeInsetLeft()>0||cutout.getSafeInsetRight()>0||cutout.getSafeInsetBottom()>0);
-                fills[0]=present&&(landscape?screen.x>screen.y:screen.y>screen.x)&&position[0]==0&&position[1]==0&&content.getWidth()==screen.x&&content.getHeight()==screen.y&&root.getPaddingLeft()==0&&root.getPaddingTop()==0&&root.getPaddingRight()==0&&root.getPaddingBottom()==0;
+                int[] rootPosition=new int[2];root.getLocationOnScreen(rootPosition);
+                boolean browser=content instanceof WebView;
+                FullscreenToolbar toolbar=(FullscreenToolbar)field(activity,"fullscreenToolbar");
+                boolean fillsContent=position[0]==0&&content.getWidth()==screen.x&&position[1]+content.getHeight()==screen.y;
+                boolean controls=true;
+                if(browser){
+                    int[] toolbarPosition=new int[2];toolbar.getLocationOnScreen(toolbarPosition);
+                    controls=toolbarPosition[1]==0&&position[1]==toolbar.getHeight();
+                    View[] groups={toolbar.addressSlot,toolbar.navigation};
+                    for(View group:groups){
+                        int[] location=new int[2];group.getLocationOnScreen(location);Rect area=new Rect(location[0],location[1],location[0]+group.getWidth(),location[1]+group.getHeight());
+                        for(Rect camera:cutout==null?java.util.Collections.<Rect>emptyList():cutout.getBoundingRects())controls&=!Rect.intersects(camera,area);
+                    }
+                    controls&=toolbar.addressSlot.getWidth()>0&&toolbar.navigation.getWidth()>0&&toolbar.navigation.getChildCount()==5;
+                }else fillsContent&=position[1]==0;
+                fills[0]=present&&(landscape?screen.x>screen.y:screen.y>screen.x)&&rootPosition[0]==0&&rootPosition[1]==0&&root.getWidth()==screen.x&&root.getHeight()==screen.y&&fillsContent&&controls&&root.getPaddingLeft()==0&&root.getPaddingTop()==0&&root.getPaddingRight()==0&&root.getPaddingBottom()==0;
                 result[0]=cutout;
             }catch(Exception error){throw new RuntimeException(error);}});
             if(fills[0])return result[0];Thread.sleep(100);
@@ -215,11 +284,13 @@ public class BrowserFullscreenTest {
             activity=start();MainActivity browser=activity;WebView web=load(browser);
             doubleTap(web,"blank");expectFullscreen(browser,true);DisplayCutout portrait=expectEntireDisplay(browser,web,false);
             assertTrue("Portrait cutout at top",portrait.getSafeInsetTop()>0);
+            preview("fullscreen-camera-portrait");
             stage="back with camera cutout";instrumentation.runOnMainSync(browser::onBackPressed);expectFullscreen(browser,false);expectProtectedChrome(browser,portrait);
             FrameLayout video=new FrameLayout(browser);instrumentation.runOnMainSync(()->web.getWebChromeClient().onShowCustomView(video,()->{}));expectEntireDisplay(browser,video,false);
             instrumentation.runOnMainSync(()->web.getWebChromeClient().onHideCustomView());expectProtectedChrome(browser,portrait);
             doubleTap(web,"blank");expectFullscreen(browser,true);device.setOrientationLeft();DisplayCutout side=expectEntireDisplay(browser,web,true);
             assertTrue("Rotated cutout at side",side.getSafeInsetLeft()>0||side.getSafeInsetRight()>0);
+            preview("fullscreen-camera-landscape");
             instrumentation.runOnMainSync(browser::onBackPressed);expectFullscreen(browser,false);expectProtectedChrome(browser,side);
         }finally{
             try{

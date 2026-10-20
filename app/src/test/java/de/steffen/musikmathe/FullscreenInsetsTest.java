@@ -23,6 +23,25 @@ import static org.junit.Assert.*;
 public class FullscreenInsetsTest {
     private Object field(MainActivity activity,String name)throws Exception{Field field=MainActivity.class.getDeclaredField(name);field.setAccessible(true);return field.get(activity);}
     private void fullscreen(MainActivity activity,boolean value)throws Exception{Method method=MainActivity.class.getDeclaredMethod("setBrowserFullscreen",boolean.class);method.setAccessible(true);method.invoke(activity,value);}
+    private int dp(int value){return Math.round(value*org.robolectric.RuntimeEnvironment.getApplication().getResources().getDisplayMetrics().density);}
+    private FullscreenToolbar toolbar(Rect safe,Rect camera,int width){
+        FullscreenToolbar toolbar=new FullscreenToolbar(org.robolectric.RuntimeEnvironment.getApplication());
+        toolbar.cutout(camera==null?null:new DisplayCutout(safe,Collections.singletonList(camera)));
+        toolbar.measure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
+        toolbar.layout(0,0,width,toolbar.getMeasuredHeight());return toolbar;
+    }
+    @Test public void cameraSitsBetweenGroupsWithoutWastingAnotherToolbarRow(){
+        Rect camera=new Rect(dp(184),0,dp(216),dp(32));FullscreenToolbar bar=toolbar(new Rect(0,dp(32),0,0),camera,dp(400));
+        assertEquals(dp(32),bar.getHeight());assertTrue(bar.addressSlot.getRight()<camera.left);assertTrue(bar.navigation.getLeft()>camera.right);
+        assertTrue(bar.addressSlot.getWidth()>dp(150));assertTrue(bar.navigation.getWidth()>dp(150));
+    }
+    @Test public void wideNotchFallsBackBelowAndSideCameraKeepsControlsOutsideCutout(){
+        Rect camera=new Rect(dp(80),0,dp(280),dp(36));FullscreenToolbar wide=toolbar(new Rect(0,dp(36),0,0),camera,dp(360));
+        assertEquals(dp(64),wide.getHeight());assertEquals(camera.bottom,wide.addressSlot.getTop());assertEquals(camera.bottom,wide.navigation.getTop());
+        FullscreenToolbar side=toolbar(new Rect(dp(32),0,0,0),new Rect(0,dp(160),dp(32),dp(200)),dp(720));
+        assertEquals(dp(28),side.getHeight());assertTrue(side.addressSlot.getLeft()>dp(32));assertTrue(side.navigation.getRight()<=dp(720));
+        assertEquals(dp(28),toolbar(null,null,dp(360)).getHeight());
+    }
     @Test public void removesOnlyCameraAndSystemBarPaddingAndRestoresItAfterVideo()throws Exception{
         ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();
         try{

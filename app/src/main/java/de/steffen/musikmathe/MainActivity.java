@@ -76,14 +76,16 @@ public class MainActivity extends AppCompatActivity {
     private volatile java.util.Set<String> adBlockExceptions=Collections.emptySet();
     private boolean adBlockUpdating;
     private PasswordManager passwords;
-    private LinearLayout shell, top, bottom;
+    private LinearLayout shell, top, bottom, omnibox;
+    private FullscreenToolbar fullscreenToolbar;
+    private boolean compactChrome;
     private FrameLayout root, pages;
     private EditText address;
     private AddressSuggestions addressSuggestions;
     private BrowserMenu browserMenu;
     private TextView siteState;
     private ProgressBar progress;
-    private BrowserIcon back, forward, tabButton, videoButton;
+    private BrowserIcon back, forward, tabButton, videoButton, homeButton, menuButton;
     private View customView;
     private boolean browserFullscreen;
     private WebChromeClient.CustomViewCallback customCallback;
@@ -166,12 +168,13 @@ public class MainActivity extends AppCompatActivity {
             getWindow().setDecorFitsSystemWindows(false);
             root.setOnApplyWindowInsetsListener((v, insets) -> {
                 android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.ime() | (browserFullscreen || customView != null ? 0 : WindowInsets.Type.displayCutout() | WindowInsets.Type.systemBars()));
+                if(fullscreenToolbar!=null)fullscreenToolbar.cutout(insets.getDisplayCutout());
                 root.setPadding(bars.left, bars.top, bars.right, bars.bottom); return insets;
             });
         }
         top = new LinearLayout(this); top.setGravity(Gravity.CENTER_VERTICAL); top.setPadding(dp(6), dp(2), dp(6), dp(2));
         shell.addView(top, new LinearLayout.LayoutParams(-1, dp(28)));
-        LinearLayout omnibox = new LinearLayout(this); omnibox.setGravity(Gravity.CENTER_VERTICAL); omnibox.setBackground(rounded(getColor(R.color.browser_field), 12));
+        omnibox = new LinearLayout(this); omnibox.setGravity(Gravity.CENTER_VERTICAL); omnibox.setBackground(rounded(getColor(R.color.browser_field), 12));
         top.addView(omnibox, new LinearLayout.LayoutParams(0, dp(24), 1));
         siteState = text("⊕", 18); siteState.setIncludeFontPadding(false); siteState.setGravity(Gravity.CENTER); siteState.setContentDescription("Informationen zur Seite");
         omnibox.addView(siteState, new LinearLayout.LayoutParams(dp(44), -1)); siteState.setOnClickListener(v -> siteInfo());
@@ -199,14 +202,16 @@ public class MainActivity extends AppCompatActivity {
         pages = new FrameLayout(this); pages.setBackgroundColor(getColor(R.color.browser_page)); shell.addView(pages, new LinearLayout.LayoutParams(-1, 0, 1));
         bottom = new LinearLayout(this); bottom.setGravity(Gravity.CENTER_VERTICAL);
         shell.addView(bottom, new LinearLayout.LayoutParams(-1, dp(25)));
-        back = icon(bottom, "back", "Zurück", this::goBack, 25);
+        back = icon(bottom, "back", "Zurück", () -> {if(browserFullscreen){WebView web=activeView();if(web!=null&&web.canGoBack())web.goBack();}else goBack();}, 25);
         forward = icon(bottom, "forward", "Vorwärts", () -> { if(activeView()!=null && activeView().canGoForward())activeView().goForward(); }, 25);
-        icon(bottom, "home", "Startseite", () -> navigate(Address.HOME), 25);
+        homeButton=icon(bottom, "home", "Startseite", () -> navigate(Address.HOME), 25);
         videoButton=icon(bottom,"video","Videos auf dieser Seite",this::showVideos,25);
         View space = new View(this); bottom.addView(space, new LinearLayout.LayoutParams(0,1,1));
         tabButton = icon(bottom, "tabs", "Tabs anzeigen", this::showTabs, 25);
         tabButton.setOnLongClickListener(v -> { newTab(Address.HOME, true); return true; });
-        icon(bottom, "menu", "Menü", this::menu, 25);
+        menuButton=icon(bottom, "menu", "Menü", this::menu, 25);
+        fullscreenToolbar=new FullscreenToolbar(this);fullscreenToolbar.setVisibility(View.GONE);
+        shell.addView(fullscreenToolbar,0,new LinearLayout.LayoutParams(-1,-2));
         FreeSpaceGesture.attachBlankView(top,()->setBrowserFullscreen(!browserFullscreen));
         FreeSpaceGesture.attachBlankView(bottom,()->setBrowserFullscreen(!browserFullscreen));
     }
@@ -407,7 +412,7 @@ public class MainActivity extends AppCompatActivity {
         hideKeyboard();if(browserMenu!=null)browserMenu.dismiss();
         Tab tab=active();if(tab==null)return;
         WebView web=tab.view;boolean webpage=Address.isWeb(tab.url),bookmarked=store.bookmarked(tab.url);
-        browserMenu=new BrowserMenu(this,bottom.getChildAt(bottom.getChildCount()-1),this::menuAction)
+        browserMenu=new BrowserMenu(this,menuButton,this::menuAction)
             .quick(21,"forward","Vorwärts",web!=null&&web.canGoForward())
             .quick(1,bookmarked?"star-filled":"star",bookmarked?"Lesezeichen entfernen":"Lesezeichen hinzufügen",webpage)
             .quick(5,"share","Seite teilen",webpage)
@@ -421,7 +426,7 @@ public class MainActivity extends AppCompatActivity {
         browserMenu.item(15,"video","Videos erkennen und speichern");
         if(!isPrivateMode())browserMenu.item(24,"cast","Auf Fernseher übertragen");
         browserMenu.divider().item(7,"find","Auf Seite suchen").item(6,"copy","Link kopieren")
-            .checked(8,"desktop","Desktopwebsite",tab.desktop).item(20,"fullscreen","Vollbild")
+            .checked(8,"desktop","Desktopwebsite",tab.desktop).item(20,"fullscreen",browserFullscreen?"Vollbild beenden":"Vollbild")
             .divider().checked(23,"night","Nachtmodus",BrowserAppearance.night(this))
             .status(18,"shield","Werbeblocker",adBlockingEnabled?"Ein":"Aus").item(19,"vpn","VPN");
         browserMenu.show();
@@ -440,7 +445,7 @@ public class MainActivity extends AppCompatActivity {
                 case 8: if(linkPreloader!=null)linkPreloader.clear();tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: BrowserDialogs.builder(this).setTitle("BestBrowser · 0.4.22").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPasswortgeschützte private Bereiche speichern Verlauf, Tabs, Website-Daten und Einstellungen getrennt und verschlüsselt. Videos in gewählten Android-Ordnern sind separat zugänglich. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: BrowserDialogs.builder(this).setTitle("BestBrowser · 0.4.23").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPasswortgeschützte private Bereiche speichern Verlauf, Tabs, Website-Daten und Einstellungen getrennt und verschlüsselt. Videos in gewählten Android-Ordnern sind separat zugänglich. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: discardPrivateTabs=true;endPrivate(); break;
@@ -450,7 +455,7 @@ public class MainActivity extends AppCompatActivity {
                 case 17: settings(); break;
                 case 18: showAdBlockingSettings(); break;
                 case 19: showVpn(); break;
-                case 20: setBrowserFullscreen(true); break;
+                case 20: setBrowserFullscreen(!browserFullscreen); break;
                 case 23: setNightMode(!BrowserAppearance.night(this));break;
                 case 24: showCast();break;
                 case 21: if(tab.view!=null&&tab.view.canGoForward())tab.view.goForward();break;
@@ -632,6 +637,7 @@ public class MainActivity extends AppCompatActivity {
     }
     private void applyFullscreenUi(){
         if(root==null)return;
+        applyCompactChrome();
         top.setVisibility(browserFullscreen?View.GONE:View.VISIBLE);bottom.setVisibility(browserFullscreen?View.GONE:View.VISIBLE);
         progress.setVisibility(browserFullscreen?View.GONE:progress.getProgress()<100?View.VISIBLE:View.INVISIBLE);
         boolean fullscreen=browserFullscreen||customView!=null;
@@ -654,6 +660,29 @@ public class MainActivity extends AppCompatActivity {
             if(fullscreen)flags|=View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
             getWindow().getDecorView().setSystemUiVisibility(flags);
         }
+    }
+    private void applyCompactChrome(){
+        fullscreenToolbar.setVisibility(browserFullscreen?View.VISIBLE:View.GONE);
+        if(compactChrome==browserFullscreen)return;
+        if(addressSuggestions!=null)addressSuggestions.dismiss();
+        if(browserMenu!=null)browserMenu.dismiss();
+        compactChrome=browserFullscreen;
+        ((ViewGroup)omnibox.getParent()).removeView(omnibox);
+        BrowserIcon[] controls={homeButton,back,forward,videoButton,menuButton};
+        for(BrowserIcon control:controls)((ViewGroup)control.getParent()).removeView(control);
+        if(compactChrome){
+            fullscreenToolbar.addressSlot.addView(omnibox,new FrameLayout.LayoutParams(-1,-1));
+            for(BrowserIcon control:controls)fullscreenToolbar.navigation.addView(control,new LinearLayout.LayoutParams(0,-1,1));
+        }else{
+            top.addView(omnibox,0,new LinearLayout.LayoutParams(0,dp(24),1));
+            BrowserIcon[] normal={back,forward,homeButton,videoButton};
+            for(int i=0;i<normal.length;i++)bottom.addView(normal[i],i,new LinearLayout.LayoutParams(dp(48),dp(25)));
+            bottom.addView(menuButton,new LinearLayout.LayoutParams(dp(48),dp(25)));
+        }
+        siteState.setTextSize(compactChrome?12:18);
+        siteState.setLayoutParams(new LinearLayout.LayoutParams(dp(compactChrome?20:44),-1));
+        address.setTextSize(compactChrome?12:16);address.setPadding(0,0,dp(compactChrome?2:8),0);
+        fullscreenToolbar.requestApplyInsets();
     }
     @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(focused&&(browserFullscreen||customView!=null))applyFullscreenUi();}
     private void goBack(){if(privateLocked()){endPrivate();return;}if(browserMenu!=null&&browserMenu.dismiss())return;if(addressSuggestions!=null&&addressSuggestions.dismissIfShowing())return;if(customView!=null){hideFullscreen();return;}if(browserFullscreen){setBrowserFullscreen(false);return;}WebView web=activeView();if(web!=null && web.canGoBack())web.goBack();else if(tabs.size()>1)closeTab(selected);else if(isPrivateMode())endPrivate();else moveTaskToBack(true);}
@@ -832,7 +861,7 @@ public class MainActivity extends AppCompatActivity {
         siteState.setTextColor(ink());address.setTextColor(ink());address.setHintTextColor(getColor(R.color.browser_hint));
         ((View)address.getParent()).setBackground(rounded(getColor(R.color.browser_field),12));
         pages.setBackgroundColor(getColor(R.color.browser_page));progress.setProgressTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.browser_accent)));
-        tintToolbar(top);tintToolbar(bottom);addressSuggestions.appearanceChanged();
+        tintToolbar(top);tintToolbar(bottom);tintToolbar(fullscreenToolbar);addressSuggestions.appearanceChanged();
         for(Tab tab:tabs)if(tab.view!=null){BrowserWebAppearance.apply(tab.view,BrowserAppearance.night(this));BrowserWebAppearance.pageFinished(tab.view,BrowserAppearance.night(this));}
         applyFullscreenUi();
     }

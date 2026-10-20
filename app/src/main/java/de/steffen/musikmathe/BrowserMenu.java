@@ -100,9 +100,11 @@ final class BrowserMenu {
         // Measure at the actual width, including wrapped labels and the system font size.
         int desired=dp(58);for(Entry entry:entries){if(entry.id<0)desired+=dp(13);else{View row=row(entry);row.measure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));desired+=row.getMeasuredHeight();}}
         settings.measure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));desired+=settings.getMeasuredHeight();
-        int height=Math.min(desired,Math.max(1,location[1]-bounds.top-dp(8)));
+        int above=location[1]-bounds.top-dp(8),below=bounds.bottom-location[1]-anchor.getHeight()-dp(8);
+        boolean openBelow=below>above;
+        int height=Math.min(desired,Math.max(1,openBelow?below:above));
         popup.setWidth(width);popup.setHeight(height);
-        popup.showAsDropDown(anchor,anchor.getWidth()-width-dp(8),-height-anchor.getHeight(),Gravity.LEFT);
+        popup.showAsDropDown(anchor,anchor.getWidth()-width-dp(8),openBelow?dp(4):-height-anchor.getHeight(),Gravity.LEFT);
         list.setSelection(0);
     }
     private void select(int id){popup.dismiss();action.accept(id);}
