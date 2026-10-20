@@ -754,11 +754,13 @@ public class MainActivity extends AppCompatActivity {
             boolean youtube=!YouTubeSources.videoId(tab.url).isEmpty();
             String message=youtube?(error.isEmpty()?"Für dieses YouTube-Video wurde keine erreichbare Downloadquelle gefunden.":error):"Noch kein speicherbarer Stream erkannt. Starte das Video und suche erneut.";
             AlertDialog.Builder empty=BrowserDialogs.builder(this).setTitle(youtube?"YouTube-Download nicht verfügbar":"Videos auf dieser Seite").setMessage(message).setNegativeButton("Schließen",null).setPositiveButton("Erneut suchen",(d,w)->showVideos());
-            empty.setNeutralButton("Download-Fortschritt",(d,w)->showVideoQueue());empty.show();return;
+            empty.setNeutralButton("Fortschritt",(d,w)->showVideoQueue());empty.show();return;
         }
         VideoPreviewAdapter previews=new VideoPreviewAdapter(this,videos,tab.url);
-        AlertDialog dialog=BrowserDialogs.builder(this).setTitle("Videos · "+videos.size()).setAdapter(previews,(d,i)->videoOptions(videos.get(i))).setNegativeButton("Schließen",null).setPositiveButton("Neu suchen",(d,w)->{tab.videos.clearResolved();showVideos();}).setNeutralButton("Download-Fortschritt",(d,w)->showVideoQueue()).create();
-        previews.information=item->{dialog.dismiss();videoInformation(item);};dialog.setOnDismissListener(d->previews.close());dialog.show();
+        AlertDialog dialog=BrowserDialogs.builder(this).setTitle("Videos · "+videos.size()).setAdapter(previews,(d,i)->videoOptions(videos.get(i))).setNegativeButton("Schließen",null).setPositiveButton("Neu suchen",(d,w)->{tab.videos.clearResolved();showVideos();}).setNeutralButton("Fortschritt",(d,w)->showVideoQueue()).create();
+        View.OnLayoutChangeListener fit=(view,l,t,r,b,ol,ot,or,ob)->{if(dialog.isShowing()&&b-t>0)dialog.getWindow().setLayout(WindowManager.LayoutParams.WRAP_CONTENT,Math.round((b-t)*0.9f));};
+        root.addOnLayoutChangeListener(fit);previews.information=item->{dialog.dismiss();videoInformation(item);};dialog.setOnDismissListener(d->{root.removeOnLayoutChangeListener(fit);previews.close();});dialog.show();
+        int available=root.getHeight()>0?root.getHeight():getResources().getDisplayMetrics().heightPixels;dialog.getWindow().setLayout(WindowManager.LayoutParams.WRAP_CONTENT,Math.round(available*0.9f));
     }
     private void showVideoQueue(){
         if(destroyed||privateLocked())return;if(videoDownloads!=null)videoDownloads.dismiss();videoDownloads=new VideoDownloadsDialog(this);videoDownloads.show();
