@@ -119,6 +119,9 @@ final class LinkPreloader {
     static final class NativeBackend implements Backend {
         private final Handler handler=new Handler(Looper.getMainLooper());
         private final LinkedHashMap<String,Profile> cached=new LinkedHashMap<>();
+        // WebKit 1.14 exposes this official feature but omits it from its StringDef.
+        @android.annotation.SuppressLint("WrongConstant")
+        private boolean configSupported(){return WebViewFeature.isFeatureSupported(WebViewFeature.SPECULATIVE_LOADING_CONFIG);}
         @Override public boolean supported(){try{return WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)&&WebViewFeature.isFeatureSupported(WebViewFeature.PROFILE_URL_PREFETCH);}catch(RuntimeException|LinkageError unavailable){return false;}}
         @Override public PreloadQueue.Cancel fetch(WebView view,String url,java.util.function.Consumer<Boolean> done){
             CancellationSignal signal=new CancellationSignal();boolean[] finished={false};
@@ -126,7 +129,7 @@ final class LinkPreloader {
             java.util.function.Consumer<Boolean> settle=success->{if(!finished[0]){finished[0]=true;handler.removeCallbacks(timeout);done.accept(success);}};
             try{
                 Profile profile=WebViewCompat.getProfile(view);
-                if(WebViewFeature.isFeatureSupported(WebViewFeature.SPECULATIVE_LOADING_CONFIG))profile.setSpeculativeLoadingConfig(new SpeculativeLoadingConfig.Builder().setMaxPrefetches(64).setPrefetchTtlSeconds(120).build());
+                if(configSupported())profile.setSpeculativeLoadingConfig(new SpeculativeLoadingConfig.Builder().setMaxPrefetches(64).setPrefetchTtlSeconds(120).build());
                 cached.put(url,profile);while(cached.size()>PreloadLinks.MAX_LINKS){String old=cached.keySet().iterator().next();Profile previous=cached.remove(old);clear(previous,old);}
                 SpeculativeLoadingParameters parameters=new SpeculativeLoadingParameters.Builder().addAdditionalHeader("User-Agent",view.getSettings().getUserAgentString()).setJavaScriptEnabled(view.getSettings().getJavaScriptEnabled()).build();
                 profile.prefetchUrlAsync(url,signal,handler::post,parameters,new OutcomeReceiverCompat<Void,PrefetchException>(){
