@@ -214,7 +214,9 @@ public class BrowserFullscreenTest {
             expect(web,"String(window.fixtureReady&&document.readyState==='complete')","true");
             tapControl(activity,"videoButton");
             assertTrue("Video dialog title",device.wait(androidx.test.uiautomator.Until.hasObject(androidx.test.uiautomator.By.text("Videos auf dieser Seite")),6000));
-            androidx.test.uiautomator.UiObject2 close=device.wait(androidx.test.uiautomator.Until.findObject(androidx.test.uiautomator.By.text(java.util.regex.Pattern.compile("Schließen",java.util.regex.Pattern.CASE_INSENSITIVE|java.util.regex.Pattern.UNICODE_CASE))),6000);
+            // Native Material buttons transform German ß into SS in all-caps labels.
+            // Use Android's negative-action ID, which remains stable across locales.
+            androidx.test.uiautomator.UiObject2 close=device.wait(androidx.test.uiautomator.Until.findObject(androidx.test.uiautomator.By.res("android:id/button2")),6000);
             assertNotNull("Video dialog opens from compact button",close);close.click();
             tapControl(activity,"menuButton");
             androidx.test.uiautomator.UiObject2 settings=device.wait(androidx.test.uiautomator.Until.findObject(androidx.test.uiautomator.By.text("Einstellungen")),6000);
