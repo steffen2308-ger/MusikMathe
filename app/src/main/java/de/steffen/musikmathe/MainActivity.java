@@ -364,7 +364,7 @@ public class MainActivity extends AppCompatActivity {
         web.setOnLongClickListener(v -> {
             WebView.HitTestResult hit=web.getHitTestResult(); if(hit==null || hit.getExtra()==null)return false;
             String target=hit.getExtra(); if(!Address.isWeb(target))return false;
-            new AlertDialog.Builder(this).setTitle(target).setItems(new String[]{"In neuem Tab öffnen","Link kopieren","Link teilen"},(dialog,which) -> { if(which==0)newTab(target,true);else if(which==1)copy(target);else share(target); }).show(); return true;
+            BrowserDialogs.builder(this).setTitle(target).setItems(new String[]{"In neuem Tab öffnen","Link kopieren","Link teilen"},(dialog,which) -> { if(which==0)newTab(target,true);else if(which==1)copy(target);else share(target); }).show(); return true;
         });
         FreeSpaceGesture.attach(web,()->!destroyed&&activeView()==web&&customView==null,()->tab.videoPage,()->setBrowserFullscreen(!browserFullscreen),event->{if(passwords!=null)passwords.touch(web,event);});
         configureAdBlocking(tab,web);
@@ -382,7 +382,7 @@ public class MainActivity extends AppCompatActivity {
         Uri uri=Uri.parse(url); String scheme=uri.getScheme();
         // External app links are only offered after a user gesture and explicit confirmation.
         if("mailto".equalsIgnoreCase(scheme) || "tel".equalsIgnoreCase(scheme) || "sms".equalsIgnoreCase(scheme) || "geo".equalsIgnoreCase(scheme) || "market".equalsIgnoreCase(scheme)) {
-            new AlertDialog.Builder(this).setMessage("Link in einer anderen App öffnen?\n"+url).setNegativeButton("Abbrechen",null).setPositiveButton("Öffnen",(d,w) -> {
+            BrowserDialogs.builder(this).setMessage("Link in einer anderen App öffnen?\n"+url).setNegativeButton("Abbrechen",null).setPositiveButton("Öffnen",(d,w) -> {
                 try { startActivity(new Intent(Intent.ACTION_VIEW,uri).addCategory(Intent.CATEGORY_BROWSABLE)); } catch(ActivityNotFoundException e) { toast("Keine passende App installiert."); }
             }).show();
         } else if("intent".equalsIgnoreCase(scheme)) {
@@ -440,7 +440,7 @@ public class MainActivity extends AppCompatActivity {
                 case 8: if(linkPreloader!=null)linkPreloader.clear();tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: new AlertDialog.Builder(this).setTitle("BestBrowser · 0.4.19").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPasswortgeschützte private Bereiche speichern Verlauf, Tabs, Website-Daten und Einstellungen getrennt und verschlüsselt. Videos in gewählten Android-Ordnern sind separat zugänglich. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: BrowserDialogs.builder(this).setTitle("BestBrowser · 0.4.19").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPasswortgeschützte private Bereiche speichern Verlauf, Tabs, Website-Daten und Einstellungen getrennt und verschlüsselt. Videos in gewählten Android-Ordnern sind separat zugänglich. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: discardPrivateTabs=true;endPrivate(); break;
@@ -460,7 +460,7 @@ public class MainActivity extends AppCompatActivity {
     private void showTabs() {
         hideKeyboard(); LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);list.setPadding(dp(8),dp(8),dp(8),dp(8));
         ScrollView scroll=new ScrollView(this);scroll.addView(list);
-        AlertDialog dialog=new AlertDialog.Builder(this).setTitle((isPrivateMode()?"Private Tabs · ":"Tabs · ")+tabs.size()).setView(scroll).setPositiveButton("Neuer Tab",(d,w)->newTab(Address.HOME,true)).setNegativeButton("Fertig",null).create();
+        AlertDialog dialog=BrowserDialogs.builder(this).setTitle((isPrivateMode()?"Private Tabs · ":"Tabs · ")+tabs.size()).setView(scroll).setPositiveButton("Neuer Tab",(d,w)->newTab(Address.HOME,true)).setNegativeButton("Fertig",null).create();
         for(int i=0;i<tabs.size();i++) {
             final int index=i; Tab tab=tabs.get(i); LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(12),dp(8),0,dp(8));
             if(i==selected)row.setBackground(rounded(getColor(R.color.browser_field),12));
@@ -473,17 +473,17 @@ public class MainActivity extends AppCompatActivity {
         List<BrowserStore.Entry> rows=store.read(key);
         if(rows.isEmpty()){toast(title+" ist leer.");return;}
         String[] labels=new String[rows.size()];for(int i=0;i<rows.size();i++)labels[i]=rows.get(i).title+"\n"+Address.host(rows.get(i).url);
-        AlertDialog dialog=new AlertDialog.Builder(this).setTitle(title).setItems(labels,(d,i)->navigate(rows.get(i).url)).setNegativeButton("Schließen",null).create();dialog.show();
+        AlertDialog dialog=BrowserDialogs.builder(this).setTitle(title).setItems(labels,(d,i)->navigate(rows.get(i).url)).setNegativeButton("Schließen",null).create();dialog.show();
         dialog.getListView().setOnItemLongClickListener((parent,view,position,id)->{
             BrowserStore.Entry entry=rows.get(position);
-            new AlertDialog.Builder(this).setTitle(entry.title).setItems(new String[]{"In neuem Tab öffnen","Eintrag löschen"},(d,i)->{
+            BrowserDialogs.builder(this).setTitle(entry.title).setItems(new String[]{"In neuem Tab öffnen","Eintrag löschen"},(d,i)->{
                 dialog.dismiss();if(i==0)newTab(entry.url,true);else{rows.remove(position);store.write(key,rows);showLibrary(key,title);}
             }).show();return true;
         });
     }
     private void findInPage() {
         WebView web=activeView(); if(web==null)return; EditText input=new EditText(this);input.setSingleLine();input.setHint("Suchtext");
-        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Auf Seite suchen").setView(input).setPositiveButton("Weiter",null).setNeutralButton("Zurück",null).setNegativeButton("Fertig",null).create();
+        AlertDialog dialog=BrowserDialogs.builder(this).setTitle("Auf Seite suchen").setView(input).setPositiveButton("Weiter",null).setNeutralButton("Zurück",null).setNegativeButton("Fertig",null).create();
         dialog.setOnDismissListener(d->{web.clearMatches();web.setFindListener(null);});
         dialog.setOnShowListener(d->{
             web.setFindListener((index,count,done)->{if(done)dialog.setTitle(count==0?"Keine Treffer":(index+1)+" / "+count+" Treffer");});
@@ -493,11 +493,11 @@ public class MainActivity extends AppCompatActivity {
     }
     private void chooseEngine() {
         String[] keys={"google","duckduckgo","bing"};int checked=0;for(int i=0;i<keys.length;i++)if(keys[i].equals(store.engine()))checked=i;
-        new AlertDialog.Builder(this).setTitle("Suchmaschine für die Adressleiste").setSingleChoiceItems(new String[]{"Google","DuckDuckGo","Bing"},checked,(d,i)->{store.engine(keys[i]);d.dismiss();}).setNegativeButton("Abbrechen",null).show();
+        BrowserDialogs.builder(this).setTitle("Suchmaschine für die Adressleiste").setSingleChoiceItems(new String[]{"Google","DuckDuckGo","Bing"},checked,(d,i)->{store.engine(keys[i]);d.dismiss();}).setNegativeButton("Abbrechen",null).show();
     }
     private void clearData() {
         boolean[] checked={true,false,false};
-        new AlertDialog.Builder(this).setTitle("Browserdaten löschen").setMultiChoiceItems(new String[]{"Verlauf","Cookies & Website-Daten (meldet dich ab)","Zwischengespeicherte Bilder und Dateien"},checked,(d,i,on)->checked[i]=on)
+        BrowserDialogs.builder(this).setTitle("Browserdaten löschen").setMultiChoiceItems(new String[]{"Verlauf","Cookies & Website-Daten (meldet dich ab)","Zwischengespeicherte Bilder und Dateien"},checked,(d,i,on)->checked[i]=on)
             .setNegativeButton("Abbrechen",null).setPositiveButton("Löschen",(d,w)->{
                 if(linkPreloader!=null)linkPreloader.clear();
                 if(checked[0]) { addressSuggestions.dismiss();store.write("history",Collections.emptyList());for(Tab tab:tabs){tab.state=null;if(tab.view!=null)tab.view.clearHistory();}refreshHomeTabs(); }
@@ -508,7 +508,7 @@ public class MainActivity extends AppCompatActivity {
     }
     private void siteInfo() {
         String url=active().url;String info=WikiTop.URL.equals(url)?"Lokale Wikipedia-Rangliste. Die Daten werden verschlüsselt von Wikimedia Analytics geladen.":Address.HOME.equals(url)?"Lokale Startseite":url.startsWith("https://")?"Diese Adresse nutzt HTTPS. Die Zertifikatsprüfung übernimmt Android WebView.":"Diese Seite verwendet keine verschlüsselte HTTPS-Verbindung.";
-        new AlertDialog.Builder(this).setTitle("Seiteninformationen").setMessage(info+"\n\n"+Address.display(url)).setPositiveButton("OK",null).show();
+        BrowserDialogs.builder(this).setTitle("Seiteninformationen").setMessage(info+"\n\n"+Address.display(url)).setPositiveButton("OK",null).show();
     }
     private void updateHome(Tab tab){
         if(store==null||tab.view==null||!Address.HOME.equals(tab.url)||!Address.HOME.equals(tab.view.getUrl()))return;
@@ -518,7 +518,7 @@ public class MainActivity extends AppCompatActivity {
     private void confirmDownload(String url,String ua,String disposition,String mime) {
         String name=URLUtil.guessFileName(url,disposition,mime);
         if (isPrivateMode()) name += "\n\nHeruntergeladene Dateien bleiben nach dem Schließen privater Tabs erhalten.";
-        new AlertDialog.Builder(this).setTitle("Datei herunterladen?").setMessage(name+"\n\n"+Address.host(url)).setNegativeButton("Abbrechen",null).setPositiveButton("Herunterladen",(d,w)->{
+        BrowserDialogs.builder(this).setTitle("Datei herunterladen?").setMessage(name+"\n\n"+Address.host(url)).setNegativeButton("Abbrechen",null).setPositiveButton("Herunterladen",(d,w)->{
             pendingDownload=new String[]{url,ua,disposition,mime};
             if(Build.VERSION.SDK_INT<=28 && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},DOWNLOAD_PERMISSION);else download();
         }).show();
@@ -557,7 +557,7 @@ public class MainActivity extends AppCompatActivity {
         boolean protectedMedia=resources.contains(PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID);
         String message=Address.host(request.getOrigin().toString())+" möchte:\n\n• "+android.text.TextUtils.join("\n• ",purposes);
         if(protectedMedia)message+="\n\nDafür darf die Website eine Gerätekennung zur Lizenzprüfung verwenden. Die Freigabe gilt nur für diese Website in diesem Tab.";
-        permissionDialog=new AlertDialog.Builder(this).setTitle(protectedMedia&&resources.size()==1?"Geschützte Inhalte":"Website-Berechtigung").setMessage(message)
+        permissionDialog=BrowserDialogs.builder(this).setTitle(protectedMedia&&resources.size()==1?"Geschützte Inhalte":"Website-Berechtigung").setMessage(message)
             .setNegativeButton("Ablehnen",(d,w)->cancelPermission()).setOnCancelListener(d->cancelPermission()).setPositiveButton("Erlauben",(d,w)->{
                 if(permissionTab!=tab || version!=permissionGeneration)return;
                 if(runtime.isEmpty())completeWebsitePermission();else{runtimePermissionPending=true;requestPermissions(runtime.toArray(new String[0]),WEB_PERMISSION);}
@@ -569,7 +569,7 @@ public class MainActivity extends AppCompatActivity {
         int version=permissionGeneration;
         permissionCancel=()->callback.invoke(requestedOrigin,false,false);
         permissionResult=()->callback.invoke(requestedOrigin,checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED,false);
-        permissionDialog=new AlertDialog.Builder(this).setTitle("Standort teilen?").setMessage(Address.host(requestedOrigin)+" möchte deinen Standort verwenden.").setNegativeButton("Ablehnen",(d,w)->cancelPermission()).setOnCancelListener(d->cancelPermission()).setPositiveButton("Erlauben",(d,w)->{
+        permissionDialog=BrowserDialogs.builder(this).setTitle("Standort teilen?").setMessage(Address.host(requestedOrigin)+" möchte deinen Standort verwenden.").setNegativeButton("Ablehnen",(d,w)->cancelPermission()).setOnCancelListener(d->cancelPermission()).setPositiveButton("Erlauben",(d,w)->{
             if(permissionTab==tab && version==permissionGeneration){runtimePermissionPending=true;requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION},WEB_PERMISSION);}
         }).show();
     }
@@ -676,10 +676,10 @@ public class MainActivity extends AppCompatActivity {
     private void endPrivate() {
         if (!isPrivateMode()) return;
         if(VideoDownloadService.busy()){
-            new AlertDialog.Builder(this).setMessage("Im privaten Bereich werden Videos gespeichert oder warten auf den Download. Alle abbrechen und die privaten Tabs schließen?").setNegativeButton("Weiter speichern",(d,w)->discardPrivateTabs=false).setOnCancelListener(d->discardPrivateTabs=false).setPositiveButton("Abbrechen und schließen",(d,w)->{VideoDownloadService.cancelAll();endPrivate();}).show();return;
+            BrowserDialogs.builder(this).setMessage("Im privaten Bereich werden Videos gespeichert oder warten auf den Download. Alle abbrechen und die privaten Tabs schließen?").setNegativeButton("Weiter speichern",(d,w)->discardPrivateTabs=false).setOnCancelListener(d->discardPrivateTabs=false).setPositiveButton("Abbrechen und schließen",(d,w)->{VideoDownloadService.cancelAll();endPrivate();}).show();return;
         }
         if(discardPrivateTabs){if(pages!=null)pages.removeAllViews();for(Tab tab:tabs)if(tab.view!=null){clearAdBlockScript(tab);tab.view.stopLoading();tab.view.destroy();}tabs.clear();selected=0;}
-        persist();if(store!=null&&store.profile!=null&&!store.profile.flush()){new AlertDialog.Builder(this).setMessage(store.profile.failure).setPositiveButton("OK",null).show();return;}
+        persist();if(store!=null&&store.profile!=null&&!store.profile.flush()){BrowserDialogs.builder(this).setMessage(store.profile.failure).setPositiveButton("OK",null).show();return;}
         closingPrivate=true;openNormal();finish();
     }
     @Override protected void onSaveInstanceState(Bundle state){state.putBoolean("browser_fullscreen",browserFullscreen);persist();super.onSaveInstanceState(state);}
@@ -734,7 +734,7 @@ public class MainActivity extends AppCompatActivity {
     }
     private void resolveYouTube(Tab tab,String id){
         YouTubeDownloadResolver resolver=new YouTubeDownloadResolver();videoResolver=resolver;int page=tab.videoPage;
-        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("YouTube herunterladen").setMessage("Downloadquelle wird gesucht und geprüft …").setNegativeButton("Abbrechen",(d,w)->{resolver.cancel();if(videoResolver==resolver)videoResolver=null;}).create();
+        AlertDialog dialog=BrowserDialogs.builder(this).setTitle("YouTube herunterladen").setMessage("Downloadquelle wird gesucht und geprüft …").setNegativeButton("Abbrechen",(d,w)->{resolver.cancel();if(videoResolver==resolver)videoResolver=null;}).create();
         videoSearch=dialog;dialog.setOnCancelListener(d->{resolver.cancel();if(videoResolver==resolver)videoResolver=null;});dialog.show();
         videoWorker.execute(()->{
             YouTubeDownloadResolver.Result result=null;String error="";
@@ -753,11 +753,11 @@ public class MainActivity extends AppCompatActivity {
         if(videos.isEmpty()){
             boolean youtube=!YouTubeSources.videoId(tab.url).isEmpty();
             String message=youtube?(error.isEmpty()?"Für dieses YouTube-Video wurde keine erreichbare Downloadquelle gefunden.":error):"Noch kein speicherbarer Stream erkannt. Starte das Video und suche erneut.";
-            AlertDialog.Builder empty=new AlertDialog.Builder(this).setTitle(youtube?"YouTube-Download nicht verfügbar":"Videos auf dieser Seite").setMessage(message).setNegativeButton("Schließen",null).setPositiveButton("Erneut suchen",(d,w)->showVideos());
+            AlertDialog.Builder empty=BrowserDialogs.builder(this).setTitle(youtube?"YouTube-Download nicht verfügbar":"Videos auf dieser Seite").setMessage(message).setNegativeButton("Schließen",null).setPositiveButton("Erneut suchen",(d,w)->showVideos());
             empty.setNeutralButton("Download-Fortschritt",(d,w)->showVideoQueue());empty.show();return;
         }
         String[] labels=new String[videos.size()];for(int i=0;i<labels.length;i++)labels[i]=videos.get(i).label();
-        AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("Videos · "+videos.size()).setItems(labels,(d,i)->videoOptions(videos.get(i))).setNegativeButton("Schließen",null).setPositiveButton("Neu suchen",(d,w)->{tab.videos.clearResolved();showVideos();});
+        AlertDialog.Builder dialog=BrowserDialogs.builder(this).setTitle("Videos · "+videos.size()).setItems(labels,(d,i)->videoOptions(videos.get(i))).setNegativeButton("Schließen",null).setPositiveButton("Neu suchen",(d,w)->{tab.videos.clearResolved();showVideos();});
         dialog.setNeutralButton("Download-Fortschritt",(d,w)->showVideoQueue());dialog.show();
     }
     private void showVideoQueue(){
@@ -768,7 +768,7 @@ public class MainActivity extends AppCompatActivity {
         boolean stream="HLS".equals(item.type)||"DASH".equals(item.type)||!item.audioUrl.isEmpty();
         String[] choices=stream?new String[]{"Als MP4 speichern","MP4-Ausschnitt: 1 Minute","MP4-Ausschnitt: 5 Minuten","MP4-Ausschnitt: 10 Minuten"}:new String[]{"Als MP4 speichern","Originaldatei speichern"};
         int castIndex=choices.length;if(!isPrivateMode()){choices=java.util.Arrays.copyOf(choices,choices.length+1);choices[castIndex]="Auf Fernseher übertragen";}
-        new AlertDialog.Builder(this).setTitle(item.type+" · Videoaktionen").setItems(choices,(d,i)->{
+        BrowserDialogs.builder(this).setTitle(item.type+" · Videoaktionen").setItems(choices,(d,i)->{
             if(i==castIndex){castVideo(sourceTab,sourcePage,sourceUrl,item);return;}
             boolean original=!stream && i==1;long clip=stream&&i>0?new long[]{0,60000,300000,600000}[i]:0;
             chooseVideoFile(item,original,clip);
@@ -789,15 +789,15 @@ public class MainActivity extends AppCompatActivity {
                 String problem=CastVideo.problem(item,url,tab.protectedMedia,false);
                 if(problem.isEmpty())candidates.add(item);else reason=problem;
             }
-            if(candidates.isEmpty()){new AlertDialog.Builder(this).setTitle("Kein übertragbares Video").setMessage(reason).setPositiveButton("OK",null).show();return;}
+            if(candidates.isEmpty()){BrowserDialogs.builder(this).setTitle("Kein übertragbares Video").setMessage(reason).setPositiveButton("OK",null).show();return;}
             String[] labels=new String[candidates.size()];for(int i=0;i<labels.length;i++)labels[i]=candidates.get(i).label();
-            new AlertDialog.Builder(this).setTitle("Video zum Übertragen auswählen").setItems(labels,(d,i)->castVideo(tab,page,url,candidates.get(i))).setNegativeButton("Abbrechen",null).show();
+            BrowserDialogs.builder(this).setTitle("Video zum Übertragen auswählen").setItems(labels,(d,i)->castVideo(tab,page,url,candidates.get(i))).setNegativeButton("Abbrechen",null).show();
         });
     }
     private void castVideo(Tab tab,int page,String url,VideoCatalog.Item item){
         if(destroyed||tab==null||active()!=tab||tab.videoPage!=page||!java.util.Objects.equals(url,tab.url)){toast("Die Seite wurde gewechselt. Bitte wähle das Video erneut aus.");return;}
         String problem=CastVideo.problem(item,tab.url,tab.protectedMedia,isPrivateMode());
-        if(!problem.isEmpty()){new AlertDialog.Builder(this).setTitle("Video nicht übertragbar").setMessage(problem).setPositiveButton("OK",null).show();return;}
+        if(!problem.isEmpty()){BrowserDialogs.builder(this).setTitle("Video nicht übertragbar").setMessage(problem).setPositiveButton("OK",null).show();return;}
         showCast();if(browserCast==null)return;
         browserCast.select(CastVideo.from(item,tab.title),()->!destroyed&&active()==tab&&tab.videoPage==page&&java.util.Objects.equals(url,tab.url)&&CastVideo.problem(item,tab.url,tab.protectedMedia,isPrivateMode()).isEmpty(),()->{if(tab.view!=null)tab.view.evaluateJavascript("(function pause(w,n){try{w.document.querySelectorAll(\"video\").forEach(function(v){v.pause();});if(n<2)for(var i=0;i<Math.min(w.frames.length,8);i++)pause(w.frames[i],n+1);}catch(e){}})(window,0)",null);});
     }
@@ -821,7 +821,7 @@ public class MainActivity extends AppCompatActivity {
         applyFullscreenUi();
     }
     private void settings(){
-        new AlertDialog.Builder(this).setTitle("Einstellungen").setItems(new String[]{"Video-Downloadordner: "+DownloadFolder.label(this),"Suchmaschine","Werbeblocker: "+(adBlockingEnabled?"Ein":"Aus"),"Video-Downloads · Fortschritt und Warteschlange","Browserdaten löschen","Über BestBrowser","Nachtmodus: "+(BrowserAppearance.night(this)?"Ein":"Aus"),"Links im WLAN vorladen: "+(store.linkPreloadingEnabled()?"Ein":"Aus")},(d,which)->{
+        BrowserDialogs.builder(this).setTitle("Einstellungen").setItems(new String[]{"Video-Downloadordner: "+DownloadFolder.label(this),"Suchmaschine","Werbeblocker: "+(adBlockingEnabled?"Ein":"Aus"),"Video-Downloads · Fortschritt und Warteschlange","Browserdaten löschen","Über BestBrowser","Nachtmodus: "+(BrowserAppearance.night(this)?"Ein":"Aus"),"Links im WLAN vorladen: "+(store.linkPreloadingEnabled()?"Ein":"Aus")},(d,which)->{
             if(which==0){pendingVideo=null;pickDownloadFolder();}else if(which==1)chooseEngine();else if(which==2)showAdBlockingSettings();else if(which==3)showVideoQueue();else if(which==4)clearData();else if(which==5)menuAction(11);else if(which==6)setNightMode(!BrowserAppearance.night(this));else showPreloadingSettings();
         }).setNegativeButton("Schließen",null).show();
     }
@@ -839,7 +839,7 @@ public class MainActivity extends AppCompatActivity {
         TextView details=text("Bereitet geeignete HTTPS-Seitenlinks im Hintergrund vor. Nur im WLAN ohne Datenbegrenzung und solange die Seite geöffnet ist. Verbraucht zusätzliche Daten und Akkuleistung.\n\nDownloads und erkennbare Aktionslinks werden ausgelassen. Es werden keine verlinkten Seiten ausgeführt. Bei sehr großen Seiten werden bis zu 512 Links berücksichtigt.\n\nIn privaten Tabs ist diese Funktion ausgeschaltet.",14);details.setPadding(0,dp(12),0,dp(12));body.addView(details);
         TextView status=text(linkPreloader==null?"Im privaten Bereich nicht aktiv":linkPreloader.status(),14);body.addView(status);
         toggle.setOnCheckedChangeListener((button,enabled)->{setPreloadingEnabled(enabled);status.setText(linkPreloader==null?"Im privaten Bereich nicht aktiv":linkPreloader.status());});
-        ScrollView scroll=new ScrollView(this);scroll.addView(body);new AlertDialog.Builder(this).setTitle("Vorladen im WLAN").setView(scroll).setPositiveButton("Fertig",null).show();
+        ScrollView scroll=new ScrollView(this);scroll.addView(body);BrowserDialogs.builder(this).setTitle("Vorladen im WLAN").setView(scroll).setPositiveButton("Fertig",null).show();
     }
     private void showAdBlockingSettings(){
         LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(24),dp(8),dp(24),dp(8));
@@ -859,7 +859,7 @@ public class MainActivity extends AppCompatActivity {
         if(isPrivateMode())message+="\n\nDie Änderung gilt nur für diese private Sitzung.";
         TextView explanation=text(message,14);explanation.setPadding(0,dp(12),0,dp(8));content.addView(explanation);
         ScrollView scroll=new ScrollView(this);scroll.addView(content);
-        AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("Werbeblocker").setView(scroll).setPositiveButton("Fertig",null);
+        AlertDialog.Builder dialog=BrowserDialogs.builder(this).setTitle("Werbeblocker").setView(scroll).setPositiveButton("Fertig",null);
         if(!isPrivateMode())dialog.setNeutralButton(adBlockUpdating?"Aktualisierung läuft …":"Serverliste aktualisieren",(d,w)->updateAdBlockFilters());
         dialog.show();
     }
@@ -900,15 +900,15 @@ public class MainActivity extends AppCompatActivity {
     }
     private void showVpn(){
         String message=VpnSupport.statusText(this)+"\n\nDie VPN-Verbindung wird von einer VPN-App aufgebaut. BestBrowser nutzt diese Android-Verbindung. Prüfe in der VPN-App, dass BestBrowser nicht vom VPN ausgeschlossen ist. Der erkannte Status allein bestätigt weder die Erreichbarkeit eines Servers noch eine geänderte öffentliche IP-Adresse.";
-        new AlertDialog.Builder(this).setTitle("VPN").setMessage(message).setPositiveButton("Auswählen",(d,w)->{
-            new AlertDialog.Builder(this).setTitle("VPN auswählen").setItems(new String[]{"Kostenloses VPN · Proton VPN","Vorhandener VPN-Zugang","VPN-Status aktualisieren","Öffentliche IP prüfen"},(dialog,which)->{
-                if(which==0)new AlertDialog.Builder(this).setTitle("Proton VPN Free").setMessage("Proton VPN bietet einen kostenlosen Tarif ohne Datenlimit. Ein Proton-Konto und die separate Proton-VPN-App sind nötig. Anmeldung, Serverwahl und Verbinden erfolgen dort. BestBrowser betreibt selbst keinen VPN-Server und aktiviert keine kostenpflichtige Option.").setPositiveButton("Proton VPN öffnen / installieren",(a,b)->openVpnClient(VpnSupport.PROTON_PACKAGE,"https://protonvpn.com/free-vpn/android")).setNegativeButton("Abbrechen",null).show();
+        BrowserDialogs.builder(this).setTitle("VPN").setMessage(message).setPositiveButton("Auswählen",(d,w)->{
+            BrowserDialogs.builder(this).setTitle("VPN auswählen").setItems(new String[]{"Kostenloses VPN · Proton VPN","Vorhandener VPN-Zugang","VPN-Status aktualisieren","Öffentliche IP prüfen"},(dialog,which)->{
+                if(which==0)BrowserDialogs.builder(this).setTitle("Proton VPN Free").setMessage("Proton VPN bietet einen kostenlosen Tarif ohne Datenlimit. Ein Proton-Konto und die separate Proton-VPN-App sind nötig. Anmeldung, Serverwahl und Verbinden erfolgen dort. BestBrowser betreibt selbst keinen VPN-Server und aktiviert keine kostenpflichtige Option.").setPositiveButton("Proton VPN öffnen / installieren",(a,b)->openVpnClient(VpnSupport.PROTON_PACKAGE,"https://protonvpn.com/free-vpn/android")).setNegativeButton("Abbrechen",null).show();
                 else if(which==1)showOwnVpn();else if(which==2)showVpn();else newTab("https://ipleak.net/",true);
             }).setNegativeButton("Schließen",null).show();
         }).setNegativeButton("Schließen",null).show();
     }
     private void showOwnVpn(){
-        new AlertDialog.Builder(this).setTitle("Vorhandener VPN-Zugang").setItems(new String[]{"WireGuard-App öffnen / installieren","OpenVPN-Connect-App öffnen / installieren","Android-VPN-Einstellungen"},(d,which)->{
+        BrowserDialogs.builder(this).setTitle("Vorhandener VPN-Zugang").setItems(new String[]{"WireGuard-App öffnen / installieren","OpenVPN-Connect-App öffnen / installieren","Android-VPN-Einstellungen"},(d,which)->{
             if(which==0)openVpnClient(VpnSupport.WIREGUARD_PACKAGE,"https://www.wireguard.com/install/");
             else if(which==1)openVpnClient(VpnSupport.OPENVPN_PACKAGE,"https://openvpn.net/client/");
             else try{startActivity(VpnSupport.settings());}catch(ActivityNotFoundException error){toast("Die Android-VPN-Einstellungen sind auf diesem Gerät nicht verfügbar.");}
@@ -929,7 +929,7 @@ public class MainActivity extends AppCompatActivity {
         pendingVideo=item;pendingVideoOriginal=original;pendingVideoClip=clip;pendingVideoTitle=title;
         String message="Wähle einmal den Ordner für deine Videos. Weitere Videos werden automatisch dort gespeichert. Ändern kannst du ihn unter Menü → Einstellungen.";
         if(isPrivateMode())message+="\n\nGespeicherte Dateien bleiben nach dem Schließen privater Tabs erhalten.";
-        new AlertDialog.Builder(this).setTitle("Downloadordner wählen").setMessage(message).setNegativeButton("Abbrechen",(d,w)->pendingVideo=null).setPositiveButton("Ordner wählen",(d,w)->pickDownloadFolder()).setOnCancelListener(d->pendingVideo=null).show();
+        BrowserDialogs.builder(this).setTitle("Downloadordner wählen").setMessage(message).setNegativeButton("Abbrechen",(d,w)->pendingVideo=null).setPositiveButton("Ordner wählen",(d,w)->pickDownloadFolder()).setOnCancelListener(d->pendingVideo=null).show();
     }
     private void saveVideoInFolder(VideoCatalog.Item item,boolean original,long clip,String title){
         Uri folder=DownloadFolder.selected(this);
@@ -943,7 +943,7 @@ public class MainActivity extends AppCompatActivity {
             Uri destination;
             try{destination=DownloadFolder.create(this,folder,mime,filename);}catch(Exception error){runOnUiThread(()->{
                 if(destroyed)return;
-                new AlertDialog.Builder(this).setMessage("Der gewählte Videoordner ist nicht mehr beschreibbar oder erreichbar. Bitte prüfe die Verbindung oder wähle einen anderen Ordner.").setNegativeButton("Schließen",null).setPositiveButton("Ordner ändern",(d,w)->{
+                BrowserDialogs.builder(this).setMessage("Der gewählte Videoordner ist nicht mehr beschreibbar oder erreichbar. Bitte prüfe die Verbindung oder wähle einen anderen Ordner.").setNegativeButton("Schließen",null).setPositiveButton("Ordner ändern",(d,w)->{
                     pendingVideo=item;pendingVideoOriginal=original;pendingVideoClip=clip;pendingVideoTitle=title;pickDownloadFolder();
                 }).show();
             });return;}

@@ -39,7 +39,7 @@ final class VideoDownloadsDialog {
         waitingRows=new LinearLayout(activity);waitingRows.setOrientation(LinearLayout.VERTICAL);content.addView(waitingRows,new LinearLayout.LayoutParams(-1,-2));
         queueHint=label(activity,content,14);queueHint.setText("Die Restzeit gilt für den aktuellen Schritt. Für die gesamte Warteschlange ist noch keine verlässliche Schätzung möglich.");
         ScrollView scroll=new ScrollView(activity);scroll.addView(content);
-        dialog=new AlertDialog.Builder(activity).setTitle("Video-Downloads").setView(scroll).setNegativeButton("Schließen",null)
+        dialog=BrowserDialogs.builder(activity).setTitle("Video-Downloads").setView(scroll).setNegativeButton("Schließen",null)
             .setNeutralButton("Alle abbrechen",null).create();
         dialog.setOnDismissListener(ignored->handler.removeCallbacks(refresh));
     }
