@@ -4,6 +4,7 @@ set -e
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 adb shell am instrument -w -e class 'de.steffen.musikmathe.BrowserFullscreenTest#cameraCutoutAreaIsUsedInBrowserAndVideoAndChromeIsRestored' -e cutoutProbe true de.steffen.musikmathe.test/androidx.test.runner.AndroidJUnitRunner | tee cutout-test.txt
+adb logcat -d -s MenuPreview:I '*:S'
 python3 - <<'PY'
 import re
 from pathlib import Path

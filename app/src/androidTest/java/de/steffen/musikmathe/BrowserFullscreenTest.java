@@ -182,6 +182,7 @@ public class BrowserFullscreenTest {
         long down=SystemClock.uptimeMillis();touch(down,MotionEvent.ACTION_DOWN,point[0],point[1]);Thread.sleep(30);touch(down,MotionEvent.ACTION_UP,point[0],point[1]);
     }
     private void preview(String name){
+        instrumentation.waitForIdleSync();android.os.SystemClock.sleep(400);
         android.graphics.Bitmap full=instrumentation.getUiAutomation().takeScreenshot();if(full==null)return;
         android.graphics.Bitmap small=android.graphics.Bitmap.createScaledBitmap(full,480,Math.round(full.getHeight()*480f/full.getWidth()),true);
         java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();small.compress(android.graphics.Bitmap.CompressFormat.JPEG,85,bytes);
@@ -210,8 +211,10 @@ public class BrowserFullscreenTest {
                 address.setText("https://fullscreen.example/typed");address.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_GO);
             }catch(Exception error){throw new RuntimeException(error);}});
             expect(web,"location.href","https://fullscreen.example/typed");expectFullscreen(activity,true);
+            expect(web,"String(window.fixtureReady&&document.readyState==='complete')","true");
             tapControl(activity,"videoButton");
-            androidx.test.uiautomator.UiObject2 close=device.wait(androidx.test.uiautomator.Until.findObject(androidx.test.uiautomator.By.text("Schließen")),6000);
+            assertTrue("Video dialog title",device.wait(androidx.test.uiautomator.Until.hasObject(androidx.test.uiautomator.By.text("Videos auf dieser Seite")),6000));
+            androidx.test.uiautomator.UiObject2 close=device.wait(androidx.test.uiautomator.Until.findObject(androidx.test.uiautomator.By.text(java.util.regex.Pattern.compile("Schließen",java.util.regex.Pattern.CASE_INSENSITIVE|java.util.regex.Pattern.UNICODE_CASE))),6000);
             assertNotNull("Video dialog opens from compact button",close);close.click();
             tapControl(activity,"menuButton");
             androidx.test.uiautomator.UiObject2 settings=device.wait(androidx.test.uiautomator.Until.findObject(androidx.test.uiautomator.By.text("Einstellungen")),6000);
