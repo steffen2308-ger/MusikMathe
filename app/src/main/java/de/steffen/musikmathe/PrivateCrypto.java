@@ -19,7 +19,7 @@ import javax.crypto.spec.SecretKeySpec;
 final class PrivateCrypto {
     static final int ITERATIONS=210000;
     static byte[] derive(char[] password,byte[] salt)throws GeneralSecurityException{
-        if(password.length<8||password.length>256||salt.length!=32)throw new GeneralSecurityException("Bitte ein Passwort mit 8 bis 256 Zeichen verwenden.");
+        if(password.length<4||password.length>256||salt.length!=32)throw new GeneralSecurityException("Bitte ein Passwort mit 4 bis 256 Zeichen verwenden.");
         PBEKeySpec spec=new PBEKeySpec(password,salt,ITERATIONS,768);
         try{return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).getEncoded();}finally{spec.clearPassword();}
     }

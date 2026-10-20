@@ -46,7 +46,7 @@ public class PrivateIsolationTest {
     private void history(String present,String absent){menu("Verlauf");assertTrue("Own private history",device.wait(Until.hasObject(By.textContains(present)),8000));assertFalse("Other area history stays hidden",device.hasObject(By.textContains(absent)));device.pressBack();}
     @Test public void passwordsRestoreIndependentHistoryCookiesStorageAndRecoverAfterProcessDeath()throws Exception{
         device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());device.wakeUp();device.executeShellCommand("wm dismiss-keyguard");
-        String passwordA=PrivateTestSupport.password(),passwordB=PrivateTestSupport.password();
+        String passwordA=java.util.UUID.randomUUID().toString().substring(0,4),passwordB=PrivateTestSupport.password();
         try(ServerSocket server=new ServerSocket(0)){
             base="http://127.0.0.1:"+server.getLocalPort();
             Thread responses=new Thread(()->{while(!server.isClosed())try(Socket socket=server.accept()){
@@ -68,9 +68,9 @@ public class PrivateIsolationTest {
             navigate("/probe","cookie:marker=B storage:B");
             history("Area B private history","Area A private history");normal();
             open(passwordA);state("cookie:marker=A storage:A");history("Area A private history","Area B private history");
-            // Home/background must hide the area and Back must not bypass its native password gate.
+            // A short Home/background round trip must retain the authenticated area.
             home();context.startActivity(new Intent(context,PrivateActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT|Intent.FLAG_ACTIVITY_SINGLE_TOP));
-            assertNotNull(device.wait(Until.findObject(By.desc("Passwort für privaten Bereich")),15000));assertFalse(device.hasObject(By.textContains("cookie:marker=A")));device.pressBack();assertTrue(device.hasObject(By.desc("Passwort für privaten Bereich")));PrivateTestSupport.unlock(device,passwordA);state("cookie:marker=A storage:A");
+            state("cookie:marker=A storage:A");assertFalse("Short return needs no password",device.hasObject(By.desc("Passwort für privaten Bereich")));
             // Kill only the separate private PID. Its Keystore lease must recover the closed databases.
             home();String pid=device.executeShellCommand("pidof de.steffen.musikmathe:private").trim();assertTrue("Separate private PID",pid.matches("[0-9]+"));device.executeShellCommand("run-as de.steffen.musikmathe kill -9 "+pid);
             InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(context,MainActivity.class).setAction(Intent.ACTION_VIEW).setData(android.net.Uri.parse(base+"/probe")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));state("cookie:marker=N storage:N");

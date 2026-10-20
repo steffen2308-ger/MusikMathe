@@ -40,6 +40,7 @@ jobs:
       - name: Test YouTube player extraction
         run: |
           node scripts/test-youtube.js
+          node scripts/test-video-scan.js
           node --check app/src/main/assets/passwords.js
           python3 scripts/compile-adblock.py
           node scripts/test-adblock.js
@@ -150,7 +151,7 @@ jobs:
             bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PrivateIsolationTest
             mkdir -p private-profile-device-reports
             cp -r app/build/reports/androidTests/. private-profile-device-reports/
-            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest,de.steffen.musikmathe.BrowserFullscreenTest,de.steffen.musikmathe.BrowserMenuDeviceTest,de.steffen.musikmathe.NightModeDeviceTest,de.steffen.musikmathe.ProtectedContentDeviceTest,de.steffen.musikmathe.CastDeviceTest,de.steffen.musikmathe.VideoDownloadProgressTest,de.steffen.musikmathe.AddressSuggestionsDeviceTest,de.steffen.musikmathe.HomePageDeviceTest,de.steffen.musikmathe.PreloadingDeviceTest -Pandroid.testInstrumentationRunnerArguments.adblockLive=true
+            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest,de.steffen.musikmathe.BrowserFullscreenTest,de.steffen.musikmathe.BrowserMenuDeviceTest,de.steffen.musikmathe.NightModeDeviceTest,de.steffen.musikmathe.ProtectedContentDeviceTest,de.steffen.musikmathe.CastDeviceTest,de.steffen.musikmathe.VideoDownloadProgressTest,de.steffen.musikmathe.VideoDetectionTest,de.steffen.musikmathe.AddressSuggestionsDeviceTest,de.steffen.musikmathe.HomePageDeviceTest,de.steffen.musikmathe.PreloadingDeviceTest -Pandroid.testInstrumentationRunnerArguments.adblockLive=true
             bash scripts/cutout-test.sh
       - name: Upload password test results
         if: always()

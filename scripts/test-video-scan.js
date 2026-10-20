@@ -1,0 +1,11 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const source=fs.readFileSync('app/src/main/assets/video-scan.js','utf8');
+const video=(url,poster,title)=>({currentSrc:url,poster,title,getAttribute:()=>'',querySelectorAll:()=>[]});
+const videos=[video('https://cdn.test/a.mp4','https://cdn.test/a.jpg','Movie A'),video('https://cdn.test/b.mp4','https://cdn.test/b.jpg','Movie B')];
+const window={document:{title:'Page',querySelectorAll:()=>videos},__mmVideos:[{url:videos[0].currentSrc,type:'video/mp4'},{url:'https://cdn.test/manifest.m3u8',type:'application/vnd.apple.mpegurl'}],performance:{getEntriesByType:()=>[]},frames:[]};
+let rows=JSON.parse(vm.runInNewContext(source,{window}));assert.equal(rows.length,3);assert.equal(rows[0].title,'Movie A');assert.equal(rows[0].thumbnail,'https://cdn.test/a.jpg');assert.equal(rows[1].title,'Movie B');assert.equal(rows[1].thumbnail,'https://cdn.test/b.jpg');assert.equal(rows[2].thumbnail,'');
+videos[0].poster='';videos[0].readyState=2;videos[0].videoWidth=640;window.document.createElement=()=>({getContext:()=>({drawImage(){throw new Error('Cross-origin');}})});
+rows=JSON.parse(vm.runInNewContext(source,{window}));assert.equal(rows[0].thumbnail,'');assert.equal(rows[1].thumbnail,'https://cdn.test/b.jpg');
+window.document.createElement=()=>({getContext:()=>({drawImage(){}}),toDataURL:()=> 'data:image/jpeg;base64,abcd'});
+rows=JSON.parse(vm.runInNewContext(source,{window}));assert.equal(rows[0].thumbnail,'data:image/jpeg;base64,abcd');
+console.log('Video preview discovery: source mapping, duplicates, missing posters and cross-origin fallback passed');

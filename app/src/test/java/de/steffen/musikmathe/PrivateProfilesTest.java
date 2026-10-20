@@ -22,6 +22,11 @@ public class PrivateProfilesTest {
     @Before public void setup()throws Exception{context=RuntimeEnvironment.getApplication();if(PrivateProfiles.active!=null)PrivateProfiles.active.close();BrowserApplication.privateProcess=false;PrivateSession.remove(PrivateProfiles.directory(context));context.getSharedPreferences("browser",0).edit().clear().commit();context.getSharedPreferences("appearance",0).edit().clear().commit();}
     @After public void cleanup(){if(PrivateProfiles.active!=null)PrivateProfiles.active.close();BrowserApplication.privateProcess=false;}
     private PrivateProfiles.Session open(String password)throws Exception{PrivateProfiles.Session s=PrivateProfiles.probe(context,password.toCharArray());PrivateProfiles.active=s;BrowserApplication.privateProcess=true;return s;}
+    @Test public void fourCharacterPasswordsReopenTheSameEncryptedProfile()throws Exception{
+        assertThrows(Exception.class,()->PrivateProfiles.probe(context,"abc".toCharArray()));
+        PrivateProfiles.Session first=open("1234");first.put("history","four-character profile");String id=first.id;first.close();
+        PrivateProfiles.Session restored=open("1234");assertFalse(restored.fresh);assertEquals(id,restored.id);assertEquals("four-character profile",restored.string("history",""));assertFalse(restored.matches("1235".toCharArray()));restored.close();
+    }
     @Test public void samePasswordRestoresItsHistoryTabsBookmarksSettingsAndFolder()throws Exception{
         BrowserStore normal=new BrowserStore(context);normal.visit("https://normal.example/","Normal");
         PrivateProfiles.Session a=open("Profile-A-password-42");assertTrue(a.fresh);BrowserStore first=new BrowserStore(context,true);
