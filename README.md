@@ -295,3 +295,8 @@ Das bereits laufende Video bleibt in derselben WebView; es wird nicht neu gelade
 Private Bereiche bieten diese Funktionen nicht an und sind im Manifest nicht für Bild-in-Bild freigegeben. Beim Öffnen eines privaten Bereichs aus dem zweiten Fenster führt das Schließen zurück zu diesem Fenster. Pro App kann ein Video schweben; ein weiteres Video beendet die laufende Wiedergabe nicht automatisch.
 
 Gerätetests auf Android 9 und 15 prüfen mit einer echten H.264-Datei die fortlaufende Wiedergabe während des Surfens, getrennte Aufgaben und Tabs, gemeinsame normale Cookies, die nativen Bild-in-Bild-Aktionen sowie das Schließen des Videofensters ohne Verlust der anderen Sitzung. Separate Tests prüfen die privaten Manifestgrenzen und gültige Video-Seitenverhältnisse.
+
+
+## Reddit-Schnellzugriff (0.4.25)
+
+Die Startseite enthält eine eigene kompakte **Reddit**-Kachel neben YouTube mit einem lokal eingebetteten orangefarbenen Reddit-Icon. Antippen öffnet **https://www.reddit.com/**.
