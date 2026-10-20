@@ -69,11 +69,11 @@ public class VideoWindowDeviceTest {
         }
     }
     private UiObject2 pipAction(MainActivity activity,String label)throws Exception{
-        UiObject2 action=device.wait(Until.findObject(By.desc(label)),1200);if(action!=null)return action;
+        UiObject2 action=device.wait(Until.findObject(By.desc(label)),1200);if(action!=null){Thread.sleep(400);return device.findObject(By.desc(label));}
         for(int attempt=0;attempt<2;attempt++){
             int[] bounds={0,0,0,0};main(()->{View view=(View)field(activity,"customView");assertNotNull("Live fullscreen video",view);int[] position=new int[2];view.getLocationOnScreen(position);bounds[0]=position[0];bounds[1]=position[1];bounds[2]=view.getWidth();bounds[3]=view.getHeight();});
             device.click(bounds[0]+bounds[2]/2,bounds[1]+bounds[3]/2);
-            action=device.wait(Until.findObject(By.desc(label)),5000);if(action!=null)return action;
+            action=device.wait(Until.findObject(By.desc(label)),5000);if(action!=null){Thread.sleep(500);UiObject2 settled=device.findObject(By.desc(label));if(settled!=null)return settled;}
         }
         fail("Native PiP action: "+label);return null;
     }
@@ -92,7 +92,7 @@ public class VideoWindowDeviceTest {
                 socket.setSoTimeout(5000);BufferedReader reader=new BufferedReader(new InputStreamReader(socket.getInputStream(),StandardCharsets.US_ASCII));String first=reader.readLine(),line,range=null;if(first==null)return;while((line=reader.readLine())!=null&&!line.isEmpty())if(line.toLowerCase(java.util.Locale.ROOT).startsWith("range:"))range=line.substring(6).trim();
                 String path=first.split(" ")[1];boolean video=path.startsWith("/movie.mp4");byte[] body;
                 if(video)body=media;else{
-                    String content=path.startsWith("/browse")?"<h1>Anderes Browserfenster</h1><input id='work' placeholder='Hier weiterarbeiten'>":"<h1>Videofenster-Test</h1><video id='movie' src='/movie.mp4' controls loop playsinline style='width:100%'></video><button onclick=\"var v=document.getElementById('movie');v.muted=true;v.play();v.requestFullscreen();\">Video im Vollbild starten</button><script>window.updates=0;document.getElementById('movie').addEventListener('timeupdate',function(){window.updates++});document.cookie='shared=normal;path=/';</script>";
+                    String content=path.startsWith("/browse")?"<h1>Anderes Browserfenster</h1><input id='work' placeholder='Hier weiterarbeiten'>":"<h1>Videofenster-Test</h1><video id='movie' src='/movie.mp4' controls loop playsinline style='width:100%'></video><button onclick=\"var v=document.getElementById('movie');v.muted=true;var p=v.play();if(p&&p.catch)p.catch(function(e){window.playError=String(e)});\">Video starten</button><button onclick=\"var v=document.getElementById('movie'),f=v.requestFullscreen||v.webkitRequestFullscreen||v.webkitEnterFullscreen;try{var p=f.call(v);if(p&&p.catch)p.catch(function(e){window.fullscreenError=String(e)});}catch(e){window.fullscreenError=String(e)}\">Video vergrößern</button><script>window.updates=0;document.getElementById('movie').addEventListener('timeupdate',function(){window.updates++});document.cookie='shared=normal;path=/';</script>";
                     body=("<!doctype html><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{font-family:sans-serif}button{min-height:48px}</style>"+content).getBytes(StandardCharsets.UTF_8);
                 }
                 int start=0,end=body.length-1;boolean partial=video&&range!=null;if(partial){String[] limits=range.replace("bytes=","").split("-",-1);start=Integer.parseInt(limits[0]);if(limits.length>1&&!limits[1].isEmpty())end=Math.min(end,Integer.parseInt(limits[1]));}
@@ -101,18 +101,25 @@ public class VideoWindowDeviceTest {
             String base="http://127.0.0.1:"+server.getLocalPort();
             owner=(MainActivity)instrumentation.startActivitySync(new Intent(app,MainActivity.class).setAction(Intent.ACTION_VIEW).setData(Uri.parse(base+"/video")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));
             MainActivity original=owner;assertTrue(BrowserPip.supported(owner));WebView movie=web(owner);expect(movie,"String(document.querySelector('video')&&document.querySelector('video').readyState>=2)","true");
-            UiObject2 start=device.wait(Until.findObject(By.text("Video im Vollbild starten")),8000);assertNotNull(start);start.click();await(()->{boolean[] value={false};main(()->value[0]=field(original,"customView")!=null);return value[0];},"HTML video enters fullscreen");tutorial();
+            UiObject2 start=device.wait(Until.findObject(By.text("Video starten")),8000);assertNotNull(start);start.click();expect(movie,"String(document.querySelector('video').paused)","false");UiObject2 full=device.wait(Until.findObject(By.text("Video vergrößern")),8000);assertNotNull(full);full.click();await(()->{boolean[] value={false};main(()->value[0]=field(original,"customView")!=null);return value[0];},"HTML video enters fullscreen");tutorial();
             UiObject2 floatButton=device.wait(Until.findObject(By.desc("Video schweben lassen")),8000);assertNotNull(floatButton);floatButton.click();
             await(()->pip(original),"Native picture-in-picture entered");await(()->second()!=null,"Second browser task opens automatically");other=second();SecondBrowserActivity browser=other;
             assertNotSame(owner,other);assertNotEquals(owner.getTaskId(),other.getTaskId());assertSame(movie,web(owner));
             main(()->{BrowserStore a=(BrowserStore)field(original,"store"),b=(BrowserStore)field(browser,"store");assertTrue(a.read("tabs").stream().anyMatch(row->row.url.equals(base+"/video")));assertEquals(1,b.read("tabs").size());assertEquals(Address.HOME,b.read("tabs").get(0).url);call(browser,"navigate",new Class<?>[]{String.class},base+"/browse");});
-            WebView browse=web(browser);expect(browse,"location.pathname","/browse");expect(browse,"String(document.cookie.includes('shared=normal'))","true");js(browse,"document.getElementById('work').value='Arbeit bleibt';true");
+            WebView browse=web(browser);expect(browse,"location.pathname","/browse");expect(browse,"String(document.cookie.includes('shared=normal'))","true");
+            js(movie,"window.videoWindowIdentity='same live video';true");
+            js(browse,"window.beforeFilterReload=true;true");
+            main(()->{call(browser,"setAdBlockingEnabled",new Class<?>[]{boolean.class},false);assertEquals(false,field(original,"adBlockingEnabled"));});
+            expect(movie,"window.videoWindowIdentity","same live video");expect(browse,"String(!window.beforeFilterReload&&document.readyState==='complete'&&!!document.getElementById('work'))","true");
+            js(browse,"document.getElementById('work').value='Arbeit bleibt';true");
             int before=Integer.parseInt(js(movie,"String(window.updates)"));Thread.sleep(1600);assertTrue("Real video continues while browsing",Integer.parseInt(js(movie,"String(window.updates)"))>before);expect(movie,"String(document.querySelector('video').paused)","false");preview("floating-video-browsing");
             pipAction(owner,"Video pausieren").click();expect(movie,"String(document.querySelector('video').paused)","true");preview("floating-video-controls");
             pipAction(owner,"Video fortsetzen").click();expect(movie,"String(document.querySelector('video').paused)","false");
             pipAction(owner,"Im Browser weitersurfen").click();await(()->second()==browser,"Return to existing browser window");expect(browse,"document.getElementById('work').value","Arbeit bleibt");assertTrue(pip(owner));
             main(original::finishAndRemoveTask);await(original::isDestroyed,"Closing the video destroys its WebView");expect(browse,"location.pathname","/browse");expect(browse,"document.getElementById('work').value","Arbeit bleibt");
-        }catch(AssertionError failure){preview("floating-video-failure");ByteArrayOutputStream hierarchy=new ByteArrayOutputStream();device.dumpWindowHierarchy(hierarchy);Log.i("MenuPreview","floating-video-state "+hierarchy.toString("UTF-8"));throw failure;}
+        }catch(AssertionError failure){
+            if(owner!=null)try{Log.i("MenuPreview","video-window-js-state "+js(web(owner),"JSON.stringify({fullscreenError:window.fullscreenError,playError:window.playError,enabled:document.fullscreenEnabled,fullscreen:!!document.fullscreenElement,focused:document.hasFocus(),video:document.querySelector('video')&&{time:document.querySelector('video').currentTime,paused:document.querySelector('video').paused,error:document.querySelector('video').error&&document.querySelector('video').error.code}})"));}catch(Exception ignored){}
+            preview("floating-video-failure");ByteArrayOutputStream hierarchy=new ByteArrayOutputStream();device.dumpWindowHierarchy(hierarchy);Log.i("MenuPreview","floating-video-state "+hierarchy.toString("UTF-8"));throw failure;}
         finally{
             MainActivity a=owner;SecondBrowserActivity b=other;
             main(()->{if(a!=null&&!a.isDestroyed())a.finishAndRemoveTask();if(b!=null&&!b.isDestroyed())b.finishAndRemoveTask();});

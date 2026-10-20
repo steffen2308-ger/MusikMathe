@@ -17,5 +17,5 @@ for path in Path('app/build/outputs/androidTest-results').rglob('*.xml'):
             print(failure.get('message', ''))
             print((failure.text or '')[:16000])
 PY
-adb logcat -d -s AdBlockLiveProbe:I MenuPreview:I NightPreview:I '*:S'
+adb logcat -d -s AdBlockLiveProbe:I MenuPreview:I NightPreview:I VideoWindow:I '*:S'
 exit "$test_result"

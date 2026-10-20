@@ -105,6 +105,7 @@ public class MainActivity extends AppCompatActivity {
     private VideoDownloadsDialog videoDownloads;
     private BrowserCast browserCast;
     private BrowserPip floatingVideo;
+    private android.content.SharedPreferences.OnSharedPreferenceChangeListener normalProfileChanges;
     private boolean closingPrivate;
     private boolean discardPrivateTabs;
     private VideoCatalog.Item pendingVideo;
@@ -215,7 +216,17 @@ public class MainActivity extends AppCompatActivity {
         menuButton=icon(bottom, "menu", "Menü", this::menu, 25);
         fullscreenToolbar=new FullscreenToolbar(this);fullscreenToolbar.setVisibility(View.GONE);
         shell.addView(fullscreenToolbar,0,new LinearLayout.LayoutParams(-1,-2));
-        if(!isPrivateMode())floatingVideo=new BrowserPip(this,this::activeView,()->customView,this::openSecondWindow);
+        if(!isPrivateMode()){
+            floatingVideo=new BrowserPip(this,this::activeView,()->customView,this::openSecondWindow,this::applyFullscreenUi);
+            normalProfileChanges=(preferences,key)->{
+                if(destroyed||!("ad_blocking".equals(key)||"ad_block_exceptions".equals(key)))return;
+                adBlockingEnabled=store.adBlockingEnabled();adBlockExceptions=Collections.unmodifiableSet(store.adBlockExceptions());
+                if(linkPreloader!=null)linkPreloader.clear();
+                // The other window's live video must not reload when a shared setting changes.
+                for(Tab tab:tabs)if(tab.view!=null)configureAdBlocking(tab,tab.view);
+            };
+            getSharedPreferences("browser",0).registerOnSharedPreferenceChangeListener(normalProfileChanges);
+        }
         FreeSpaceGesture.attachBlankView(top,()->setBrowserFullscreen(!browserFullscreen));
         FreeSpaceGesture.attachBlankView(bottom,()->setBrowserFullscreen(!browserFullscreen));
     }
@@ -646,7 +657,7 @@ public class MainActivity extends AppCompatActivity {
     }
     private void applyFullscreenUi(){
         if(root==null)return;
-        if(floatingVideo!=null&&floatingVideo.inMode())return;
+        if(floatingVideo!=null&&floatingVideo.keepsPlaying())return;
         applyCompactChrome();
         top.setVisibility(browserFullscreen?View.GONE:View.VISIBLE);bottom.setVisibility(browserFullscreen?View.GONE:View.VISIBLE);
         progress.setVisibility(browserFullscreen?View.GONE:progress.getProgress()<100?View.VISIBLE:View.INVISIBLE);
@@ -746,6 +757,7 @@ public class MainActivity extends AppCompatActivity {
         super.onTrimMemory(level);if(level>=TRIM_MEMORY_RUNNING_LOW){for(Tab tab:tabs)if(tab!=active() && tab.view!=null){tab.state=new Bundle();tab.view.saveState(tab.state);clearAdBlockScript(tab);tab.view.destroy();tab.view=null;}}
     }
     @Override protected void onDestroy(){
+        if(normalProfileChanges!=null)getSharedPreferences("browser",0).unregisterOnSharedPreferenceChangeListener(normalProfileChanges);
         if(floatingVideo!=null)floatingVideo.destroy();
         if(privateAccess!=null)privateAccess.destroy();
         if(linkPreloader!=null)linkPreloader.destroy();

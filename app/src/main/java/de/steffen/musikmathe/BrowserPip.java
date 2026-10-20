@@ -34,6 +34,7 @@ final class BrowserPip {
     private final Supplier<WebView> source;
     private final Supplier<View> fullscreen;
     private final Runnable browse;
+    private final Runnable restoreFullscreen;
     private final String token=UUID.randomUUID().toString();
     private final android.os.Handler handler=new android.os.Handler(android.os.Looper.getMainLooper());
     private BrowserIcon button;
@@ -41,9 +42,12 @@ final class BrowserPip {
     private WebView video;
     private boolean pending,entered,playing=true,destroyed,hasVideo;
     private int width=16,height=9;
+    private int publishedWidth=-1,publishedHeight=-1;
+    private boolean publishedPlaying;
+    private Rect sourceBounds;
     private final Runnable poll=new Runnable(){public void run(){if(!inMode()||destroyed)return;readState(()->updateParams());handler.postDelayed(this,1000);}};
 
-    BrowserPip(Activity activity,Supplier<WebView> source,Supplier<View> fullscreen,Runnable browse){this.activity=activity;this.source=source;this.fullscreen=fullscreen;this.browse=browse;}
+    BrowserPip(Activity activity,Supplier<WebView> source,Supplier<View> fullscreen,Runnable browse,Runnable restoreFullscreen){this.activity=activity;this.source=source;this.fullscreen=fullscreen;this.browse=browse;this.restoreFullscreen=restoreFullscreen;}
     static boolean supported(Activity activity){return Build.VERSION.SDK_INT>=26&&!BrowserApplication.privateProcess&&activity.getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);}
     boolean inMode(){return Build.VERSION.SDK_INT>=26&&activity.isInPictureInPictureMode();}
     boolean keepsPlaying(){return pending||inMode();}
@@ -80,14 +84,23 @@ final class BrowserPip {
         readState(()->{
             if(destroyed||fullscreen.get()==null||source.get()!=video){pending=false;return;}
             if(!hasVideo){pending=false;owner.clear();message("Kein Video im Vollbild erkannt. Öffne zuerst das Vollbild direkt am Videoplayer.");return;}
+            // Calculate the pinned window against normal system-bar insets, rather
+            // than placing its controls over the navigation buttons of the other task.
+            activity.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            activity.getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+            if(Build.VERSION.SDK_INT>=30&&activity.getWindow().getInsetsController()!=null)activity.getWindow().getInsetsController().show(WindowInsets.Type.systemBars());
+            handler.postDelayed(()->requestPip(),250);
+        });
+    }
+    @android.annotation.TargetApi(26) private void requestPip(){
+            if(destroyed||!pending||activity.isFinishing()||fullscreen.get()==null){pending=false;return;}
             try{
                 if(activity.enterPictureInPictureMode(params())){
                     handler.post(()->{if(!destroyed&&keepsPlaying())browse.run();});
                 }else failed();
             }catch(IllegalStateException|IllegalArgumentException|SecurityException error){failed();}
-        });
     }
-    private void failed(){pending=false;if(owner.get()==this)owner.clear();message("Android konnte das schwebende Fenster nicht öffnen. Prüfe in den App-Einstellungen, ob Bild-in-Bild für BestBrowser erlaubt ist.");}
+    private void failed(){pending=false;if(owner.get()==this)owner.clear();restoreFullscreen.run();message("Android konnte das schwebende Fenster nicht öffnen. Prüfe in den App-Einstellungen, ob Bild-in-Bild für BestBrowser erlaubt ist.");}
     private void readState(Runnable done){
         WebView web=video;if(web==null||destroyed)return;
         web.evaluateJavascript("(function(){var v="+VIDEO+";return JSON.stringify(v?{width:v.videoWidth,height:v.videoHeight,playing:!v.paused}:{});})()",value->{
@@ -109,14 +122,18 @@ final class BrowserPip {
         PictureInPictureParams.Builder builder=new PictureInPictureParams.Builder().setAspectRatio(ratio(width,height)).setActions(Arrays.asList(
             action(playing?"pause":"play",playing?android.R.drawable.ic_media_pause:android.R.drawable.ic_media_play,playing?"Video pausieren":"Video fortsetzen"),
             action("browse",android.R.drawable.ic_menu_view,"Im Browser weitersurfen")));
-        View view=fullscreen.get();Rect bounds=new Rect();if(view!=null&&view.getGlobalVisibleRect(bounds)&&!bounds.isEmpty())builder.setSourceRectHint(bounds);
+        if(!inMode()){View view=fullscreen.get();Rect bounds=new Rect();if(view!=null&&view.getGlobalVisibleRect(bounds)&&!bounds.isEmpty())sourceBounds=bounds;}
+        if(sourceBounds!=null)builder.setSourceRectHint(sourceBounds);
         if(Build.VERSION.SDK_INT>=31)builder.setSeamlessResizeEnabled(true);
         return builder.build();
     }
-    @android.annotation.TargetApi(26) private void updateParams(){if(inMode())try{activity.setPictureInPictureParams(params());}catch(IllegalStateException|IllegalArgumentException ignored){}}
+    @android.annotation.TargetApi(26) private void updateParams(){
+        if(!inMode()||(publishedWidth==width&&publishedHeight==height&&publishedPlaying==playing))return;
+        try{activity.setPictureInPictureParams(params());publishedWidth=width;publishedHeight=height;publishedPlaying=playing;}catch(IllegalStateException|IllegalArgumentException ignored){}
+    }
     void modeChanged(boolean pip){
         pending=false;handler.removeCallbacks(poll);if(button!=null)button.setVisibility(pip?View.GONE:View.VISIBLE);
-        if(pip){entered=true;owner=new WeakReference<>(this);if(video!=null)video.onResume();handler.post(poll);}
+        if(pip){entered=true;publishedWidth=-1;owner=new WeakReference<>(this);if(video!=null)video.onResume();handler.post(poll);}
         else{if(owner.get()==this)owner.clear();}
     }
     void resumed(){if(!inMode()){entered=false;pending=false;}}
@@ -128,11 +145,12 @@ final class BrowserPip {
     static void control(Intent intent){
         BrowserPip current=owner.get();if(current==null||current.destroyed||!current.inMode()||intent==null||!current.token.equals(intent.getStringExtra("token")))return;
         String action=intent.getStringExtra("control");if("browse".equals(action)){current.browse.run();return;}
+        android.util.Log.i("VideoWindow","Accepted PiP action: "+action);
         if(!"play".equals(action)&&!"pause".equals(action))return;
         WebView web=current.video;if(web==null)return;
         // A remote play action is an explicit user request; restrict this setting to PiP.
         if("play".equals(action))web.getSettings().setMediaPlaybackRequiresUserGesture(false);
-        web.evaluateJavascript("(function(){var v="+VIDEO+";if(!v)return;"+("pause".equals(action)?"v.pause();":"var p=v.play();if(p&&p.catch)p.catch(function(){});")+"})()",value->current.readState(current::updateParams));
+        web.evaluateJavascript("(function(){var v="+VIDEO+";if(!v)return;"+("pause".equals(action)?"v.pause();":"var p=v.play();if(p&&p.catch)p.catch(function(){});")+"})()",value->current.readState(()->{android.util.Log.i("VideoWindow","PiP action completed: playing="+current.playing);current.updateParams();}));
     }
     void destroy(){destroyed=true;handler.removeCallbacksAndMessages(null);if(owner.get()==this)owner.clear();hideButton();video=null;}
     void restoreGesturePolicy(){if(video!=null)video.getSettings().setMediaPlaybackRequiresUserGesture(true);}
