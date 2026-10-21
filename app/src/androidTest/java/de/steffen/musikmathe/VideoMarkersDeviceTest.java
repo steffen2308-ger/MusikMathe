@@ -83,7 +83,7 @@ public class VideoMarkersDeviceTest {
     @Test public void pointsTrackScrollAndDynamicVideosAndDisappearOnOtherTabsAndNavigation()throws Exception{
         try(Fixture fixture=new Fixture()){
             launch(fixture.base()+"/page");marker("Erster Testfilm");int before=marker("Zweiter Testfilm").getVisibleCenter().y;
-            js("window.scrollTo(0,150);true");await(()->{UiObject2 dot=device.findObject(By.desc("Video herunterladen: Zweiter Testfilm"));return dot!=null&&dot.getVisibleCenter().y<before-60;},"Marker follows the actual video after scrolling");
+            js("window.scrollTo(0,150);true");await(()->{try{UiObject2 dot=device.findObject(By.desc("Video herunterladen: Zweiter Testfilm"));return dot!=null&&dot.getVisibleCenter().y<before-60;}catch(androidx.test.uiautomator.StaleObjectException updating){return false;}},"Marker follows the actual video after scrolling");
             js("document.getElementById('second').remove();var v=document.createElement('video');v.id='dynamic';v.title='Dritter Testfilm';v.src='/second.mp4';v.style='position:fixed;left:8px;top:100px;width:90%;height:120px;background:blue';document.body.appendChild(v);true");
             assertTrue(device.wait(Until.gone(By.desc("Video herunterladen: Zweiter Testfilm")),8000));marker("Dritter Testfilm");
             js("var cover=document.createElement('div');cover.id='cover';cover.style='position:fixed;z-index:99999;inset:0;background:white';document.body.appendChild(cover);true");assertTrue(device.wait(Until.gone(By.desc("Video herunterladen: Dritter Testfilm")),8000));
