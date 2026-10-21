@@ -66,7 +66,7 @@ public class PreloadingDeviceTest {
         activity=launch();AtomicBoolean wifi=new AtomicBoolean(true);FakeBackend backend=new FakeBackend();LinkPreloader[] controller={null};AtomicInteger pageLoads=new AtomicInteger();
         try{
             main(()->web=(WebView)invoke("activeView",new Class<?>[0]));expect("location.href","\"file:///android_asset/start.html\"");
-            expect("document.querySelectorAll('nav[data-fixed] a svg').length","11");
+            expect("document.querySelectorAll('nav[data-fixed] a svg').length","12");
             expect("Array.from(document.querySelectorAll('nav[data-fixed] a')).slice(0,5).map(function(a){return a.href;}).join('|')","\"https://www.google.com/|https://yandex.com/|https://search.inetol.net/|https://search.brave.com/|https://www.mojeek.com/\"");
             main(()->{
                 try{LinkPreloader original=(LinkPreloader)controllerField().get(activity);original.destroy();controller[0]=new LinkPreloader(activity,()->new BrowserStore(activity).linkPreloadingEnabled(),url->url.contains("ads.example"),wifi::get,backend);controllerField().set(activity,controller[0]);}catch(Exception error){throw new RuntimeException(error);}
