@@ -8,6 +8,21 @@ import java.util.Map;
 import static org.junit.Assert.*;
 @RunWith(org.robolectric.RobolectricTestRunner.class) @Config(sdk=28)
 public class VideoCatalogTest {
+    @Test public void markerNeverFallsBackToAnotherVideosSources(){
+        VideoCatalog catalog=new VideoCatalog();String a="https://cdn.test/a.mp4",b="https://cdn.test/b.mp4";
+        catalog.add(a,"",Map.of());catalog.add(b,"",Map.of());
+        assertEquals(b,catalog.forMarker(java.util.List.of(b),"").get(0).url);
+        assertEquals(1,catalog.forMarker(java.util.List.of(b),"").size());
+        assertTrue(catalog.forMarker(java.util.List.of("blob:https://page.test/one"),"").isEmpty());
+        assertTrue(catalog.forMarker(java.util.List.of(),"").isEmpty());
+        assertTrue(catalog.forMarker(java.util.List.of(a),"abcdefghijk").isEmpty());
+    }
+    @Test public void explicitlySelectedSourceStillWorksWhenPageCatalogIsFull(){
+        VideoCatalog catalog=new VideoCatalog();for(int i=0;i<60;i++)catalog.add("https://cdn.test/old-"+i+".mp4","",Map.of());
+        assertTrue(catalog.addForMarker("https://cdn.test/selected.mp4","",Map.of("Referer","https://page.test/")));
+        assertEquals(60,catalog.list().size());assertEquals("https://cdn.test/selected.mp4",catalog.forMarker(java.util.List.of("https://cdn.test/selected.mp4"),"").get(0).url);
+        assertFalse(catalog.addForMarker("javascript:alert(1)","video/mp4",Map.of()));assertEquals(60,catalog.list().size());
+    }
     @Test public void previewsStayWithTheirSourceAndSurviveNetworkUpdates(){
         VideoCatalog catalog=new VideoCatalog();catalog.add("https://cdn.test/one.mp4","",Map.of());catalog.add("https://cdn.test/two.mp4","",Map.of());
         catalog.describe("https://cdn.test/one.mp4","First movie","https://cdn.test/one.jpg");catalog.describe("https://cdn.test/two.mp4","Second movie","https://cdn.test/two.jpg");catalog.add("https://cdn.test/one.mp4","",Map.of("User-Agent","Browser"));

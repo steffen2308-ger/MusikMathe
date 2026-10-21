@@ -51,6 +51,16 @@ final class VideoCatalog {
         if(items.containsKey(url)){Item old=items.get(url);Map<String,String> merged=new LinkedHashMap<>(old.headers);merged.putAll(safeHeaders(headers));items.put(url,copy(old,new Item(url,old.type,merged,old.audioUrl,old.youtubeId,old.description,old.thumbnail)));return false;}
         if(items.size()>=60)return false;items.put(url,new Item(url,type,safeHeaders(headers)));return true;
     }
+    synchronized List<Item> forMarker(List<String> sources,String youtubeId){
+        java.util.Set<String> wanted=new java.util.HashSet<>(sources);ArrayList<Item> selected=new ArrayList<>();
+        for(Item item:list())if(youtubeId.isEmpty()?wanted.contains(item.url):youtubeId.equals(item.youtubeId))selected.add(item);
+        return selected;
+    }
+    synchronized boolean addForMarker(String url,String mime,Map<String,String> headers){
+        if(classify(url,mime,headers)==null)return false;
+        if(!items.containsKey(url)&&items.size()>=60)items.remove(items.keySet().iterator().next());
+        add(url,mime,headers);return true;
+    }
     static Map<String,String> safeHeaders(Map<String,String> input){
         LinkedHashMap<String,String> safe=new LinkedHashMap<>();
         if(input!=null)for(Map.Entry<String,String> row:input.entrySet()){

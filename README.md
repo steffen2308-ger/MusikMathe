@@ -305,3 +305,14 @@ Die Startseite enthält eine eigene kompakte **Reddit**-Kachel neben YouTube mit
 ## Heimautomation-Schnellzugriff (0.4.26)
 
 Die Startseite enthält eine eigene kompakte **Heimautomation**-Kachel mit lokal eingebettetem Haus-/WLAN-Icon. Sie öffnet direkt **http://192.168.178.125:8082/vis-2/index.html#Ger%C3%A4te**, einschließlich des Geräte-Ankers. Die Adresse ist im Heimnetz beziehungsweise über eine passende VPN-Verbindung erreichbar. Die Kachel lädt beim Anzeigen der Startseite keine Inhalte vom Heimautomationsserver.
+
+
+## Grüne Download-Punkte direkt am Video (0.4.27)
+
+Auf sichtbaren HTML-Videos erscheint oben rechts ein grüner Punkt mit Downloadpfeil. Antippen öffnet für genau diesen Player die vorhandene Download-Auswahl mit Vorschaubild, Auflösung, Dauer und dem Zugang zu allen verfügbaren Informationen. Mehrere deklarierte Quellen beziehungsweise Qualitätsstufen werden separat für dieses Video angeboten. Die normale Videoliste bleibt für die Suche auf der gesamten Seite erreichbar.
+
+Die Punkte sind native Schaltflächen mit 44-dp-Trefffläche. Sie folgen Scrollen, Zoom, Größenänderungen, nachgeladenen Videos und zugänglichen eingebetteten Frames. Verdeckte beziehungsweise nicht mehr sichtbare Videos erhalten keinen Punkt; beim Tab-/Seitenwechsel, im Hintergrund und im nativen Video-Vollbild werden die Punkte entfernt. Es gibt keine zusätzliche Android-JavaScript-Schnittstelle und keine automatischen Downloads. Vorschaubilder aus dem laufenden Video werden erst beim Antippen erzeugt.
+
+Die Zuordnung verwendet die Quellen des einzelnen Videoelements. Bei YouTube-Watch-Seiten wird der vorhandene Resolver für die identifizierte Video-ID genutzt. Blob-/MSE-Player ohne eindeutige Quelle bieten einen Hinweis und auf Wunsch die separat benannte Suche auf der gesamten Seite; sie erhalten nicht stillschweigend fremde Quellen. Der Inhalt fremder Cross-Origin-Frames bleibt getrennt; dort kann die normale Videoliste erforderlich sein. Website- und DRM-Beschränkungen werden nicht umgangen. Private Bereiche verwenden weiterhin ihren eigenen Downloadordner und Cookie-Speicher.
+
+Prüfungen umfassen die Zuordnung mehrerer Videos, stabile Identitäten nach DOM-Änderungen, Sichtbarkeit/Überdeckung, Zoom-Viewport, eingebettete Frames und das Erzeugen von Vorschaubildern erst beim Antippen. Android-Gerätetests klicken den nativen Punkt des zweiten von zwei Videos und speichern dessen Originaldatei vollständig in einem Testordner; sie prüfen auch Scrollen, dynamische Videos, Überdeckungen sowie Tab-/Seitenwechsel.
