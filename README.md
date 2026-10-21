@@ -300,3 +300,8 @@ Gerätetests auf Android 9 und 15 prüfen mit einer echten H.264-Datei die fortl
 ## Reddit-Schnellzugriff (0.4.25)
 
 Die Startseite enthält eine eigene kompakte **Reddit**-Kachel neben YouTube mit einem lokal eingebetteten orangefarbenen Reddit-Icon. Antippen öffnet **https://www.reddit.com/**.
+
+
+## Heimautomation-Schnellzugriff (0.4.26)
+
+Die Startseite enthält eine eigene kompakte **Heimautomation**-Kachel mit lokal eingebettetem Haus-/WLAN-Icon. Sie öffnet direkt **http://192.168.178.125:8082/vis-2/index.html#Ger%C3%A4te**, einschließlich des Geräte-Ankers. Die Adresse ist im Heimnetz beziehungsweise über eine passende VPN-Verbindung erreichbar. Die Kachel lädt beim Anzeigen der Startseite keine Inhalte vom Heimautomationsserver.
