@@ -81,7 +81,7 @@ final class VideoMarkers {
                 if(!capture.isEmpty()){
                     for(int i=0;i<Math.min(rows.length(),24);i++){JSONObject row=rows.getJSONObject(i);if(capture.equals(row.optString("id"))){selected.accept(source,row);break;}}
                 }else render(source,rows,width,height);
-                later(rows.length()==0?1000:350);
+                later(rows.length()==0?1000:750);
             }catch(Exception ignored){clear();later(1000);}
         });
     }
@@ -105,7 +105,8 @@ final class VideoMarkers {
         private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
         Dot(Context context){super(context);setClickable(true);setFocusable(true);setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);}
         @Override protected void onDraw(Canvas canvas){
-            super.onDraw(canvas);float cx=getWidth()/2f,cy=getHeight()/2f,r=Math.min(getWidth(),getHeight())*.25f;
+            super.onDraw(canvas);float cx=getWidth()/2f,cy=getHeight()/2f,r=Math.min(getWidth(),getHeight())*.34f;
+            paint.setStyle(Paint.Style.STROKE);paint.setColor(0x99000000);paint.setStrokeWidth(r*.35f);canvas.drawCircle(cx,cy,r,paint);
             paint.setStyle(Paint.Style.FILL);paint.setColor(isPressed()?0xff087d40:0xff0aab54);canvas.drawCircle(cx,cy,r,paint);
             paint.setColor(Color.WHITE);paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(r*.15f);canvas.drawCircle(cx,cy,r,paint);
             paint.setStrokeCap(Paint.Cap.ROUND);canvas.drawLine(cx,cy-r*.5f,cx,cy+r*.2f,paint);canvas.drawLine(cx-r*.28f,cy-r*.06f,cx,cy+r*.24f,paint);canvas.drawLine(cx+r*.28f,cy-r*.06f,cx,cy+r*.24f,paint);canvas.drawLine(cx-r*.35f,cy+r*.5f,cx+r*.35f,cy+r*.5f,paint);

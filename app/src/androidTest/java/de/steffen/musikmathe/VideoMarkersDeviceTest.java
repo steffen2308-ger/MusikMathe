@@ -93,6 +93,28 @@ public class VideoMarkersDeviceTest {
             main(()->call("navigate",new Class<?>[]{String.class},fixture.base()+"/blank"));assertTrue(device.wait(Until.gone(By.descStartsWith("Video herunterladen")),8000));
         }catch(AssertionError failure){diagnostic();throw failure;}finally{if(activity!=null)main(activity::finish);}
     }
+    @Test public void homepagePreviewsSelectTheirOwnVideoAndOpenShadowPlayersAreRecognised()throws Exception{
+        try(Fixture fixture=new Fixture()){
+            launch(fixture.base()+"/cards");marker("YouTube Vorschau");marker("ntv Vorschau");
+            // Use an already resolved source, so this tests the real native click
+            // and ID filtering without relying on YouTube's availability in CI.
+            main(()->{
+                Object tab=call("active",new Class<?>[0]);
+                try{Field f=tab.getClass().getDeclaredField("videos");f.setAccessible(true);VideoCatalog catalog=(VideoCatalog)f.get(tab);
+                    catalog.add(fixture.base()+"/first.mp4","video/mp4",java.util.Collections.emptyMap());
+                    VideoCatalog.Item chosen=new VideoCatalog.Item(fixture.base()+"/second.mp4","MP4",java.util.Collections.emptyMap(),"","abcdefghijk","YouTube Vorschau",fixture.base()+"/blue.png");
+                    catalog.resolved(new YouTubeDownloadResolver.Result("abcdefghijk","YouTube Vorschau",java.util.Collections.singletonList(chosen)));
+                }catch(Exception e){throw new RuntimeException(e);}
+            });
+            marker("YouTube Vorschau").click();text("Originaldatei speichern");text("Informationen").click();
+            assertNotNull(device.wait(Until.findObject(By.textContains("YouTube-ID: abcdefghijk")),8000));
+            assertNotNull(device.findObject(By.textContains("Dateiname / Pfadende: second.mp4")));text("Schließen").click();
+            marker("ntv Vorschau").click();text("Video öffnen");assertNull("A linked HTML page must not be offered as an MP4",device.findObject(By.text("Originaldatei speichern")));text("Schließen").click();
+            main(()->{try{Object tab=call("active",new Class<?>[0]);Field f=tab.getClass().getDeclaredField("videos");f.setAccessible(true);((VideoCatalog)f.get(tab)).clear();}catch(Exception e){throw new RuntimeException(e);}});
+            js("document.body.innerHTML='';var host=document.createElement('div');document.body.appendChild(host);var shadow=host.attachShadow({mode:'open'});shadow.innerHTML=\"<style>.wrap{position:relative;width:100%;height:180px}video{width:100%;height:180px}.controls{position:absolute;top:0;right:0;bottom:0;left:0}</style><div class='wrap'><video title='Shadow Testfilm' src='/second.mp4' poster='/blue.png' preload='none'></video><div class='controls'></div></div>\";true");
+            marker("Shadow Testfilm").click();text("Originaldatei speichern");text("Abbrechen").click();
+        }catch(AssertionError failure){diagnostic();throw failure;}finally{if(activity!=null)main(activity::finish);}
+    }
     private final class Fixture implements AutoCloseable {
         final ServerSocket server=new ServerSocket(0);final byte[] first,second,red,blue;
         Fixture()throws Exception{
@@ -106,7 +128,7 @@ public class VideoMarkersDeviceTest {
             String path=firstLine.split(" ")[1],type="text/html; charset=utf-8";byte[] body;
             if(path.endsWith(".mp4")){body=path.startsWith("/first")?first:second;type="video/mp4";}
             else if(path.endsWith(".png")){body=path.startsWith("/red")?red:blue;type="image/png";}
-            else{String html=path.startsWith("/blank")?"<h1>Keine Videos</h1>":"<h1>Video-Punkte</h1><video id='first' title='Erster Testfilm' src='/first.mp4' poster='/red.png' preload='none' controls></video><video id='second' title='Zweiter Testfilm' src='/second.mp4' poster='/blue.png' preload='none' controls></video>";body=("<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{font-family:sans-serif;min-height:1800px;margin:8px}h1{font-size:20px}video{display:block;width:100%;height:130px;margin:8px 0;object-fit:fill}</style>"+html).getBytes(StandardCharsets.UTF_8);}
+            else{String html=path.startsWith("/blank")?"<h1>Keine Videos</h1>":path.startsWith("/cards")?"<h1>Video-Vorschauen</h1><a href='https://m.youtube.com/watch?v=abcdefghijk' title='YouTube Vorschau'><img alt='YouTube Vorschau' src='/red.png'></a><a href='https://www.n-tv.de/mediathek/videos/politik/Testfilm-id123.html' title='ntv Vorschau'><img alt='ntv Vorschau' src='/blue.png'></a>":"<h1>Video-Punkte</h1><div class='touch-player'><video id='first' title='Erster Testfilm' src='/first.mp4' poster='/red.png' preload='none' controls></video><div class='touch-controls'></div></div><div class='touch-player'><video id='second' title='Zweiter Testfilm' src='/second.mp4' poster='/blue.png' preload='none' controls></video><div class='touch-controls'></div></div>";body=("<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{font-family:sans-serif;min-height:1800px;margin:8px}h1{font-size:20px}video,img{display:block;width:100%;height:130px;margin:8px 0;object-fit:fill}.touch-player{position:relative;height:146px}.touch-controls{position:absolute;top:0;right:0;bottom:0;left:0}</style>"+html).getBytes(StandardCharsets.UTF_8);}
             int start=0,end=body.length-1;boolean partial=range!=null&&type.equals("video/mp4");if(partial){String[] limits=range.replace("bytes=","").split("-",-1);start=Integer.parseInt(limits[0]);if(limits.length>1&&!limits[1].isEmpty())end=Math.min(end,Integer.parseInt(limits[1]));}if(start>end)return;
             String headers="HTTP/1.1 "+(partial?"206 Partial Content":"200 OK")+"\r\nContent-Type: "+type+"\r\nContent-Length: "+(end-start+1)+"\r\nAccept-Ranges: bytes\r\nConnection: close\r\n"+(partial?"Content-Range: bytes "+start+"-"+end+"/"+body.length+"\r\n":"")+"\r\n";socket.getOutputStream().write(headers.getBytes(StandardCharsets.US_ASCII));socket.getOutputStream().write(body,start,end-start+1);socket.getOutputStream().flush();
         }catch(Exception ignored){}}

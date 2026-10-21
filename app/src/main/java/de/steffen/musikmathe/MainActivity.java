@@ -469,7 +469,7 @@ public class MainActivity extends AppCompatActivity {
                 case 8: if(linkPreloader!=null)linkPreloader.clear();tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: BrowserDialogs.builder(this).setTitle("BestBrowser · 0.4.27").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPasswortgeschützte private Bereiche speichern Verlauf, Tabs, Website-Daten und Einstellungen getrennt und verschlüsselt. Videos in gewählten Android-Ordnern sind separat zugänglich. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: BrowserDialogs.builder(this).setTitle("BestBrowser · 0.4.28").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPasswortgeschützte private Bereiche speichern Verlauf, Tabs, Website-Daten und Einstellungen getrennt und verschlüsselt. Videos in gewählten Android-Ordnern sind separat zugänglich. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: discardPrivateTabs=true;endPrivate(); break;
@@ -800,14 +800,23 @@ public class MainActivity extends AppCompatActivity {
     private void videoMarkerSelected(WebView view,org.json.JSONObject video){
         Tab tab=active();if(destroyed||privateLocked()||tab==null||tab.view!=view||videoResolver!=null)return;
         int page=tab.videoPage;String sourceUrl=tab.url;
-        String id=YouTubeSources.videoId(sourceUrl),reported=video.optString("youtubeId");
-        boolean youtube=!id.isEmpty()&&YouTubeSources.originAllowed(video.optString("page"))&&(id.equals(reported)||(reported.isEmpty()&&video.optBoolean("main")&&video.optInt("count")==1));
+        boolean linked="link".equals(video.optString("kind"));String target=video.optString("target");
+        String id=YouTubeSources.videoId(linked?target:sourceUrl),reported=video.optString("youtubeId");
+        boolean youtube=!id.isEmpty()&&(linked?YouTubeSources.originAllowed(target)&&id.equals(reported):YouTubeSources.originAllowed(video.optString("page"))&&(id.equals(reported)||(reported.isEmpty()&&video.optBoolean("main")&&video.optInt("count")==1)));
         if(youtube){
-            scanYouTube(tab,()->{
+            Runnable lookup=()->{
                 if(destroyed||privateLocked()||active()!=tab||tab.videoPage!=page||!java.util.Objects.equals(sourceUrl,tab.url))return;
                 java.util.function.Consumer<String> show=error->{if(active()==tab&&tab.videoPage==page&&java.util.Objects.equals(sourceUrl,tab.url))showMarkerSources(tab,video,tab.videos.forMarker(Collections.emptyList(),id),error);};
                 if(tab.videos.hasResolved(id))show.accept("");else resolveYouTube(tab,id,show);
-            });return;
+            };
+            if(linked)lookup.run();else scanYouTube(tab,lookup);return;
+        }
+        if(linked){
+            Uri destination=Uri.parse(target);String host=destination.getHost(),path=destination.getPath();
+            if(!"https".equals(destination.getScheme())||!("n-tv.de".equals(host)||"www.n-tv.de".equals(host))||path==null||!path.matches("/mediathek/(videos|sendungen)/.+\\.html"))return;
+            VideoCatalog.Item item=new VideoCatalog.Item("","Videoseite",Collections.emptyMap(),"","",video.optString("title","Dieses Video"),video.optString("thumbnail"));
+            VideoPreviewAdapter preview=new VideoPreviewAdapter(this,Collections.singletonList(item),sourceUrl);
+            AlertDialog dialog=BrowserDialogs.builder(this).setCustomTitle(preview.row(item,true)).setMessage("Öffne diese Videoseite und starte den Film. Der grüne Punkt am laufenden Video öffnet seine verfügbaren Downloadquellen.").setPositiveButton("Video öffnen",(d,w)->{if(active()==tab&&page==tab.videoPage&&java.util.Objects.equals(sourceUrl,tab.url))navigate(target);}).setNegativeButton("Schließen",null).create();dialog.setOnDismissListener(d->preview.close());dialog.show();return;
         }
         ArrayList<String> urls=new ArrayList<>();org.json.JSONArray sources=video.optJSONArray("sources");
         String referer=video.optString("page");if(!Address.isWeb(referer))referer=sourceUrl;
@@ -846,7 +855,7 @@ public class MainActivity extends AppCompatActivity {
     }
     private void resolveYouTube(Tab tab,String id){resolveYouTube(tab,id,message->showVideoList(tab,message));}
     private void resolveYouTube(Tab tab,String id,java.util.function.Consumer<String> completed){
-        YouTubeDownloadResolver resolver=new YouTubeDownloadResolver();videoResolver=resolver;int page=tab.videoPage;
+        YouTubeDownloadResolver resolver=new YouTubeDownloadResolver();videoResolver=resolver;int page=tab.videoPage;String sourceUrl=tab.url;
         AlertDialog dialog=BrowserDialogs.builder(this).setTitle("YouTube herunterladen").setMessage("Downloadquelle wird gesucht und geprüft …").setNegativeButton("Abbrechen",(d,w)->{resolver.cancel();if(videoResolver==resolver)videoResolver=null;}).create();
         videoSearch=dialog;dialog.setOnCancelListener(d->{resolver.cancel();if(videoResolver==resolver)videoResolver=null;});dialog.show();
         videoWorker.execute(()->{
@@ -855,7 +864,7 @@ public class MainActivity extends AppCompatActivity {
             final YouTubeDownloadResolver.Result found=result;final String message=error;
             runOnUiThread(()->{
                 if(videoResolver!=resolver)return;videoResolver=null;videoSearch=null;dialog.dismiss();
-                if(destroyed||active()!=tab||page!=tab.videoPage||!id.equals(YouTubeSources.videoId(tab.url)))return;
+                if(destroyed||privateLocked()||active()!=tab||page!=tab.videoPage||!java.util.Objects.equals(sourceUrl,tab.url))return;
                 if(found!=null){tab.videos.resolved(found);updateToolbar();}completed.accept(message);
             });
         });
