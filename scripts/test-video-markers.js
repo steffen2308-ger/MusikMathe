@@ -4,8 +4,8 @@ const rect=(left,top,width,height)=>({left,top,right:left+width,bottom:top+heigh
 function video(url,title,box){return {currentSrc:url,src:url,title,poster:'',readyState:2,videoWidth:640,videoHeight:360,duration:12,box,parentElement:null,
   getAttribute(){return '';},getClientRects(){return [this.box];},getBoundingClientRect(){return this.box;},contains(hit){return hit===this;},
   closest(selector){if(selector.includes('.ad-showing'))return this.ad?{}:null;return this.player||null;},querySelectorAll(){return this.alternatives||[];}};}
-function page(videos=[],frames=[]){const doc={title:'Page',videos,frames,links:[],querySelectorAll(selector){return selector==='video'?this.videos:selector==='iframe,frame'?this.frames:selector==='a[href]'?this.links:[];},
-  elementFromPoint(x,y){if(this.cover)return {};if(this.hit)return this.hit;for(const item of [...this.frames,...this.videos,...this.links.map(a=>a.image)].reverse()){const r=item.getBoundingClientRect();if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom)return item;}return null;},
+function page(videos=[],frames=[]){const doc={title:'Page',videos,frames,links:[],posters:[],querySelectorAll(selector){return selector==='video'?this.videos:selector==='iframe,frame'?this.frames:selector==='a[href]'?this.links:selector.startsWith('img[alt=')?this.posters:[];},
+  elementFromPoint(x,y){if(this.cover)return {};if(this.hit)return this.hit;for(const item of [...this.frames,...this.videos,...this.links.map(a=>a.image),...this.posters].reverse()){const r=item.getBoundingClientRect();if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom)return item;}return null;},
   createElement(){return {getContext:()=>({drawImage:v=>{v.captures=(v.captures||0)+1;}}),toDataURL:()=> 'data:image/jpeg;base64,abcd'};}};
   return {document:doc,location:{href:'https://page.test/watch'},innerWidth:400,innerHeight:800,getComputedStyle:v=>Object.assign({display:'block',visibility:'visible',opacity:'1',overflowX:'visible',overflowY:'visible'},v.style||{})};}
 const a=video('https://media.test/a.mp4','Movie A',rect(10,40,360,140)),b=video('https://media.test/b.mp4','Movie B',rect(10,220,360,140));
@@ -45,4 +45,7 @@ root.document.cover=true;assert.equal(scan().rows.length,0);root.document.cover=
 root.document.links=[card('https://youtube.com.evil.test/watch?v=abcdefghijk','Fake video',rect(10,30,360,180)),card('javascript:alert(1)','Invalid link',rect(10,250,360,180))];assert.equal(scan().rows.length,0);
 root.document.links=[];frame.src='https://player.rtl.de/video/player.html';frame.title='ntv embedded player';root.document.frames=[frame];rows=scan().rows;assert.equal(rows.length,1);assert.equal(rows[0].kind,'frame');assert.equal(rows[0].sources.length,0);
 frame.src='https://ad.test/player.html';assert.equal(scan().rows.length,0);
+root.document.frames=[];root.location={href:'https://www.n-tv.de/mediathek/videos/politik/Film-id123.html',hostname:'www.n-tv.de'};
+const poster={tagName:'IMG',src:'https://img.test/poster.jpg',getBoundingClientRect:()=>rect(10,30,360,180),contains:hit=>hit===poster};root.document.posters=[poster];rows=scan().rows;assert.equal(rows.length,1);assert.equal(rows[0].kind,'poster');assert.equal(rows[0].sources.length,0);
+root.document.videos=[video('https://media.test/film.mp4','Started film',rect(10,30,360,180))];root.document.posters=[];rows=scan().rows;assert.equal(rows.length,1);assert.equal(rows[0].sources[0].url,'https://media.test/film.mp4');
 console.log('Video markers: source isolation, live DOM updates, stable IDs, clipping, occlusion, nested frames, cross-origin isolation, visual viewport, YouTube identity and click-only thumbnails passed');

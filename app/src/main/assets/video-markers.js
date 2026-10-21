@@ -59,12 +59,14 @@
   function walk(w, x, y, sx, sy, clip, depth, parents) {
     if (++visits > 12 || rows.length >= 24) return;
     try {
-      var doc = w.document, roots = scopes(doc), videos = [], frames = [], links = [];
+      var doc = w.document, roots = scopes(doc), videos = [], frames = [], links = [], videoBoxes = [];
       roots.forEach(function (scope) {
         videos = videos.concat(Array.from(scope.querySelectorAll('video')).slice(0, 64));
         frames = frames.concat(Array.from(scope.querySelectorAll('iframe,frame')).slice(0, 32));
         links = links.concat(Array.from(scope.querySelectorAll('a[href]')).slice(0, 300));
       });
+      links = links.slice(0, 300);
+      if (videoLink(w.location.href, w.location.href) && /(^|\.)n-tv\.de$/.test(w.location.hostname)) links = links.concat(Array.from(doc.querySelectorAll('img[alt="Video poster"],img[alt="Video-Poster"]')).slice(0, 8));
       for (var i = 0; i < Math.min(videos.length, 64) && rows.length < 24; i++) {
         var video = videos[i], style = w.getComputedStyle(video);
         if (video.closest('.ad-showing,.ad-interrupting')) continue;
@@ -112,25 +114,27 @@
         rows.push({id: id, x: cx - left, y: cy - top, page: text(w.location.href, 8192), main: w === root, count: videos.length,
           sources: sources, youtubeId: youtubeId, title: text(video.title || video.getAttribute('aria-label') || (videos.length === 1 ? doc.title : ''), 2000),
           thumbnail: thumbnail, width: positive(video.videoWidth), height: positive(video.videoHeight), duration: positive(video.duration), live: video.duration === Infinity});
+        videoBoxes.push(visible);
       }
       // A homepage's thumbnails are links, not <video> elements. Mark their
       // individual previews as well, without mistaking the HTML page for a stream.
       var targets = {};
-      for (var k = 0; k < Math.min(links.length, 300) && rows.length < 24; k++) {
-        var link = links[k], target = videoLink(link.href, w.location.href), image = link.querySelector('img');
+      for (var k = 0; k < Math.min(links.length, 308) && rows.length < 24; k++) {
+        var link = links[k], poster = link.tagName === 'IMG', target = videoLink(poster ? w.location.href : link.href, w.location.href), image = poster ? link : link.querySelector('img');
         if (!target || !image || targets[target.url]) continue;
         var imageStyle = w.getComputedStyle(image), linkStyle = w.getComputedStyle(link);
         if (imageStyle.visibility === 'hidden' || Number(imageStyle.opacity) === 0 || linkStyle.visibility === 'hidden' || Number(linkStyle.opacity) === 0) continue;
         if (videos.some(function (v) { return link.contains(v); })) continue;
         var ir = image.getBoundingClientRect(), box = intersect(bounds(ir, x, y, sx, sy), clip);
         if (box.right - box.left < hitX * 1.2 || box.bottom - box.top < hitY * 1.2) continue;
+        if (videoBoxes.some(function (vb) { var overlap = intersect(vb, box); return (overlap.right - overlap.left) > (box.right - box.left) * .5 && (overlap.bottom - overlap.top) > (box.bottom - box.top) * .5; })) continue;
         var px = box.right - hitX * .6, py = box.top + hitY * .6, hit = doc.elementFromPoint((px - x) / sx, (py - y) / sy);
         if (!hit || !link.contains(hit)) continue;
         if (!parents.every(function (p) { return p.document.elementFromPoint((px - p.x) / p.sx, (py - p.y) / p.sy) === p.frame; })) continue;
         var lid = state.ids.get(link); if (!lid) { lid = String(++state.next); state.ids.set(link, lid); }
         targets[target.url] = true;
-        rows.push({id: lid, x: px - left, y: py - top, kind: 'link', target: target.url, page: text(w.location.href, 8192), main: w === root,
-          youtubeId: target.youtubeId, title: text(link.getAttribute('aria-label') || link.title || image.alt || link.textContent, 2000), thumbnail: text(image.currentSrc || image.src, 8192), sources: []});
+        rows.push({id: lid, x: px - left, y: py - top, kind: poster ? 'poster' : 'link', target: target.url, page: text(w.location.href, 8192), main: w === root,
+          youtubeId: target.youtubeId, title: text(poster ? doc.title : (link.getAttribute('aria-label') || link.title || image.alt || link.textContent), 2000), thumbnail: text(image.currentSrc || image.src, 8192), sources: []});
       }
       if (depth < 2) {
         for (var j = 0; j < Math.min(frames.length, 32) && rows.length < 24; j++) {

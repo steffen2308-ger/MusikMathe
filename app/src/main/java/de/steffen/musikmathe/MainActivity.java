@@ -837,6 +837,7 @@ public class MainActivity extends AppCompatActivity {
             VideoCatalog.Item item=new VideoCatalog.Item("","Video",Collections.emptyMap(),"","",video.optString("title","Dieses Video"),video.optString("thumbnail"));item.metadata.merge(VideoMetadata.fromPlayer(video));
             VideoPreviewAdapter preview=new VideoPreviewAdapter(this,java.util.Collections.singletonList(item),tab.url);
             String message="Für dieses Video gibt der Player keine eindeutig zuordenbare Downloadquelle frei. Du kannst die erkannten Quellen der gesamten Seite separat öffnen.";
+            if("poster".equals(video.optString("kind")))message="Starte dieses Video zuerst über die Wiedergabetaste auf der Webseite. Tippe danach erneut auf den grünen Punkt, um die verfügbaren Quellen zu öffnen.";
             if(!error.isEmpty())message=error+"\n\n"+message;
             AlertDialog dialog=BrowserDialogs.builder(this).setCustomTitle(preview.row(item,true)).setMessage(message).setPositiveButton("Videos auf dieser Seite",(d,w)->showVideos()).setNegativeButton("Schließen",null).create();dialog.setOnDismissListener(d->preview.close());dialog.show();return;
         }

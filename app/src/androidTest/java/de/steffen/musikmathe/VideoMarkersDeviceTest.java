@@ -115,6 +115,22 @@ public class VideoMarkersDeviceTest {
             marker("Shadow Testfilm").click();text("Originaldatei speichern");text("Abbrechen").click();
         }catch(AssertionError failure){diagnostic();throw failure;}finally{if(activity!=null)main(activity::finish);}
     }
+    @Test public void ntvPosterBeforePlaybackHasAPointAndExplainsHowToStart()throws Exception{
+        try(Fixture fixture=new Fixture()){
+            launch(fixture.base()+"/blank");String url="https://www.n-tv.de/mediathek/videos/politik/Testfilm-id123.html";
+            String html="<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><title>ntv Poster Test</title><h1>Film vor Wiedergabe</h1><img alt='Video poster' style='width:100%;height:180px' src='data:image/png;base64,"+Base64.encodeToString(fixture.blue,Base64.NO_WRAP)+"'>";
+            CountDownLatch loaded=new CountDownLatch(1);main(()->{
+                WebView web=(WebView)call("activeView",new Class<?>[0]);android.webkit.WebViewClient original=web.getWebViewClient();
+                web.setWebViewClient(new android.webkit.WebViewClient(){
+                    @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view,android.webkit.WebResourceRequest request){if(url.equals(request.getUrl().toString()))return new android.webkit.WebResourceResponse("text/html","UTF-8",new java.io.ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8)));return original.shouldInterceptRequest(view,request);}
+                    @Override public void onPageStarted(WebView view,String target,Bitmap icon){original.onPageStarted(view,target,icon);}
+                    @Override public void onPageFinished(WebView view,String target){original.onPageFinished(view,target);if(url.equals(target))loaded.countDown();}
+                    @Override public void doUpdateVisitedHistory(WebView view,String target,boolean reload){original.doUpdateVisitedHistory(view,target,reload);}
+                });call("navigate",new Class<?>[]{String.class},url);
+            });assertTrue(loaded.await(12,TimeUnit.SECONDS));marker("ntv Poster Test").click();
+            assertNotNull(device.wait(Until.findObject(By.textContains("Starte dieses Video zuerst")),8000));assertNull(device.findObject(By.text("Originaldatei speichern")));text("Schließen").click();
+        }catch(AssertionError failure){diagnostic();throw failure;}finally{if(activity!=null)main(activity::finish);}
+    }
     private final class Fixture implements AutoCloseable {
         final ServerSocket server=new ServerSocket(0);final byte[] first,second,red,blue;
         Fixture()throws Exception{
