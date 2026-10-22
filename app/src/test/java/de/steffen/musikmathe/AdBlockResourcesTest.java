@@ -21,6 +21,9 @@ public class AdBlockResourcesTest {
         assertTrue(script.contains("allowed.example"));assertTrue(script.contains("selectors"));
         assertFalse(script.contains("'__FILTER_DATA__'"));assertFalse(script.contains("'__SITE_EXCEPTIONS__'"));
         assertFalse(script.contains("'__CONFIG_KEY__'"));
+        java.util.regex.Matcher marker=java.util.regex.Pattern.compile("var signature = \\\"(cosmetic-v2:[0-9]+)\\\"").matcher(script);
+        assertTrue("Cache marker is a process-local sequence, without exception domains",marker.find());
+        assertEquals("Repeated accesses reuse the same configuration",script,AdBlockResources.cosmeticScript(context,Collections.singleton("allowed.example")));
     }
     @Test public void aBlockedHostFilterWorkerDoesNotBlockCosmeticFiltering()throws Exception{
         Context context=RuntimeEnvironment.getApplication();AdBlockResources.cosmeticScript(context,Collections.emptySet());

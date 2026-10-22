@@ -27,6 +27,7 @@ final class AdBlockResources {
     private static volatile String problem = "";
     private static String scriptTemplate;
     private static String scriptKey,scriptCache;
+    private static long scriptGeneration;
     private static final Object HOST_LOCK = new Object();
     private static final Object SCRIPT_LOCK = new Object();
 
@@ -78,7 +79,8 @@ final class AdBlockResources {
             ArrayList<String> sorted=new ArrayList<>(exceptions);java.util.Collections.sort(sorted);
             String key=new JSONArray(sorted).toString();
             // Bundled CSS rules cannot change during this process; only the exception list varies.
-            if(!key.equals(scriptKey)){scriptCache=scriptTemplate.replace("'__SITE_EXCEPTIONS__'",key).replace("'__CONFIG_KEY__'",org.json.JSONObject.quote("cosmetic-v2:"+key));scriptKey=key;}
+            // The page-visible cache marker contains no exception domains or persistent identifier.
+            if(!key.equals(scriptKey)){scriptCache=scriptTemplate.replace("'__SITE_EXCEPTIONS__'",key).replace("'__CONFIG_KEY__'",org.json.JSONObject.quote("cosmetic-v2:"+(++scriptGeneration)));scriptKey=key;}
             return scriptCache;
         }
     }
