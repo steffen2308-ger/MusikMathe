@@ -484,7 +484,7 @@ public class MainActivity extends AppCompatActivity {
                 case 8: if(linkPreloader!=null)linkPreloader.clear();tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: BrowserDialogs.builder(this).setTitle("BestBrowser · 0.4.30").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPasswortgeschützte private Bereiche speichern Verlauf, Tabs, Website-Daten und Einstellungen getrennt und verschlüsselt. Videos in gewählten Android-Ordnern sind separat zugänglich. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: BrowserDialogs.builder(this).setTitle("BestBrowser · 0.4.31").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPasswortgeschützte private Bereiche speichern Verlauf, Tabs, Website-Daten und Einstellungen getrennt und verschlüsselt. Videos in gewählten Android-Ordnern sind separat zugänglich. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: discardPrivateTabs=true;endPrivate(); break;
@@ -737,7 +737,11 @@ public class MainActivity extends AppCompatActivity {
         if(store==null)return;ArrayList<BrowserStore.Entry> rows=new ArrayList<>();for(Tab tab:tabs)rows.add(new BrowserStore.Entry("about:blank".equals(tab.url)?Address.HOME:tab.url,tab.title,0,tab.desktop));store.saveTabs(rows,selected);
     }
     private void acceptIntent(Intent intent){if(intent!=null&&VideoDownloadService.SHOW_DOWNLOADS.equals(intent.getAction())){showVideoQueue();return;}if(intent!=null && Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData()!=null){String url=intent.getData().toString();if(Address.isWeb(url))newTab(url,true);}}
-    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(store==null)return;if(privateLocked()){privateAccess.defer(()->acceptIntent(intent));return;}acceptIntent(intent);if(isPrivateMode()&&!privateLocked()&&intent.getBooleanExtra("new_private_tab",false))newTab(Address.HOME,true);}
+    private void acceptNewIntent(Intent intent){
+        acceptIntent(intent);
+        if(isPrivateMode()&&intent.getBooleanExtra("new_private_tab",false)){intent.removeExtra("new_private_tab");newTab(Address.HOME,true);}
+    }
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(store==null)return;if(privateLocked()){privateAccess.defer(()->acceptNewIntent(intent));return;}acceptNewIntent(intent);}
     private void openPrivate(boolean newTab) {
         if (Build.VERSION.SDK_INT < 28) { toast("Private Tabs benötigen Android 9 oder neuer."); return; }
         startActivity(new Intent(this,PrivateActivity.class).putExtra("new_private_tab",newTab).putExtra("return_second_window",this instanceof SecondBrowserActivity).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_SINGLE_TOP));
@@ -749,7 +753,8 @@ public class MainActivity extends AppCompatActivity {
         catch(ActivityNotFoundException error){toast("Das zweite Browserfenster konnte nicht geöffnet werden.");}
     }
     private void openNormal() {
-        if(isPrivateMode()&&!closingPrivate){endPrivate();return;}
+        // A mode switch keeps the authenticated Activity; onPause/PrivateAccess enforce the five-minute gate.
+        // Only an explicit lock/close seals the profile and stops the private process.
         Class<?> target=isPrivateMode()&&getIntent().getBooleanExtra("return_second_window",false)?SecondBrowserActivity.class:MainActivity.class;
         startActivity(new Intent(this,target).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_SINGLE_TOP));
     }
