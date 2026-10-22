@@ -21,8 +21,8 @@
     while (hit && hit.shadowRoot && hit.shadowRoot.elementFromPoint) {
       var inner = hit.shadowRoot.elementFromPoint(x, y); if (!inner || inner === hit) break; hit = inner;
     }
-    if (hit === video || (hit && video.contains(hit))) return true;
     if (!hit || (hit.closest && hit.closest('[role="dialog"],[aria-modal="true"]'))) return false;
+    if (hit === video || video.contains(hit)) return true;
     // Mobile players often put a transparent touch/control layer beside the video.
     // Accept siblings only in a tight player-sized container, never the whole page.
     var vr = video.getBoundingClientRect();
@@ -76,11 +76,21 @@
       links = links.slice(0, 300);
       if (videoLink(w.location.href, w.location.href) && /(^|\.)n-tv\.de$/.test(w.location.hostname)) links = links.concat(Array.from(doc.querySelectorAll('img[alt="Video poster"],img[alt="Video-Poster"]')).slice(0, 8));
       for (var i = 0; i < Math.min(videos.length, 64) && rows.length < 24; i++) {
-        var video = videos[i], style = w.getComputedStyle(video);
+        var video = videos[i], display = video;
+        // Vimeo keeps its <video> transparent behind a separate poster before
+        // playback. Anchor to the visible owner player, retaining this video's ID.
+        try {
+          var vu = new URL(w.location.href), vi = vu.pathname.match(/^\/video\/([0-9]{1,15})\/?$/), vc = w.playerConfig;
+          if (videos.length === 1 && vu.protocol === 'https:' && vu.hostname === 'player.vimeo.com' && vi && vc && vc.video && String(vc.video.id) === vi[1]) {
+            var ownerPlayer = doc.getElementById('player') || video.closest('.player');
+            if (ownerPlayer && ownerPlayer.contains(video)) display = ownerPlayer;
+          }
+        } catch (ignored) {}
+        var style = w.getComputedStyle(display);
         if (video.closest('.ad-showing,.ad-interrupting')) continue;
-        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0 || !video.getClientRects().length) continue;
-        var rect = video.getBoundingClientRect(), visible = intersect(bounds(rect, x, y, sx, sy), clip);
-        for (var parent = video.parentElement, n = 0; parent && n < 16; parent = parent.parentElement, n++) {
+        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0 || !display.getClientRects().length) continue;
+        var rect = display.getBoundingClientRect(), visible = intersect(bounds(rect, x, y, sx, sy), clip);
+        for (var parent = display.parentElement, n = 0; parent && n < 16; parent = parent.parentElement, n++) {
           var ps = w.getComputedStyle(parent);
           if (ps.display === 'none' || ps.visibility === 'hidden' || Number(ps.opacity) === 0) { visible.right = visible.left; break; }
           var pb = bounds(parent.getBoundingClientRect(), x, y, sx, sy);
@@ -90,7 +100,7 @@
         if (visible.right - visible.left < hitX * 1.2 || visible.bottom - visible.top < hitY * 1.2) continue;
         var point = null;
         [[visible.right - hitX * .6, visible.top + hitY * .6], [visible.left + hitX * .6, visible.top + hitY * .6], [visible.right - hitX * .6, visible.bottom - hitY * .6]].some(function (p) {
-          if (!allowedHit(doc, video, (p[0] - x) / sx, (p[1] - y) / sy)) return false;
+          if (!allowedHit(doc, display, (p[0] - x) / sx, (p[1] - y) / sy)) return false;
           if (!parents.every(function (ancestor) { return ancestor.document.elementFromPoint((p[0] - ancestor.x) / ancestor.sx, (p[1] - ancestor.y) / ancestor.sy) === ancestor.frame; })) return false;
           point = p; return true;
         });
@@ -118,7 +128,7 @@
         try {
           var pageUrl = new URL(w.location.href), match = pageUrl.pathname.match(/^\/video\/([0-9]{1,15})\/?$/), config = w.playerConfig;
           if (videos.length === 1 && pageUrl.protocol === 'https:' && pageUrl.hostname === 'player.vimeo.com' && match && config && config.video && String(config.video.id) === match[1]) {
-            var info = config.video, files = info.files || (config.request && config.request.files) || {};
+            var info = config.video, files = (info.files && Object.keys(info.files).length ? info.files : (config.request && config.request.files)) || {};
             if (!files.drm && !info.drm && !info.is_drm) {
               vimeoInfo = info;
               (Array.isArray(files.progressive) ? files.progressive : []).slice(0, 8).forEach(function (f) {

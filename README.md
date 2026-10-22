@@ -331,7 +331,7 @@ Regressionstests verwenden echte native Punkte über Playern mit transparenten S
 
 ## Vimeo-Punkte (0.4.29)
 
-Vimeo-Player unter `https://player.vimeo.com/video/…` werden jetzt auch in fremden Frames erkannt. Bisher fehlte Vimeo in der Frame-Erkennung, sodass eingebettete Videos keinen grünen Punkt erhielten. Sichtbare Vimeo-Videovorschaubilder erhalten ebenfalls einen Punkt.
+Vimeo-Player unter `https://player.vimeo.com/video/…` werden jetzt auch in fremden Frames erkannt. Bisher fehlte Vimeo in der Frame-Erkennung, sodass eingebettete Videos keinen grünen Punkt erhielten. Sichtbare Vimeo-Videovorschaubilder erhalten ebenfalls einen Punkt. Der direkt geöffnete Vimeo-Player wird auch vor dem Abspielen erkannt, wenn sein Videoelement transparent hinter einem separaten Vorschaubild liegt; der Punkt sitzt dann am sichtbaren, derselben Video-ID zugeordneten Player.
 
 Bei einer fremden Einbettung zeigt der Punkt das gewählte Video und bietet **Player öffnen** an. Damit wird genau dieser Player im aktuellen Tab geöffnet; Zurück führt wieder zur einbettenden Seite. Nicht gelistete Videos behalten ihren `h`-Parameter. Der direkt geöffnete Player kann neben seinen Videoelement-Quellen auch bereits gelieferte progressive MP4-, HLS- und DASH-Quellen aus seiner passenden Vimeo-Konfiguration verwenden. Die Video-ID muss mit der Playeradresse übereinstimmen; mehrere Videoelemente, fremde Domains, unpassende Konfigurationen und ausgewiesene DRM-Konfigurationen werden dafür ausgeschlossen. Qualitätsstufen behalten ihre eigenen Angaben zu Auflösung, Bildrate und Dauer. Es werden keine zusätzlichen Konfigurations-Endpunkte abgefragt.
 

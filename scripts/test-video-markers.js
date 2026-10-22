@@ -3,7 +3,7 @@ const source=fs.readFileSync('app/src/main/assets/video-markers.js','utf8');
 const rect=(left,top,width,height)=>({left,top,right:left+width,bottom:top+height,width,height});
 function video(url,title,box){return {currentSrc:url,src:url,title,poster:'',readyState:2,videoWidth:640,videoHeight:360,duration:12,box,parentElement:null,
   getAttribute(){return '';},getClientRects(){return [this.box];},getBoundingClientRect(){return this.box;},contains(hit){return hit===this;},
-  closest(selector){if(selector.includes('.ad-showing'))return this.ad?{}:null;return this.player||null;},querySelectorAll(){return this.alternatives||[];}};}
+  closest(selector){if(selector.includes('.ad-showing'))return this.ad?{}:null;if(selector.includes('[role='))return this.dialog||null;return this.player||null;},querySelectorAll(){return this.alternatives||[];}};}
 function page(videos=[],frames=[]){const doc={title:'Page',videos,frames,links:[],posters:[],querySelectorAll(selector){return selector==='video'?this.videos:selector==='iframe,frame'?this.frames:selector==='a[href]'?this.links:selector.startsWith('img[alt=')?this.posters:[];},
   elementFromPoint(x,y){if(this.cover)return {};if(this.hit)return this.hit;for(const item of [...this.frames,...this.videos,...this.links.map(a=>a.image),...this.posters].reverse()){const r=item.getBoundingClientRect();if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom)return item;}return null;},
   createElement(){return {getContext:()=>({drawImage:v=>{v.captures=(v.captures||0)+1;}}),toDataURL:()=> 'data:image/jpeg;base64,abcd'};}};
@@ -63,4 +63,12 @@ rows=scan().rows;assert.equal(rows.length,1);assert.equal(rows[0].title,'Exact V
 root.playerConfig.video.id=19231868;assert.equal(scan().rows[0].sources.length,1);
 root.playerConfig.video.id=76979871;root.playerConfig.request.files.drm={enabled:true};assert.equal(scan().rows[0].sources.length,1);delete root.playerConfig.request.files.drm;
 root.location={href:'https://other.test/video/76979871',hostname:'other.test'};assert.equal(scan().rows[0].sources.length,1);
+// The actual Vimeo player keeps the video invisible behind its separate preview
+// before playback. The visible, ID-matched owner must still offer its own point.
+root.location={href:'https://player.vimeo.com/video/76979871',hostname:'player.vimeo.com'};
+const vimeoPoster={closest:()=>null},owner={parentElement:null,contains:hit=>hit===vimeo||hit===vimeoPoster,getBoundingClientRect:()=>vimeo.box,getClientRects:()=>[vimeo.box]};
+root.document.getElementById=()=>owner;root.document.hit=vimeoPoster;vimeo.style={opacity:'0'};root.playerConfig.video.files={};
+rows=scan().rows;assert.equal(rows.length,1);assert.equal(rows[0].sources.length,4);assert.equal(rows[0].title,'Exact Vimeo film');
+owner.style={display:'none'};assert.equal(scan().rows.length,0);owner.style={};
+root.document.hit={closest:()=>({})};assert.equal(scan().rows.length,0);
 console.log('Video markers: source isolation, live DOM updates, stable IDs, clipping, occlusion, nested frames, cross-origin isolation, visual viewport, YouTube identity and click-only thumbnails passed');
