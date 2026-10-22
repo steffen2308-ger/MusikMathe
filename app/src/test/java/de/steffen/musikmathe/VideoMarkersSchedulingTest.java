@@ -22,7 +22,13 @@ public class VideoMarkersSchedulingTest {
     private static final class DeferredWebView extends WebView {
         final List<ValueCallback<String>> callbacks=new ArrayList<>();
         int evaluations;
-        DeferredWebView(Context context){super(context);measure(android.view.View.MeasureSpec.makeMeasureSpec(800,android.view.View.MeasureSpec.EXACTLY),android.view.View.MeasureSpec.makeMeasureSpec(600,android.view.View.MeasureSpec.EXACTLY));layout(0,0,800,600);}
+        DeferredWebView(Context context){
+            super(context);
+            // Robolectric's WebView provider has a no-op setFrame delegate. Supply
+            // the synthetic viewport directly; real geometry is covered on devices.
+            org.robolectric.util.ReflectionHelpers.setField(this,"mRight",800);
+            org.robolectric.util.ReflectionHelpers.setField(this,"mBottom",600);
+        }
         @Override public boolean isShown(){return true;}
         @Override public String getUrl(){return "https://video.example/watch";}
         @Override public void evaluateJavascript(String script,ValueCallback<String> callback){evaluations++;callbacks.add(callback);}
