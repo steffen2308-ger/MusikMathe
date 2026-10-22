@@ -66,4 +66,14 @@ public class VideoMarkersSchedulingTest {
             markers.destroy();a.answer(emptyReport());tick();assertEquals(2,a.evaluations);assertEquals(1,b.evaluations);
         }finally{markers.destroy();a.destroy();b.destroy();}
     }
+    @Test public void aNavigationWithNoOldCallbackStillScansTheNewDocument(){
+        Context context=RuntimeEnvironment.getApplication();FrameLayout host=new FrameLayout(context);DeferredWebView web=new DeferredWebView(context);
+        VideoMarkers markers=new VideoMarkers(context,host,()->true,(view,row)->fail("No old-document capture"));
+        try{
+            markers.attach(web);markers.resume();assertReady(markers,web);tick();assertEquals(1,web.evaluations);
+            markers.navigation(web);tick();assertEquals("New documents cannot wait forever for a discarded callback",2,web.evaluations);
+            web.answer(emptyReport());tick();assertEquals("A late old-document callback must not release the new request",2,web.evaluations);
+            assertEquals(1,web.callbacks.size());web.answer(emptyReport());markers.pause();tick();assertEquals(2,web.evaluations);
+        }finally{markers.destroy();web.destroy();}
+    }
 }

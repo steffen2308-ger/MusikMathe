@@ -53,7 +53,11 @@ final class VideoMarkers {
         if(overlay.getParent() instanceof ViewGroup)((ViewGroup)overlay.getParent()).removeView(overlay);
         host.addView(overlay,new FrameLayout.LayoutParams(-1,-1));refreshAfter(220);
     }
-    void navigation(WebView view){if(web==view)refresh();}
+    void navigation(WebView view){
+        // Navigation can discard a callback with the old JavaScript context.
+        // Its ticket must not prevent scanning the replacement document.
+        pending.remove(view);if(web==view){requestedCapture="";refresh();}
+    }
     void changed(WebView view){if(web==view)refresh();}
     void touch(WebView view,MotionEvent event){
         if(web!=view)return;int action=event.getActionMasked();
