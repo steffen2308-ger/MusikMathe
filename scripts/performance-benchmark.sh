@@ -13,7 +13,7 @@ for variant in baseline current; do
   adb shell am force-stop de.steffen.musikmathe
   adb shell am instrument -w -e class de.steffen.musikmathe.BrowserPerformanceBenchmarkTest -e performanceBenchmark "$variant" de.steffen.musikmathe.test/androidx.test.runner.AndroidJUnitRunner > "performance-reports/$variant-instrumentation.txt"
   cat "performance-reports/$variant-instrumentation.txt"
-  if ! rg -q 'OK \(1 test\)' "performance-reports/$variant-instrumentation.txt"; then
+  if ! grep -Fq 'OK (1 test)' "performance-reports/$variant-instrumentation.txt"; then
     adb logcat -d -s MenuPreview:I AndroidRuntime:E '*:S'
     exit 1
   fi
