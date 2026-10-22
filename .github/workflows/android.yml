@@ -128,6 +128,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout previous APK for performance comparison
+        uses: actions/checkout@v4
+        with:
+          ref: 57aa7ef5c484863f45a999ed7deb67f8f78a085b
+          path: performance-baseline
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -149,6 +154,7 @@ jobs:
           disable-animations: true
           script: |
             adb logcat -G 16M
+            bash scripts/performance-benchmark.sh
             bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PrivateIsolationTest
             mkdir -p private-profile-device-reports
             cp -r app/build/reports/androidTests/. private-profile-device-reports/
@@ -163,6 +169,7 @@ jobs:
             app/build/reports/androidTests/
             private-profile-device-reports/
             app/build/outputs/androidTest-results/
+            performance-reports/
             cutout-test.txt
           if-no-files-found: ignore
 

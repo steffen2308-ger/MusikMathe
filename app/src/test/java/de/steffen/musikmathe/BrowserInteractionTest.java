@@ -42,6 +42,26 @@ public class BrowserInteractionTest {
         invoke(next.get(),"closeTab",new Class<?>[]{int.class},1);assertEquals(1,tabs(next.get()).size());
         invoke(next.get(),"closeTab",new Class<?>[]{int.class},0);assertEquals(Address.HOME,tabs(next.get()).get(0).url);next.pause().stop().destroy();
     }
+    @Test public void incomingLinkCreatesOnlyItsWebViewAndKeepsRestoredTabsLazy()throws Exception{
+        clear();BrowserStore stored=new BrowserStore(RuntimeEnvironment.getApplication());stored.write("tabs",java.util.Arrays.asList(new BrowserStore.Entry("https://old.example/","Old",0),new BrowserStore.Entry(Address.HOME,"Start",0)));stored.selected(0);
+        ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class,new Intent(Intent.ACTION_VIEW,Uri.parse("https://new.example/"))).setup();
+        try{assertEquals(3,tabs(controller.get()).size());assertNull(tabs(controller.get()).get(0).view);assertNull(tabs(controller.get()).get(1).view);assertEquals("https://new.example/",Shadows.shadowOf(web(controller.get())).getLastLoadedUrl());}finally{controller.pause().stop().destroy();}
+    }
+    @Test public void closingActiveAndBackgroundCachedTabsKeepsTheRightTabVisibleAndPersisted()throws Exception{
+        clear();ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity a=controller.get();
+        try{invoke(a,"newTab",new Class<?>[]{String.class,boolean.class},"https://second.example/",true);WebView second=web(a);invoke(a,"switchTab",new Class<?>[]{int.class},0);invoke(a,"closeTab",new Class<?>[]{int.class},0);assertSame(second,web(a));assertEquals(android.view.View.VISIBLE,second.getVisibility());
+            invoke(a,"newTab",new Class<?>[]{String.class,boolean.class},Address.HOME,true);invoke(a,"closeTab",new Class<?>[]{int.class},0);assertEquals(1,new BrowserStore(a).read("tabs").size());assertEquals(0,new BrowserStore(a).selected());
+        }finally{controller.pause().stop().destroy();}
+    }
+    @Test public void recentlyAttachedTabsAreBoundedAndMemoryPressureReleasesInactiveViews()throws Exception{
+        clear();ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity a=controller.get();
+        try{
+            for(int i=0;i<5;i++)invoke(a,"newTab",new Class<?>[]{String.class,boolean.class},"about:blank",true);
+            int attached=0,visible=0;for(MainActivity.Tab tab:tabs(a))if(tab.view!=null&&tab.view.getParent()!=null){attached++;if(tab.view.getVisibility()==android.view.View.VISIBLE)visible++;}
+            assertEquals(3,attached);assertEquals(1,visible);WebView active=web(a);a.onTrimMemory(android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW);assertSame(active,web(a));
+            for(MainActivity.Tab tab:tabs(a))if(tab.view!=active)assertNull(tab.view);
+        }finally{controller.pause().stop().destroy();}
+    }
     @Test public void untrustedLocalAccessIsDisabledAndExternalUrlsOpen()throws Exception{
         clear();Intent intent=new Intent(Intent.ACTION_VIEW,Uri.parse("https://example.com"));
         ActivityController<MainActivity> c=Robolectric.buildActivity(MainActivity.class,intent).setup();

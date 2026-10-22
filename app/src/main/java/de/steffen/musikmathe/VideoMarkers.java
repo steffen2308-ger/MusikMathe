@@ -49,29 +49,36 @@ final class VideoMarkers {
     void attach(WebView view){
         generation++;busy=false;dragging=false;clear();web=view;
         if(overlay.getParent() instanceof ViewGroup)((ViewGroup)overlay.getParent()).removeView(overlay);
-        host.addView(overlay,new FrameLayout.LayoutParams(-1,-1));refresh();
+        host.addView(overlay,new FrameLayout.LayoutParams(-1,-1));refreshAfter(220);
     }
     void navigation(WebView view){if(web==view)refresh();}
     void changed(WebView view){if(web==view)refresh();}
     void touch(WebView view,MotionEvent event){
         if(web!=view)return;int action=event.getActionMasked();
-        if(action==MotionEvent.ACTION_DOWN){dragging=true;clear();}
+        if(action==MotionEvent.ACTION_DOWN){dragging=true;handler.removeCallbacks(poll);clear();}
         else if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL){dragging=false;refresh();}
     }
-    void refresh(){generation++;busy=false;clear();handler.removeCallbacks(poll);if(running&&!destroyed)handler.post(poll);}
-    void resume(){if(destroyed)return;running=true;refresh();}
+    void refresh(){refreshAfter(160);}
+    private void refreshAfter(long delay){generation++;busy=false;clear();handler.removeCallbacks(poll);if(running&&!destroyed)handler.postDelayed(poll,delay);}
+    void resume(){if(destroyed)return;running=true;refreshAfter(220);}
     void pause(){running=false;generation++;busy=false;handler.removeCallbacks(poll);clear();}
     void destroy(){pause();destroyed=true;web=null;if(overlay.getParent() instanceof ViewGroup)((ViewGroup)overlay.getParent()).removeView(overlay);}
     private boolean ready(){return running&&!destroyed&&!dragging&&available.getAsBoolean()&&web!=null&&web.isShown()&&web.getWidth()>0&&web.getHeight()>0&&Address.isWeb(web.getUrl());}
-    private void clear(){dots.clear();overlay.removeAllViews();}
+    private void clear(){if(dots.isEmpty())return;dots.clear();overlay.removeAllViews();}
     private void later(long delay){handler.removeCallbacks(poll);if(running&&!destroyed)handler.postDelayed(poll,delay);}
     private void sample(String capture){
         if(!ready()){clear();later(1000);return;}if(busy)return;
         WebView source=web;int token=generation;busy=true;
-        String call="("+script+")("+((double)dp(44)/source.getWidth())+","+((double)dp(44)/source.getHeight())+","+JSONObject.quote(capture)+")";
+        String call="typeof window.__mmVideoMarkerScan==='function'?window.__mmVideoMarkerScan("+((double)dp(44)/source.getWidth())+","+((double)dp(44)/source.getHeight())+","+JSONObject.quote(capture)+"):null";
         source.evaluateJavascript(call,value->{
             if(token!=generation||source!=web||destroyed)return;busy=false;
             if(!ready()){clear();later(1000);return;}
+            if("null".equals(value)){
+                busy=true;source.evaluateJavascript("(function(){window.__mmVideoMarkerScan="+script+";return true;})()",installed->{
+                    if(token!=generation||source!=web||destroyed)return;busy=false;
+                    if("true".equals(installed))sample(capture);else{clear();later(1000);}
+                });return;
+            }
             try{
                 if(value==null||value.length()>700000)throw new IllegalArgumentException();
                 JSONObject report=new JSONObject(String.valueOf(new JSONTokener(value).nextValue()));

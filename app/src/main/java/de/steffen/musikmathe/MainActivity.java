@@ -62,12 +62,15 @@ public class MainActivity extends AppCompatActivity {
         volatile int videoPage;
         int historyPage=-1;
         boolean protectedMedia;
+        long lastShown;
+        String homeUpdate;
         final java.util.concurrent.atomic.AtomicInteger blockedRequests=new java.util.concurrent.atomic.AtomicInteger();
         androidx.webkit.ScriptHandler adBlockScript;
         Tab(String url, String title, boolean desktop) { this.url = url; this.title = title; this.desktop = desktop; }
     }
     private final List<Tab> tabs = new ArrayList<>();
     private int selected;
+    private long tabUseSequence;
     private BrowserStore store;
     private PrivateAccess privateAccess;
     private LinkPreloader linkPreloader;
@@ -143,8 +146,13 @@ public class MainActivity extends AppCompatActivity {
         for (BrowserStore.Entry row : store.read("tabs")) tabs.add(new Tab(row.url, row.title, row.desktop));
         if (tabs.isEmpty()) tabs.add(new Tab(Address.HOME, "Neuer Tab", false));
         selected = Math.max(0, Math.min(store.selected(), tabs.size() - 1));
+        boolean incoming=false;
+        if(saved==null&&getIntent()!=null&&Intent.ACTION_VIEW.equals(getIntent().getAction())&&getIntent().getData()!=null){
+            String url=getIntent().getData().toString();
+            if(Address.isWeb(url)&&tabs.size()<BrowserStore.MAX_TABS){tabs.add(new Tab(url,url,false));selected=tabs.size()-1;incoming=true;}
+        }
         switchTab(selected);
-        if (saved == null) acceptIntent(getIntent());
+        if (saved == null&&!incoming) acceptIntent(getIntent());
         if(isPrivateMode()&&getIntent().getBooleanExtra("new_private_tab",false)&&tabs.size()>0&&!Address.HOME.equals(active().url))newTab(Address.HOME,true);
         getIntent().removeExtra("new_private_tab");
         applyFullscreenUi();
@@ -255,17 +263,24 @@ public class MainActivity extends AppCompatActivity {
     }
     private void switchTab(int index) {
         if(index<0 || index>=tabs.size()) return;
-        if(linkPreloader!=null)linkPreloader.clear();
+        if(index==selected&&activeView()!=null&&activeView().getParent()==pages&&activeView().getVisibility()==View.VISIBLE&&customView==null){updateToolbar();persist();return;}
+        if(linkPreloader!=null)linkPreloader.pause();
         addressSuggestions.dismiss();cancelPermission(); cancelUpload();if(passwords!=null)passwords.tabChanged();
-        WebView old=activeView(); if(old!=null) { old.onPause(); pages.removeView(old); }
+        WebView old=activeView(); if(old!=null) { old.onPause();old.setVisibility(View.INVISIBLE); }
         hideFullscreen(); selected=index; Tab tab=active();
         if(tab.view==null) tab.view=createWebView(tab);
-        if(tab.view.getParent() instanceof ViewGroup)((ViewGroup)tab.view.getParent()).removeView(tab.view);
-        pages.removeAllViews(); pages.addView(tab.view,new FrameLayout.LayoutParams(-1,-1)); tab.view.onResume();
+        if(tab.view.getParent()!=pages){if(tab.view.getParent() instanceof ViewGroup)((ViewGroup)tab.view.getParent()).removeView(tab.view);pages.addView(tab.view,new FrameLayout.LayoutParams(-1,-1));}
+        tab.lastShown=++tabUseSequence;tab.view.setVisibility(View.VISIBLE);tab.view.bringToFront();tab.view.onResume();
+        trimAttachedTabs();
         if(videoMarkers!=null)videoMarkers.attach(tab.view);
         updateHome(tab);
         refreshPreloading();
         updateToolbar(); persist();
+    }
+    private void trimAttachedTabs(){
+        ArrayList<Tab> attached=new ArrayList<>();for(Tab tab:tabs)if(tab.view!=null&&tab.view.getParent()==pages)attached.add(tab);
+        attached.sort((a,b)->Long.compare(b.lastShown,a.lastShown));
+        for(int i=3;i<attached.size();i++){Tab tab=attached.get(i);if(tab!=active())pages.removeView(tab.view);}
     }
     private void closeTab(int index) {
         if(index<0 || index>=tabs.size()) return;
@@ -326,7 +341,7 @@ public class MainActivity extends AppCompatActivity {
                 if(active()==tab&&linkPreloader!=null)linkPreloader.navigation(url);
                 if(passwords!=null)passwords.pageStarted(view);
                 if(videoMarkers!=null)videoMarkers.navigation(view);
-                tab.videoPage++;tab.protectedMedia=false;tab.videos.clear();tab.url=url; cancelPermissionFor(tab); if(active()==tab)updateToolbar();
+                tab.videoPage++;tab.homeUpdate=null;tab.protectedMedia=false;tab.videos.clear();tab.url=url; cancelPermissionFor(tab); if(active()==tab)updateToolbar();
                 tab.blockedRequests.set(0);
                 if(adBlockingEnabled)view.evaluateJavascript(AdBlockResources.cosmeticScript(MainActivity.this,adBlockExceptions),null);
             }
@@ -469,7 +484,7 @@ public class MainActivity extends AppCompatActivity {
                 case 8: if(linkPreloader!=null)linkPreloader.clear();tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: BrowserDialogs.builder(this).setTitle("BestBrowser · 0.4.29").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPasswortgeschützte private Bereiche speichern Verlauf, Tabs, Website-Daten und Einstellungen getrennt und verschlüsselt. Videos in gewählten Android-Ordnern sind separat zugänglich. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: BrowserDialogs.builder(this).setTitle("BestBrowser · 0.4.30").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPasswortgeschützte private Bereiche speichern Verlauf, Tabs, Website-Daten und Einstellungen getrennt und verschlüsselt. Videos in gewählten Android-Ordnern sind separat zugänglich. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: discardPrivateTabs=true;endPrivate(); break;
@@ -542,10 +557,11 @@ public class MainActivity extends AppCompatActivity {
         BrowserDialogs.builder(this).setTitle("Seiteninformationen").setMessage(info+"\n\n"+Address.display(url)).setPositiveButton("OK",null).show();
     }
     private void updateHome(Tab tab){
-        if(store==null||tab.view==null||!Address.HOME.equals(tab.url)||!Address.HOME.equals(tab.view.getUrl()))return;
-        tab.view.evaluateJavascript(HomePage.update(store.frequentSites(),isPrivateMode()&&store.profile==null),null);
+        if(store==null||tab==null||tab.view==null||!Address.HOME.equals(tab.url)||!Address.HOME.equals(tab.view.getUrl()))return;
+        String script=HomePage.update(store.frequentSites(),isPrivateMode()&&store.profile==null);
+        if(script.equals(tab.homeUpdate))return;tab.homeUpdate=script;tab.view.evaluateJavascript(script,null);
     }
-    private void refreshHomeTabs(){for(Tab tab:tabs)updateHome(tab);}
+    private void refreshHomeTabs(){updateHome(active());}
     private void confirmDownload(String url,String ua,String disposition,String mime) {
         String name=URLUtil.guessFileName(url,disposition,mime);
         if (isPrivateMode()) name += "\n\nHeruntergeladene Dateien bleiben nach dem Schließen privater Tabs erhalten.";
@@ -718,7 +734,7 @@ public class MainActivity extends AppCompatActivity {
     private void copy(String url){((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Webadresse",url));toast("Link kopiert.");}
     private void toast(String message){if(!destroyed&&!privateLocked())Toast.makeText(this,message,Toast.LENGTH_SHORT).show();}
     private void persist(){
-        if(store==null)return;ArrayList<BrowserStore.Entry> rows=new ArrayList<>();for(Tab tab:tabs)rows.add(new BrowserStore.Entry("about:blank".equals(tab.url)?Address.HOME:tab.url,tab.title,0,tab.desktop));store.write("tabs",rows);store.selected(selected);
+        if(store==null)return;ArrayList<BrowserStore.Entry> rows=new ArrayList<>();for(Tab tab:tabs)rows.add(new BrowserStore.Entry("about:blank".equals(tab.url)?Address.HOME:tab.url,tab.title,0,tab.desktop));store.saveTabs(rows,selected);
     }
     private void acceptIntent(Intent intent){if(intent!=null&&VideoDownloadService.SHOW_DOWNLOADS.equals(intent.getAction())){showVideoQueue();return;}if(intent!=null && Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData()!=null){String url=intent.getData().toString();if(Address.isWeb(url))newTab(url,true);}}
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(store==null)return;if(privateLocked()){privateAccess.defer(()->acceptIntent(intent));return;}acceptIntent(intent);if(isPrivateMode()&&!privateLocked()&&intent.getBooleanExtra("new_private_tab",false))newTab(Address.HOME,true);}
@@ -761,7 +777,7 @@ public class MainActivity extends AppCompatActivity {
     }
     @Override protected void onStop(){if(floatingVideo!=null)floatingVideo.stopped();super.onStop();}
     @Override public void onTrimMemory(int level){
-        super.onTrimMemory(level);if(level>=TRIM_MEMORY_RUNNING_LOW){for(Tab tab:tabs)if(tab!=active() && tab.view!=null){tab.state=new Bundle();tab.view.saveState(tab.state);clearAdBlockScript(tab);tab.view.destroy();tab.view=null;}}
+        super.onTrimMemory(level);if(level>=TRIM_MEMORY_RUNNING_LOW){for(Tab tab:tabs)if(tab!=active() && tab.view!=null){tab.state=new Bundle();tab.view.saveState(tab.state);pages.removeView(tab.view);clearAdBlockScript(tab);tab.view.destroy();tab.view=null;tab.homeUpdate=null;}}
     }
     @Override protected void onDestroy(){
         if(videoMarkers!=null)videoMarkers.destroy();
@@ -1112,7 +1128,7 @@ public class MainActivity extends AppCompatActivity {
         new Thread(()->DownloadFolder.delete(getApplicationContext(),destination),"download-cleanup").start();
     }
     private void acceptYouTube(Tab tab,org.json.JSONObject data){
-        if(destroyed||!tabs.contains(tab))return;
+        if(destroyed||!browserResumed||active()!=tab)return;
         String current=YouTubeSources.videoId(tab.url),reported=data.optString("videoId");
         if(!current.isEmpty()&&!current.equals(reported))return;
         try{

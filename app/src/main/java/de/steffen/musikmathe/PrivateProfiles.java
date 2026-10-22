@@ -54,6 +54,13 @@ final class PrivateProfiles {
         synchronized boolean bool(String key,boolean fallback){check();return data.optBoolean(key,fallback);}
         synchronized JSONObject object(String key){check();JSONObject value=data.optJSONObject(key);return value==null?new JSONObject():value;}
         synchronized void put(String key,Object value){check();try{data.put(key,value);flush();}catch(Exception e){failure="Private Daten konnten nicht gespeichert werden. Bitte den freien Speicher prüfen.";}}
+        synchronized void putAll(JSONObject changes){
+            check();try{
+                boolean changed=false;java.util.Iterator<String> keys=changes.keys();
+                while(keys.hasNext()){String key=keys.next();Object next=changes.get(key);if(!java.util.Objects.equals(data.opt(key),next)){data.put(key,next);changed=true;}}
+                if(changed||!failure.isEmpty())flush();
+            }catch(Exception e){failure="Private Daten konnten nicht gespeichert werden. Bitte den freien Speicher prüfen.";}
+        }
         synchronized boolean flush(){
             check();try{byte[] plain=data.toString().getBytes(StandardCharsets.UTF_8);if(plain.length>8*1024*1024-29)throw new IOException("Privater Speicher zu groß");write(dataFile(context,id),PrivateCrypto.encrypt(PrivateCrypto.dataKey(material),PrivateCrypto.aad("data",id),plain));failure="";return true;}
             catch(Exception e){failure="Private Daten konnten nicht gespeichert werden. Bitte den freien Speicher prüfen.";return false;}

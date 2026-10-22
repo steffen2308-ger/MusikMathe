@@ -28,6 +28,13 @@ final class BrowserStore {
     private final SharedPreferences prefs;
     private final boolean privateMode;
     private final String tabPrefix;
+    private final java.util.Map<String,CachedRows> cachedRows=new java.util.HashMap<>();
+    private String frequentRaw;
+    private List<Entry> frequentCache;
+    private static final class CachedRows {
+        final String raw;final List<Entry> rows;
+        CachedRows(String raw,List<Entry> rows){this.raw=raw;this.rows=new ArrayList<>(rows);}
+    }
     final PrivateProfiles.Session profile;
     private String privateEngine;
     private boolean privateAdBlocking;
@@ -45,11 +52,16 @@ final class BrowserStore {
         if(profile==null)privateAdBlockExceptions.addAll(prefs.getStringSet("ad_block_exceptions",Collections.emptySet()));
         else try{JSONArray list=new JSONArray(profile.string("ad_block_exceptions","[]"));for(int i=0;i<list.length();i++)privateAdBlockExceptions.add(list.getString(i));}catch(Exception ignored){}
     }
-    List<Entry> read(String key) {
+    synchronized List<Entry> read(String key) {
         ArrayList<Entry> result = new ArrayList<>();
         if (privateMode && profile==null) return result;
+        String raw;
+        try{raw=profile==null?prefs.getString("tabs".equals(key)?tabPrefix+key:key,"[]"):profile.string(key,"[]");}catch(RuntimeException unavailable){return result;}
+        if(raw==null)return result;
+        CachedRows cached=cachedRows.get(key);
+        if(cached!=null&&cached.raw.equals(raw))return new ArrayList<>(cached.rows);
         try {
-            JSONArray array = new JSONArray(profile==null?prefs.getString("tabs".equals(key)?tabPrefix+key:key, "[]"):profile.string(key,"[]"));
+            JSONArray array = new JSONArray(raw);
             int limit = "tabs".equals(key) ? MAX_TABS : 500;
             for (int i = 0; i < array.length() && result.size() < limit; i++) {
                 JSONObject row = array.optJSONObject(i);
@@ -59,16 +71,33 @@ final class BrowserStore {
                 result.add(new Entry(url, row.optString("title"), row.optLong("time"), row.optBoolean("desktop"),row.optLong("visits",1)));
             }
         } catch (Exception ignored) { }
+        if(cachedRows.size()<3||cachedRows.containsKey(key))cachedRows.put(key,new CachedRows(raw,result));
         return result;
     }
-    void write(String key, List<Entry> rows) {
-        if (privateMode&&profile==null) return;
+    private String encode(String key,List<Entry> rows){
         JSONArray array = new JSONArray();
         for (Entry row : rows) {
             try { JSONObject item=new JSONObject().put("url", row.url).put("title", row.title).put("time", row.time).put("desktop", row.desktop);if("history".equals(key))item.put("visits",row.visits);array.put(item); }
             catch (Exception ignored) { }
         }
-        if(profile!=null)profile.put(key,array.toString());else prefs.edit().putString("tabs".equals(key)?tabPrefix+key:key, array.toString()).apply();
+        return array.toString();
+    }
+    void write(String key, List<Entry> rows) {
+        if (privateMode&&profile==null) return;
+        String encoded=encode(key,rows),stored=profile==null?prefs.getString("tabs".equals(key)?tabPrefix+key:key,"[]"):profile.string(key,"[]");
+        if(encoded.equals(stored))return;
+        if(profile!=null)profile.put(key,encoded);else prefs.edit().putString("tabs".equals(key)?tabPrefix+key:key,encoded).apply();
+    }
+    void saveTabs(List<Entry> rows,int selected){
+        if(privateMode&&profile==null)return;
+        String encoded=encode("tabs",rows);
+        if(profile!=null){
+            try{profile.putAll(new JSONObject().put("tabs",encoded).put("selected",selected));}catch(org.json.JSONException ignored){}
+        }else{
+            boolean changed=!encoded.equals(prefs.getString(tabPrefix+"tabs","[]")),selection=selected!=prefs.getInt(tabPrefix+"selected",0);
+            if(!changed&&!selection)return;
+            SharedPreferences.Editor editor=prefs.edit();if(changed)editor.putString(tabPrefix+"tabs",encoded);if(selection)editor.putInt(tabPrefix+"selected",selected);editor.apply();
+        }
     }
     void visit(String url, String title) {
         if ((privateMode&&profile==null) || !Address.isWeb(url)) return;
@@ -79,7 +108,14 @@ final class BrowserStore {
         while (history.size() > 500) history.remove(history.size() - 1);
         write("history", history);
     }
-    List<Entry> frequentSites(){return privateMode&&profile==null?Collections.emptyList():FrequentSites.top(read("history"));}
+    synchronized List<Entry> frequentSites(){
+        if(privateMode&&profile==null)return Collections.emptyList();
+        String raw;
+        try{raw=profile==null?prefs.getString("history","[]"):profile.string("history","[]");}catch(RuntimeException unavailable){return Collections.emptyList();}
+        if(raw==null)return Collections.emptyList();
+        if(frequentCache==null||!raw.equals(frequentRaw)){frequentCache=FrequentSites.top(read("history"));frequentRaw=raw;}
+        return new ArrayList<>(frequentCache);
+    }
     boolean bookmarked(String url) { for (Entry row : read("bookmarks")) if (row.url.equals(url)) return true; return false; }
     boolean toggleBookmark(String url, String title) {
         if ((privateMode&&profile==null) || !Address.isWeb(url)) return false;

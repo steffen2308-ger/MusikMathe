@@ -40,6 +40,22 @@ public class BrowserStoreTest {
     @Test public void corruptStorageIsRecoverable(){
         RuntimeEnvironment.getApplication().getSharedPreferences("browser",0).edit().putString("tabs","not json").commit();assertTrue(store.read("tabs").isEmpty());
     }
+    @Test public void cachedRowsAreDefensiveAndRefreshAfterAnotherWindowWrites(){
+        Context context=RuntimeEnvironment.getApplication();store.visit("https://first.example/","First");
+        java.util.List<BrowserStore.Entry> first=store.read("history");BrowserStore.Entry cached=first.get(0);first.clear();
+        assertSame("Unchanged rows do not need another JSON parse",cached,store.read("history").get(0));
+        BrowserStore other=new BrowserStore(context,false,"second");other.visit("https://second.example/","Second");
+        assertEquals("Second",store.read("history").get(0).title);store.frequentSites().clear();assertFalse(store.frequentSites().isEmpty());
+        other.write("history",java.util.Collections.emptyList());assertTrue(store.read("history").isEmpty());assertTrue(store.frequentSites().isEmpty());
+    }
+    @Test public void tabSnapshotUpdatesTabsAndSelectionTogetherAndSkipsUnchangedWrites(){
+        android.content.SharedPreferences prefs=RuntimeEnvironment.getApplication().getSharedPreferences("browser",0);
+        java.util.List<BrowserStore.Entry> rows=Arrays.asList(new BrowserStore.Entry(Address.HOME,"Start",0),new BrowserStore.Entry("https://example.org/","Example",0));
+        store.saveTabs(rows,1);assertEquals(2,new BrowserStore(RuntimeEnvironment.getApplication()).read("tabs").size());assertEquals(1,new BrowserStore(RuntimeEnvironment.getApplication()).selected());
+        java.util.concurrent.atomic.AtomicInteger changed=new java.util.concurrent.atomic.AtomicInteger();
+        android.content.SharedPreferences.OnSharedPreferenceChangeListener listener=(p,key)->changed.incrementAndGet();prefs.registerOnSharedPreferenceChangeListener(listener);
+        try{store.saveTabs(rows,1);org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();assertEquals(0,changed.get());}finally{prefs.unregisterOnSharedPreferenceChangeListener(listener);}
+    }
     @Test public void secondWindowHasIndependentTabsAndSharesOnlyNormalProfileData(){
         Context context=RuntimeEnvironment.getApplication();BrowserStore second=new BrowserStore(context,false,"second");
         store.write("tabs",Arrays.asList(new BrowserStore.Entry("https://example.org/video","Video",0)));store.selected(0);

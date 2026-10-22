@@ -10,7 +10,8 @@
     if(originalFetch)window.fetch=function(){return originalFetch.apply(this,arguments).then(function(r){try{if(youtube(r.url)&&r.url.indexOf('/youtubei/v1/player')>=0)r.clone().json().then(take).catch(function(){});}catch(e){}return r;});};
     var open=XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open=function(){this.addEventListener('load',function(){try{if(youtube(this.responseURL)&&this.responseURL.indexOf('/youtubei/v1/player')>=0)take(this.responseType==='json'?this.response:this.responseText);}catch(e){}},{once:true});return open.apply(this,arguments);};
-    function emit(){try{if(window.musikYouTube&&window.musikYouTube.postMessage)window.musikYouTube.postMessage(JSON.stringify(snapshot()));}catch(e){}}
+    var previous='';
+    function emit(){try{if(document.hidden)return;if(window.musikYouTube&&window.musikYouTube.postMessage){var value=JSON.stringify(snapshot());if(value!==previous){previous=value;window.musikYouTube.postMessage(value);}}}catch(e){}}
     window.addEventListener('yt-navigate-finish',function(){setTimeout(emit,300);});
     window.addEventListener('yt-page-data-updated',emit);
     setInterval(emit,2000);

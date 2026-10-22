@@ -27,6 +27,13 @@ public class PrivateProfilesTest {
         PrivateProfiles.Session first=open("1234");first.put("history","four-character profile");String id=first.id;first.close();
         PrivateProfiles.Session restored=open("1234");assertFalse(restored.fresh);assertEquals(id,restored.id);assertEquals("four-character profile",restored.string("history",""));assertFalse(restored.matches("1235".toCharArray()));restored.close();
     }
+    @Test public void privateTabSnapshotIsDurableAndUnchangedSnapshotDoesNotReencrypt()throws Exception{
+        PrivateProfiles.Session session=open("Snapshot-password-42");BrowserStore store=new BrowserStore(context,true);
+        java.util.List<BrowserStore.Entry> rows=Arrays.asList(new BrowserStore.Entry(Address.HOME,"Start",0),new BrowserStore.Entry("https://private.example/","Private",0));
+        store.saveTabs(rows,1);File file=PrivateProfiles.dataFile(context,session.id).getBaseFile();byte[] first=Files.readAllBytes(file.toPath());
+        store.saveTabs(rows,1);assertArrayEquals(first,Files.readAllBytes(file.toPath()));session.close();
+        PrivateProfiles.Session restored=open("Snapshot-password-42");BrowserStore again=new BrowserStore(context,true);assertEquals(1,again.selected());assertEquals("Private",again.read("tabs").get(1).title);restored.close();
+    }
     @Test public void samePasswordRestoresItsHistoryTabsBookmarksSettingsAndFolder()throws Exception{
         BrowserStore normal=new BrowserStore(context);normal.visit("https://normal.example/","Normal");
         PrivateProfiles.Session a=open("Profile-A-password-42");assertTrue(a.fresh);BrowserStore first=new BrowserStore(context,true);
