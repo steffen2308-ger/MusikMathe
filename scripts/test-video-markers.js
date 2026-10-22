@@ -48,4 +48,19 @@ frame.src='https://ad.test/player.html';assert.equal(scan().rows.length,0);
 root.document.frames=[];root.location={href:'https://www.n-tv.de/mediathek/videos/politik/Film-id123.html',hostname:'www.n-tv.de'};
 const poster={tagName:'IMG',src:'https://img.test/poster.jpg',getBoundingClientRect:()=>rect(10,30,360,180),contains:hit=>hit===poster};root.document.posters=[poster];rows=scan().rows;assert.equal(rows.length,1);assert.equal(rows[0].kind,'poster');assert.equal(rows[0].sources.length,0);
 root.document.videos=[video('https://media.test/film.mp4','Started film',rect(10,30,360,180))];root.document.posters=[];rows=scan().rows;assert.equal(rows.length,1);assert.equal(rows[0].sources[0].url,'https://media.test/film.mp4');
+// Vimeo embeds are cross-origin: locate their frame and preserve its actual URL,
+// without claiming access to its document or mixing the neighbouring player.
+root.document.videos=[];root.document.frames=[frame];frame.src='https://player.vimeo.com/video/19231868?h=8272103f6e';frame.title='Vimeo B';
+rows=scan().rows;assert.equal(rows.length,1);assert.equal(rows[0].page,frame.src);assert.equal(rows[0].title,'Vimeo B');assert.equal(rows[0].kind,'frame');assert.equal(rows[0].sources.length,0);
+root.document.cover=true;assert.equal(scan().rows.length,0);root.document.cover=false;
+frame.src='https://player.vimeo.com.evil.test/video/19231868';assert.equal(scan().rows.length,0);
+root.document.frames=[];root.document.links=[card('https://vimeo.com/76979871/8272103f6e','Vimeo preview',rect(10,30,360,180))];
+rows=scan().rows;assert.equal(rows.length,1);assert.equal(rows[0].target,'https://player.vimeo.com/video/76979871?h=8272103f6e');
+root.document.links=[];const vimeo=video('blob:https://player.vimeo.com/opaque','',rect(10,30,360,180));root.document.videos=[vimeo];
+root.location={href:'https://player.vimeo.com/video/76979871',hostname:'player.vimeo.com'};
+root.playerConfig={video:{id:76979871,title:'Exact Vimeo film',duration:12,thumbs:{'640':'https://img.test/vimeo.jpg'}},request:{files:{progressive:[{url:'https://cdn.test/vimeo-360.mp4',mime:'video/mp4',width:640,height:360,fps:25,quality:'360p'},{url:'https://cdn.test/vimeo-720.mp4',mime:'video/mp4',width:1280,height:720,quality:'720p'}],hls:{default_cdn:'correct',cdns:{wrong:{url:'https://cdn.test/other.m3u8'},correct:{url:'https://cdn.test/vimeo.m3u8'}}}}}};
+rows=scan().rows;assert.equal(rows.length,1);assert.equal(rows[0].title,'Exact Vimeo film');assert.equal(rows[0].thumbnail,'https://img.test/vimeo.jpg');assert.equal(rows[0].sources.length,4);assert.equal(rows[0].sources[1].width,640);assert.equal(rows[0].sources[2].height,720);assert.equal(rows[0].sources[3].url,'https://cdn.test/vimeo.m3u8');assert.equal(rows[0].sources[2].current,false);
+root.playerConfig.video.id=19231868;assert.equal(scan().rows[0].sources.length,1);
+root.playerConfig.video.id=76979871;root.playerConfig.request.files.drm={enabled:true};assert.equal(scan().rows[0].sources.length,1);delete root.playerConfig.request.files.drm;
+root.location={href:'https://other.test/video/76979871',hostname:'other.test'};assert.equal(scan().rows[0].sources.length,1);
 console.log('Video markers: source isolation, live DOM updates, stable IDs, clipping, occlusion, nested frames, cross-origin isolation, visual viewport, YouTube identity and click-only thumbnails passed');

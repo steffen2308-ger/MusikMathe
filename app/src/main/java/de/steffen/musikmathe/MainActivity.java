@@ -469,7 +469,7 @@ public class MainActivity extends AppCompatActivity {
                 case 8: if(linkPreloader!=null)linkPreloader.clear();tab.desktop=!tab.desktop;applyDesktop(tab.view,tab.desktop);tab.view.reload();persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: BrowserDialogs.builder(this).setTitle("BestBrowser · 0.4.28").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPasswortgeschützte private Bereiche speichern Verlauf, Tabs, Website-Daten und Einstellungen getrennt und verschlüsselt. Videos in gewählten Android-Ordnern sind separat zugänglich. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: BrowserDialogs.builder(this).setTitle("BestBrowser · 0.4.29").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPasswortgeschützte private Bereiche speichern Verlauf, Tabs, Website-Daten und Einstellungen getrennt und verschlüsselt. Videos in gewählten Android-Ordnern sind separat zugänglich. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: discardPrivateTabs=true;endPrivate(); break;
@@ -812,6 +812,8 @@ public class MainActivity extends AppCompatActivity {
             if(linked)lookup.run();else scanYouTube(tab,lookup);return;
         }
         if(linked){
+            String vimeoPlayer=VimeoVideos.playerUrl(target);
+            if(!vimeoPlayer.isEmpty()){showVimeoPlayer(tab,video,vimeoPlayer);return;}
             Uri destination=Uri.parse(target);String host=destination.getHost(),path=destination.getPath();
             if(!"https".equals(destination.getScheme())||!("n-tv.de".equals(host)||"www.n-tv.de".equals(host))||path==null||!path.matches("/mediathek/(videos|sendungen)/.+\\.html"))return;
             VideoCatalog.Item item=new VideoCatalog.Item("","Videoseite",Collections.emptyMap(),"","",video.optString("title","Dieses Video"),video.optString("thumbnail"));
@@ -826,14 +828,23 @@ public class MainActivity extends AppCompatActivity {
             if(Address.isWeb(referer)){Uri ref=Uri.parse(referer).buildUpon().fragment(null).build();if(!VideoCatalog.origin(referer).equals(VideoCatalog.origin(url)))ref=ref.buildUpon().path("/").clearQuery().build();headers.put("Referer",ref.toString());}
             if(!tab.videos.addForMarker(url,source.optString("type"),headers))continue;
             urls.add(url);tab.videos.describe(url,video.optString("title"),video.optString("thumbnail"));
-            org.json.JSONObject metadata=source.optBoolean("current")?new org.json.JSONObject(video.toString()):new org.json.JSONObject();metadata.put("mime",source.optString("type"));tab.videos.metadata(url,metadata);
+            if(source.optBoolean("current"))tab.videos.metadata(url,video);
+            org.json.JSONObject metadata=new org.json.JSONObject(source.toString());metadata.put("mime",source.optString("type"));tab.videos.metadata(url,metadata);
         }catch(Exception ignored){}
         updateToolbar();showMarkerSources(tab,video,tab.videos.forMarker(urls,""),"");
+    }
+    private void showVimeoPlayer(Tab tab,org.json.JSONObject video,String player){
+        int page=tab.videoPage;String sourceUrl=tab.url;
+        VideoCatalog.Item item=new VideoCatalog.Item("","Vimeo-Video",Collections.emptyMap(),"","",video.optString("title","Vimeo-Video"),video.optString("thumbnail"));
+        VideoPreviewAdapter preview=new VideoPreviewAdapter(this,Collections.singletonList(item),sourceUrl);
+        AlertDialog dialog=BrowserDialogs.builder(this).setCustomTitle(preview.row(item,true)).setMessage("Öffne diesen Vimeo-Player direkt im Browser. Sein grüner Punkt zeigt die verfügbaren Downloadquellen, sobald Vimeo sie bereitstellt.").setPositiveButton("Player öffnen",(d,w)->{if(!destroyed&&!privateLocked()&&active()==tab&&page==tab.videoPage&&java.util.Objects.equals(sourceUrl,tab.url))navigate(player);}).setNeutralButton("Videos auf dieser Seite",(d,w)->showVideos()).setNegativeButton("Schließen",null).create();dialog.setOnDismissListener(d->preview.close());dialog.show();
     }
     private void showMarkerSources(Tab tab,org.json.JSONObject video,java.util.List<VideoCatalog.Item> items,String error){
         if(destroyed||privateLocked()||active()!=tab)return;
         if(items.size()==1){videoOptions(items.get(0));return;}
         if(items.isEmpty()){
+            String vimeoPlayer=VimeoVideos.playerUrl(video.optString("page"));
+            if("frame".equals(video.optString("kind"))&&!vimeoPlayer.isEmpty()){showVimeoPlayer(tab,video,vimeoPlayer);return;}
             VideoCatalog.Item item=new VideoCatalog.Item("","Video",Collections.emptyMap(),"","",video.optString("title","Dieses Video"),video.optString("thumbnail"));item.metadata.merge(VideoMetadata.fromPlayer(video));
             VideoPreviewAdapter preview=new VideoPreviewAdapter(this,java.util.Collections.singletonList(item),tab.url);
             String message="Für dieses Video gibt der Player keine eindeutig zuordenbare Downloadquelle frei. Du kannst die erkannten Quellen der gesamten Seite separat öffnen.";

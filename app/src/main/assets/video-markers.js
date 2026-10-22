@@ -44,6 +44,14 @@
         if (id && /^[\w-]{11}$/.test(id)) return {url: 'https://www.youtube.com/watch?v=' + id, youtubeId: id};
       }
       if ((h === 'n-tv.de' || h === 'www.n-tv.de') && /^\/mediathek\/(?:videos|sendungen)\/.+\.html$/.test(u.pathname)) return {url: u.origin + u.pathname, youtubeId: ''};
+      if (h === 'vimeo.com' || h === 'www.vimeo.com' || h === 'player.vimeo.com') {
+        var vm = u.pathname.match(h === 'player.vimeo.com' ? /^\/video\/([0-9]{1,15})\/?$/ : /^\/(?:channels\/[^/]+\/|groups\/[^/]+\/videos\/|(?:showcase|album)\/[0-9]+\/video\/)?([0-9]{1,15})(?:\/([a-fA-F0-9]{6,64}))?\/?$/);
+        if (vm && !u.username && !u.password && (!u.port || u.port === '443')) {
+          var vh = vm[2] || u.searchParams.get('h') || '';
+          if (vh && !/^[A-Za-z0-9_-]{1,128}$/.test(vh)) return null;
+          return {url: 'https://player.vimeo.com/video/' + vm[1] + (vh ? '?h=' + encodeURIComponent(vh) : ''), youtubeId: ''};
+        }
+      }
     } catch (ignored) {}
     return null;
   }
@@ -92,9 +100,9 @@
         var current = text(video.currentSrc || video.src, 8192), sources = [], seen = {};
         function add(url, type) {
           url = text(url, 8192); if (!url) return;
-          if (seen[url]) { if (type && seen[url].type === 'video/unknown') seen[url].type = text(type, 200); return; }
+          if (seen[url]) { if (type && seen[url].type === 'video/unknown') seen[url].type = text(type, 200); return seen[url]; }
           if (sources.length >= 12) return;
-          var source = {url: url, type: text(type, 200) || 'video/unknown', current: url === current}; seen[url] = source; sources.push(source);
+          var source = {url: url, type: text(type, 200) || 'video/unknown', current: url === current}; seen[url] = source; sources.push(source); return source;
         }
         add(current, video.getAttribute('type')); add(video.src, video.getAttribute('type'));
         video.querySelectorAll('source').forEach(function (source) { add(source.src, source.type); });
@@ -104,7 +112,31 @@
             if (api && api.el && api.el().contains(video) && api.currentSources) api.currentSources().slice(0, 12).forEach(function (s) { add(s.src, s.type); });
           }
         } catch (ignored) {}
+        // Read only the configuration already supplied to this one Vimeo player.
+        // No config endpoint is guessed and no cross-origin frame is inspected.
+        var vimeoInfo = null;
+        try {
+          var pageUrl = new URL(w.location.href), match = pageUrl.pathname.match(/^\/video\/([0-9]{1,15})\/?$/), config = w.playerConfig;
+          if (videos.length === 1 && pageUrl.protocol === 'https:' && pageUrl.hostname === 'player.vimeo.com' && match && config && config.video && String(config.video.id) === match[1]) {
+            var info = config.video, files = info.files || (config.request && config.request.files) || {};
+            if (!files.drm && !info.drm && !info.is_drm) {
+              vimeoInfo = info;
+              (Array.isArray(files.progressive) ? files.progressive : []).slice(0, 8).forEach(function (f) {
+                if (!/^https:\/\//i.test(f.url || '')) return;
+                var entry = add(f.url, f.mime || 'video/mp4');
+                if (entry) { entry.width = positive(f.width); entry.height = positive(f.height); entry.duration = positive(info.duration); entry.fps = positive(f.fps); entry.quality = text(f.quality, 100); }
+              });
+              ['hls', 'dash'].forEach(function (format) {
+                var data = files[format], cdns = data && data.cdns;
+                if (!cdns) return;
+                var cdn = cdns[data.default_cdn] || cdns[Object.keys(cdns)[0]];
+                if (cdn && /^https:\/\//i.test(cdn.url || '')) add(cdn.url, format === 'hls' ? 'application/vnd.apple.mpegurl' : 'application/dash+xml');
+              });
+            }
+          }
+        } catch (ignored) {}
         var thumbnail = text(video.poster, 8192);
+        if (!thumbnail && vimeoInfo && vimeoInfo.thumbs) { var thumbs = vimeoInfo.thumbs; thumbnail = text(thumbs['960'] || thumbs['640'] || thumbs.base || thumbs[Object.keys(thumbs)[0]], 8192); }
         if (id === captureId && !thumbnail && video.readyState >= 2 && video.videoWidth > 0) try {
           var canvas = doc.createElement('canvas'); canvas.width = 160; canvas.height = 90;
           canvas.getContext('2d').drawImage(video, 0, 0, 160, 90); thumbnail = canvas.toDataURL('image/jpeg', .7);
@@ -112,7 +144,7 @@
         var youtubeId = '';
         try { var player = video.closest('.html5-video-player'); if (player && typeof player.getVideoData === 'function') youtubeId = text(player.getVideoData().video_id, 32); } catch (ignored) {}
         rows.push({id: id, x: cx - left, y: cy - top, page: text(w.location.href, 8192), main: w === root, count: videos.length,
-          sources: sources, youtubeId: youtubeId, title: text(video.title || video.getAttribute('aria-label') || (videos.length === 1 ? doc.title : ''), 2000),
+          sources: sources, youtubeId: youtubeId, title: text(video.title || video.getAttribute('aria-label') || (vimeoInfo && vimeoInfo.title) || (videos.length === 1 ? doc.title : ''), 2000),
           thumbnail: thumbnail, width: positive(video.videoWidth), height: positive(video.videoHeight), duration: positive(video.duration), live: video.duration === Infinity});
         videoBoxes.push(visible);
       }
@@ -149,13 +181,14 @@
           // cross-origin document. Its separately labelled page search stays explicit.
           try {
             var fu = new URL(frame.src, w.location.href), fh = fu.hostname;
-            if (fu.protocol !== 'https:' || !/(^|\.)(youtube(?:-nocookie)?\.com|rtl\.de|n-tv\.de)$/.test(fh) || !/\/embed\/|player|video/i.test(fu.pathname)) continue;
+            var vimeoFrame = fh === 'player.vimeo.com' && /^\/video\/[0-9]{1,15}\/?$/.test(fu.pathname);
+            if (fu.protocol !== 'https:' || !(vimeoFrame || /(^|\.)(youtube(?:-nocookie)?\.com|rtl\.de|n-tv\.de)$/.test(fh)) || !/\/embed\/|player|video/i.test(fu.pathname)) continue;
             if (childClip.right - childClip.left < hitX * 1.2 || childClip.bottom - childClip.top < hitY * 1.2) continue;
             var ex = childClip.right - hitX * .6, ey = childClip.top + hitY * .6;
             if (doc.elementFromPoint((ex - x) / sx, (ey - y) / sy) !== frame) continue;
             if (!parents.every(function (p) { return p.document.elementFromPoint((ex - p.x) / p.sx, (ey - p.y) / p.sy) === p.frame; })) continue;
             var fid = state.ids.get(frame); if (!fid) { fid = String(++state.next); state.ids.set(frame, fid); }
-            rows.push({id: fid, x: ex - left, y: ey - top, kind: 'frame', page: text(fu.href, 8192), title: text(frame.title || 'Eingebetteter Videoplayer', 2000), sources: []});
+            rows.push({id: fid, x: ex - left, y: ey - top, kind: 'frame', page: text(fu.href, 8192), title: text(frame.title || (vimeoFrame ? 'Vimeo-Video' : 'Eingebetteter Videoplayer'), 2000), sources: []});
           } catch (ignored) {}
         }
       }

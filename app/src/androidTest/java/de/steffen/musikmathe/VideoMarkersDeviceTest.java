@@ -131,6 +131,36 @@ public class VideoMarkersDeviceTest {
             assertNotNull(device.wait(Until.findObject(By.textContains("Starte dieses Video zuerst")),8000));assertNull(device.findObject(By.text("Originaldatei speichern")));text("Schließen").click();
         }catch(AssertionError failure){diagnostic();throw failure;}finally{if(activity!=null)main(activity::finish);}
     }
+    @Test public void vimeoFramePointOpensOnlyItsPlayerAndItsConfiguredSources()throws Exception{
+        try(Fixture fixture=new Fixture()){
+            launch(fixture.base()+"/blank");String first="https://player.vimeo.com/video/76979871",second="https://player.vimeo.com/video/19231868?h=8272103f6e",top="https://vimeo-fixture.test/embedded";
+            String embeds="<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><title>Vimeo Einbettungen</title><h1>Zwei Vimeo-Player</h1><iframe title='Vimeo Testfilm A' style='width:100%;height:180px;border:0' src='"+first+"'></iframe><iframe title='Vimeo Testfilm B' style='width:100%;height:180px;border:0' src='"+second+"'></iframe>";
+            CountDownLatch loaded=new CountDownLatch(1);main(()->{
+                WebView web=(WebView)call("activeView",new Class<?>[0]);android.webkit.WebViewClient original=web.getWebViewClient();
+                web.setWebViewClient(new android.webkit.WebViewClient(){
+                    @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view,android.webkit.WebResourceRequest request){
+                        String url=request.getUrl().toString(),html=null;
+                        if(top.equals(url))html=embeds;
+                        if(url.startsWith(first)||url.startsWith(second)){
+                            boolean b=url.startsWith(second);String title=b?"Vimeo Testfilm B":"Vimeo Testfilm A",id=b?"19231868":"76979871",name=b?"second.mp4":"first.mp4";
+                            html="<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><title>"+title+"</title><style>body{margin:0}.player{position:relative;width:100%;height:180px}video{width:100%;height:180px}.controls{position:absolute;top:0;right:0;bottom:0;left:0}</style><div class='player'><video title='"+title+"' src='blob:https://player.vimeo.com/unavailable' poster='data:image/png;base64,"+Base64.encodeToString(b?fixture.blue:fixture.red,Base64.NO_WRAP)+"' preload='none'></video><div class='controls'></div></div><script>window.playerConfig={video:{id:"+id+",title:'"+title+"',duration:2},request:{files:{progressive:[{url:'https://vimeo-media.test/"+name+"',mime:'video/mp4',width:320,height:180,quality:'180p'}]}}};</script>";
+                        }
+                        if(html!=null)return new android.webkit.WebResourceResponse("text/html","UTF-8",new java.io.ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8)));
+                        return original.shouldInterceptRequest(view,request);
+                    }
+                    @Override public void onPageStarted(WebView view,String target,Bitmap icon){original.onPageStarted(view,target,icon);}
+                    @Override public void onPageFinished(WebView view,String target){original.onPageFinished(view,target);if(top.equals(target))loaded.countDown();}
+                    @Override public void doUpdateVisitedHistory(WebView view,String target,boolean reload){original.doUpdateVisitedHistory(view,target,reload);}
+                });call("navigate",new Class<?>[]{String.class},top);
+            });assertTrue(loaded.await(12,TimeUnit.SECONDS));
+            assertEquals("The fixture must exercise real cross-origin isolation","true",js("(function(){try{document.querySelector('iframe').contentWindow.document;return false}catch(e){return true}})()"));
+            marker("Vimeo Testfilm A");marker("Vimeo Testfilm B");preview();marker("Vimeo Testfilm B").click();text("Player öffnen").click();
+            await(()->{boolean[] found={false};main(()->found[0]=second.equals(((WebView)call("activeView",new Class<?>[0])).getUrl()));return found[0];},"The selected second player's ID and unlisted hash are preserved");
+            marker("Vimeo Testfilm B").click();text("Originaldatei speichern");text("Informationen").click();
+            assertNotNull(device.wait(Until.findObject(By.textContains("Dateiname / Pfadende: second.mp4")),8000));assertNotNull(device.findObject(By.textContains("Auflösung: 320 × 180 Pixel")));assertNotNull(device.findObject(By.textContains("Dauer: 0:02")));assertNull(device.findObject(By.textContains("Dateiname / Pfadende: first.mp4")));text("Schließen").click();
+            main(()->((WebView)call("activeView",new Class<?>[0])).goBack());marker("Vimeo Testfilm A");marker("Vimeo Testfilm B");
+        }catch(AssertionError failure){diagnostic();throw failure;}finally{if(activity!=null)main(activity::finish);}
+    }
     private final class Fixture implements AutoCloseable {
         final ServerSocket server=new ServerSocket(0);final byte[] first,second,red,blue;
         Fixture()throws Exception{
