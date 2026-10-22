@@ -40,7 +40,7 @@
     window.__bestBrowserAdblock = {signature: signature, installed: function () {
         if (stopped) return false;
         if (sheet) return document.adoptedStyleSheets.indexOf(sheet) >= 0;
-        if (style) return !!style.parentNode;
+        if (style) return !!(document.documentElement && document.documentElement.contains(style));
         return !document.head && !document.documentElement;
     }, stop: function () {
         stopped = true;

@@ -4,7 +4,7 @@ function run(host,allowed=[],constructed=true){
     const sheets=[],nodes=[];
     let installs=0;
     const parent={appendChild(node){installs++;nodes.push(node);node.parentNode=this;},removeChild(node){nodes.splice(nodes.indexOf(node),1);node.parentNode=null;}};
-    const document={head:parent,documentElement:parent,createElement(){return {setAttribute(){},textContent:''};},removeEventListener(){},addEventListener(){}};
+    const document={head:parent,documentElement:{contains(node){return node.parentNode===document.head;}},createElement(){return {setAttribute(){},textContent:''};},removeEventListener(){},addEventListener(){}};
     if(constructed)document.adoptedStyleSheets=sheets;
     const context={document,location:{protocol:'https:',hostname:host},CSSStyleSheet:class{replaceSync(css){installs++;this.css=css;}},MutationObserver:class{observe(){}disconnect(){}}};
     context.window=context;context.top=context;
@@ -25,6 +25,7 @@ for(const constructed of [true,false]){
     normal.apply([]);assert.equal(normal.installs(),3);
     if(constructed)normal.document.adoptedStyleSheets=[];else normal.nodes[0].parentNode.removeChild(normal.nodes[0]);
     normal.apply();assert.equal(normal.installs(),4,'Removed stylesheets are repaired');
+    if(!constructed){normal.document.head={...normal.document.head};normal.apply();assert.equal(normal.installs(),5,'Replacing the whole head must not leave filtering in a disconnected tree');}
     assert.equal(run('sub.news.example',['news.example'],constructed).css,'');
     assert(run('news.example.evil.test',['news.example'],constructed).css.includes('.ads{'));
     const test=run('adblock.turtlecute.org',[],constructed);assert(test.css.includes('.adbox.banner_ads.adsbox{'));
