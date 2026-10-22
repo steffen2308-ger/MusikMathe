@@ -13,27 +13,33 @@ import org.junit.runner.RunWith;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.LooperMode;
 import static org.junit.Assert.*;
 
 /** Slow renderers must not acquire an ever-growing queue of optional DOM scans. */
-@RunWith(org.robolectric.RobolectricTestRunner.class) @Config(sdk=28)
+@RunWith(org.robolectric.RobolectricTestRunner.class) @Config(sdk=28) @LooperMode(LooperMode.Mode.PAUSED)
 public class VideoMarkersSchedulingTest {
     private static final class DeferredWebView extends WebView {
         final List<ValueCallback<String>> callbacks=new ArrayList<>();
         int evaluations;
-        DeferredWebView(Context context){super(context);layout(0,0,800,600);}
+        DeferredWebView(Context context){super(context);measure(android.view.View.MeasureSpec.makeMeasureSpec(800,android.view.View.MeasureSpec.EXACTLY),android.view.View.MeasureSpec.makeMeasureSpec(600,android.view.View.MeasureSpec.EXACTLY));layout(0,0,800,600);}
         @Override public boolean isShown(){return true;}
         @Override public String getUrl(){return "https://video.example/watch";}
         @Override public void evaluateJavascript(String script,ValueCallback<String> callback){evaluations++;callbacks.add(callback);}
         void answer(String value){assertFalse(callbacks.isEmpty());callbacks.remove(0).onReceiveValue(value);}
     }
     private void tick(){Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300));}
+    private void assertReady(VideoMarkers markers,DeferredWebView web){
+        assertTrue("Measured width: "+web.getWidth(),web.getWidth()>0);assertTrue("Measured height: "+web.getHeight(),web.getHeight()>0);
+        assertTrue(web.isShown());assertTrue(Address.isWeb(web.getUrl()));
+        try{java.lang.reflect.Method ready=VideoMarkers.class.getDeclaredMethod("ready");ready.setAccessible(true);assertEquals("Scheduling fixture is a ready web page",Boolean.TRUE,ready.invoke(markers));}catch(ReflectiveOperationException error){throw new AssertionError(error);}
+    }
     private String emptyReport(){return org.json.JSONObject.quote("{\"href\":\"https://video.example/watch\",\"width\":800,\"height\":600,\"rows\":[]}");}
     @Test public void repeatedRefreshesWaitForTheOutstandingRendererCallback(){
         Context context=RuntimeEnvironment.getApplication();FrameLayout host=new FrameLayout(context);DeferredWebView web=new DeferredWebView(context);
         VideoMarkers markers=new VideoMarkers(context,host,()->true,(view,row)->fail("No stale capture"));
         try{
-            markers.attach(web);markers.resume();tick();assertEquals(1,web.evaluations);
+            markers.attach(web);markers.resume();assertReady(markers,web);tick();assertEquals(1,web.evaluations);
             for(int i=0;i<100;i++){markers.changed(web);tick();}
             assertEquals("Refresh events must coalesce while JavaScript is pending",1,web.evaluations);assertEquals(1,web.callbacks.size());
             web.answer("null");tick();assertEquals("One fresh scan after the stale response",2,web.evaluations);
@@ -47,7 +53,7 @@ public class VideoMarkersSchedulingTest {
         Context context=RuntimeEnvironment.getApplication();FrameLayout host=new FrameLayout(context);DeferredWebView a=new DeferredWebView(context),b=new DeferredWebView(context);
         VideoMarkers markers=new VideoMarkers(context,host,()->true,(view,row)->fail("No stale capture"));
         try{
-            markers.attach(a);markers.resume();tick();markers.attach(b);tick();markers.attach(a);tick();
+            markers.attach(a);markers.resume();assertReady(markers,a);tick();markers.attach(b);assertReady(markers,b);tick();markers.attach(a);tick();
             assertEquals(1,a.evaluations);assertEquals(1,b.evaluations);
             b.answer(emptyReport());tick();assertEquals(1,a.evaluations);
             a.answer(emptyReport());tick();assertEquals(2,a.evaluations);assertEquals(1,a.callbacks.size());
