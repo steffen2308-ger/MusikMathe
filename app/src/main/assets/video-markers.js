@@ -10,6 +10,12 @@
   var hitX = width * fractionX, hitY = height * fractionY;
   function text(value, limit) { return typeof value === 'string' ? value.slice(0, limit) : ''; }
   function positive(value) { return typeof value === 'number' && isFinite(value) && value > 0 ? value : 0; }
+  function first(scope, selector, limit) {
+    var out = []; if (limit <= 0) return out;
+    var nodes = scope.querySelectorAll(selector);
+    for (var i = 0; i < nodes.length && i < limit; i++) out.push(nodes[i]);
+    return out;
+  }
   function intersect(a, b) {
     return {left: Math.max(a.left, b.left), top: Math.max(a.top, b.top), right: Math.min(a.right, b.right), bottom: Math.min(a.bottom, b.bottom)};
   }
@@ -69,12 +75,12 @@
     try {
       var doc = w.document, roots = scopes(doc), videos = [], frames = [], links = [], videoBoxes = [];
       roots.forEach(function (scope) {
-        videos = videos.concat(Array.from(scope.querySelectorAll('video')).slice(0, 64));
-        frames = frames.concat(Array.from(scope.querySelectorAll('iframe,frame')).slice(0, 32));
-        links = links.concat(Array.from(scope.querySelectorAll('a[href]')).slice(0, 300));
+        videos = videos.concat(first(scope, 'video', 64 - videos.length));
+        frames = frames.concat(first(scope, 'iframe,frame', 32 - frames.length));
+        links = links.concat(first(scope, 'a[href]', 300 - links.length));
       });
       links = links.slice(0, 300);
-      if (videoLink(w.location.href, w.location.href) && /(^|\.)n-tv\.de$/.test(w.location.hostname)) links = links.concat(Array.from(doc.querySelectorAll('img[alt="Video poster"],img[alt="Video-Poster"]')).slice(0, 8));
+      if (videoLink(w.location.href, w.location.href) && /(^|\.)n-tv\.de$/.test(w.location.hostname)) links = links.concat(first(doc, 'img[alt="Video poster"],img[alt="Video-Poster"]', 8));
       for (var i = 0; i < Math.min(videos.length, 64) && rows.length < 24; i++) {
         var video = videos[i], display = video;
         // Vimeo keeps its <video> transparent behind a separate poster before
@@ -115,7 +121,7 @@
           var source = {url: url, type: text(type, 200) || 'video/unknown', current: url === current}; seen[url] = source; sources.push(source); return source;
         }
         add(current, video.getAttribute('type')); add(video.src, video.getAttribute('type'));
-        video.querySelectorAll('source').forEach(function (source) { add(source.src, source.type); });
+        first(video, 'source', 64).forEach(function (source) { add(source.src, source.type); });
         try {
           if (w.videojs && typeof w.videojs.getPlayer === 'function') {
             var owner = video.closest('.video-js'), api = owner && w.videojs.getPlayer(owner.id);

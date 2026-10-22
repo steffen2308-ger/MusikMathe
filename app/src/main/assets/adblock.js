@@ -1,7 +1,9 @@
 (function () {
     'use strict';
     if (window.top !== window || !/^https?:$/.test(location.protocol)) return;
-    if (window.__bestBrowserAdblock) window.__bestBrowserAdblock.stop();
+    var signature = '__CONFIG_KEY__', previous = window.__bestBrowserAdblock;
+    if (previous && previous.signature === signature && previous.installed()) return;
+    if (previous) previous.stop();
     var host = location.hostname.toLowerCase().replace(/\.$/, '');
     function matches(domain) { return host === domain || host.endsWith('.' + domain); }
     var allowedSites = '__SITE_EXCEPTIONS__';
@@ -35,7 +37,12 @@
         style.textContent = css;
         parent.appendChild(style);
     }
-    window.__bestBrowserAdblock = {stop: function () {
+    window.__bestBrowserAdblock = {signature: signature, installed: function () {
+        if (stopped) return false;
+        if (sheet) return document.adoptedStyleSheets.indexOf(sheet) >= 0;
+        if (style) return !!style.parentNode;
+        return !document.head && !document.documentElement;
+    }, stop: function () {
         stopped = true;
         if (observer) observer.disconnect();
         document.removeEventListener('DOMContentLoaded', install);

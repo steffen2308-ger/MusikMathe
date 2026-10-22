@@ -27,7 +27,8 @@ final class AdBlockResources {
     private static volatile String problem = "";
     private static String scriptTemplate;
     private static String scriptKey,scriptCache;
-    private static final Object LOCK = new Object();
+    private static final Object HOST_LOCK = new Object();
+    private static final Object SCRIPT_LOCK = new Object();
 
     private AdBlockResources() { }
     private static AtomicFile cache(Context context) {
@@ -36,7 +37,7 @@ final class AdBlockResources {
     static void preload(Context context) {
         if(loaded)return;
         Context app=context.getApplicationContext();
-        Thread thread=new Thread(()->ensureLoaded(app),"adblock-filters");thread.setDaemon(true);thread.start();
+        Thread thread=new Thread(()->{cosmeticScript(app,java.util.Collections.emptySet());ensureLoaded(app);},"adblock-filters");thread.setDaemon(true);thread.start();
     }
     static byte[] readLimited(InputStream source) throws IOException {
         ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] buffer=new byte[8192];int n;
@@ -53,7 +54,7 @@ final class AdBlockResources {
     }
     static void ensureLoaded(Context context) {
         if(loaded)return;
-        synchronized(LOCK){
+        synchronized(HOST_LOCK){
             if(loaded)return;
             try(InputStream in=cache(context).openRead()){
                 AdBlocker.useHosts(validated(readLimited(in)));problem="";loaded=true;return;
@@ -68,7 +69,7 @@ final class AdBlockResources {
         return !problem.isEmpty()?problem:loaded?java.text.NumberFormat.getIntegerInstance().format(AdBlocker.hostCount())+" Serverregeln geladen":"Filter werden geladen …";
     }
     static String cosmeticScript(Context context,Set<String> exceptions) {
-        synchronized(LOCK){
+        synchronized(SCRIPT_LOCK){
             if(scriptTemplate==null){
                 try(InputStream js=context.getAssets().open("adblock.js");InputStream data=context.getAssets().open("adblock_cosmetic.json")){
                     scriptTemplate=new String(readLimited(js),StandardCharsets.UTF_8).replace("'__FILTER_DATA__'",new String(readLimited(data),StandardCharsets.UTF_8));
@@ -76,13 +77,14 @@ final class AdBlockResources {
             }
             ArrayList<String> sorted=new ArrayList<>(exceptions);java.util.Collections.sort(sorted);
             String key=new JSONArray(sorted).toString();
-            if(!key.equals(scriptKey)){scriptCache=scriptTemplate.replace("'__SITE_EXCEPTIONS__'",key);scriptKey=key;}
+            // Bundled CSS rules cannot change during this process; only the exception list varies.
+            if(!key.equals(scriptKey)){scriptCache=scriptTemplate.replace("'__SITE_EXCEPTIONS__'",key).replace("'__CONFIG_KEY__'",org.json.JSONObject.quote("cosmetic-v2:"+key));scriptKey=key;}
             return scriptCache;
         }
     }
     static void installUpdate(Context context,byte[] data)throws IOException {
         Set<String> next=validated(data);
-        synchronized(LOCK){
+        synchronized(HOST_LOCK){
             AtomicFile target=cache(context);FileOutputStream output=null;
             try{
                 output=target.startWrite();output.write(data);target.finishWrite(output);

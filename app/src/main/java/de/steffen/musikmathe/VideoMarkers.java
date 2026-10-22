@@ -30,9 +30,11 @@ final class VideoMarkers {
     private final BiConsumer<WebView,JSONObject> selected;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Map<String,Dot> dots=new HashMap<>();
+    private final Map<WebView,Object> pending=new java.util.WeakHashMap<>();
     private final String script;
     private WebView web;
-    private boolean running,destroyed,busy,dragging;
+    private boolean running,destroyed,dragging;
+    private String requestedCapture="";
     private int generation;
     private final Runnable poll=()->sample("");
 
@@ -47,7 +49,7 @@ final class VideoMarkers {
     }
     private int dp(int value){return Math.round(value*context.getResources().getDisplayMetrics().density);}
     void attach(WebView view){
-        generation++;busy=false;dragging=false;clear();web=view;
+        generation++;requestedCapture="";dragging=false;clear();web=view;
         if(overlay.getParent() instanceof ViewGroup)((ViewGroup)overlay.getParent()).removeView(overlay);
         host.addView(overlay,new FrameLayout.LayoutParams(-1,-1));refreshAfter(220);
     }
@@ -59,34 +61,44 @@ final class VideoMarkers {
         else if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL){dragging=false;refresh();}
     }
     void refresh(){refreshAfter(160);}
-    private void refreshAfter(long delay){generation++;busy=false;clear();handler.removeCallbacks(poll);if(running&&!destroyed)handler.postDelayed(poll,delay);}
+    private void refreshAfter(long delay){generation++;clear();handler.removeCallbacks(poll);if(running&&!destroyed)handler.postDelayed(poll,delay);}
     void resume(){if(destroyed)return;running=true;refreshAfter(220);}
-    void pause(){running=false;generation++;busy=false;handler.removeCallbacks(poll);clear();}
-    void destroy(){pause();destroyed=true;web=null;if(overlay.getParent() instanceof ViewGroup)((ViewGroup)overlay.getParent()).removeView(overlay);}
+    void pause(){running=false;generation++;requestedCapture="";handler.removeCallbacks(poll);clear();}
+    void destroy(){pause();destroyed=true;pending.clear();web=null;if(overlay.getParent() instanceof ViewGroup)((ViewGroup)overlay.getParent()).removeView(overlay);}
     private boolean ready(){return running&&!destroyed&&!dragging&&available.getAsBoolean()&&web!=null&&web.isShown()&&web.getWidth()>0&&web.getHeight()>0&&Address.isWeb(web.getUrl());}
     private void clear(){if(dots.isEmpty())return;dots.clear();overlay.removeAllViews();}
     private void later(long delay){handler.removeCallbacks(poll);if(running&&!destroyed)handler.postDelayed(poll,delay);}
+    private boolean finish(WebView source,Object request,int token){
+        if(pending.get(source)!=request)return false;
+        pending.remove(source);
+        if(destroyed)return false;
+        if(token!=generation||source!=web){if(source==web)later(160);return false;}
+        return true;
+    }
     private void sample(String capture){
-        if(!ready()){clear();later(1000);return;}if(busy)return;
-        WebView source=web;int token=generation;busy=true;
-        String call="typeof window.__mmVideoMarkerScan==='function'?window.__mmVideoMarkerScan("+((double)dp(44)/source.getWidth())+","+((double)dp(44)/source.getHeight())+","+JSONObject.quote(capture)+"):null";
+        if(!capture.isEmpty())requestedCapture=capture;
+        if(!ready()){clear();later(1000);return;}if(pending.containsKey(web))return;
+        WebView source=web;int token=generation;Object request=new Object();pending.put(source,request);
+        String captureId=requestedCapture;requestedCapture="";
+        String call="typeof window.__mmVideoMarkerScan==='function'?window.__mmVideoMarkerScan("+((double)dp(44)/source.getWidth())+","+((double)dp(44)/source.getHeight())+","+JSONObject.quote(captureId)+"):null";
         source.evaluateJavascript(call,value->{
-            if(token!=generation||source!=web||destroyed)return;busy=false;
-            if(!ready()){clear();later(1000);return;}
+            if(token!=generation||source!=web||destroyed){finish(source,request,token);return;}
+            if(!ready()){finish(source,request,token);clear();later(1000);return;}
             if("null".equals(value)){
-                busy=true;source.evaluateJavascript("(function(){window.__mmVideoMarkerScan="+script+";return true;})()",installed->{
-                    if(token!=generation||source!=web||destroyed)return;busy=false;
-                    if("true".equals(installed))sample(capture);else{clear();later(1000);}
+                source.evaluateJavascript("(function(){window.__mmVideoMarkerScan="+script+";return true;})()",installed->{
+                    if(!finish(source,request,token))return;
+                    if("true".equals(installed))sample(captureId);else{clear();later(1000);}
                 });return;
             }
+            if(!finish(source,request,token))return;
             try{
                 if(value==null||value.length()>700000)throw new IllegalArgumentException();
                 JSONObject report=new JSONObject(String.valueOf(new JSONTokener(value).nextValue()));
                 if(!java.util.Objects.equals(source.getUrl(),report.optString("href")))throw new IllegalArgumentException();
                 JSONArray rows=report.optJSONArray("rows");double width=report.optDouble("width"),height=report.optDouble("height");
                 if(rows==null||!Double.isFinite(width)||!Double.isFinite(height)||width<=0||height<=0)throw new IllegalArgumentException();
-                if(!capture.isEmpty()){
-                    for(int i=0;i<Math.min(rows.length(),24);i++){JSONObject row=rows.getJSONObject(i);if(capture.equals(row.optString("id"))){selected.accept(source,row);break;}}
+                if(!captureId.isEmpty()){
+                    for(int i=0;i<Math.min(rows.length(),24);i++){JSONObject row=rows.getJSONObject(i);if(captureId.equals(row.optString("id"))){selected.accept(source,row);break;}}
                 }else render(source,rows,width,height);
                 later(rows.length()==0?1000:750);
             }catch(Exception ignored){clear();later(1000);}
@@ -99,7 +111,7 @@ final class VideoMarkers {
             if(id.isEmpty()||id.length()>32||!Double.isFinite(x)||!Double.isFinite(y)||x<0||y<0||x>width||y>height)continue;
             int left=source.getLeft()+(int)Math.round(x*source.getWidth()/width)-size/2,top=source.getTop()+(int)Math.round(y*source.getHeight()/height)-size/2;
             if(left<0||top<0||left+size>overlay.getWidth()||top+size>overlay.getHeight())continue;
-            Dot dot=dots.get(id);if(dot==null){dot=new Dot(context);dots.put(id,dot);overlay.addView(dot);final String key=id;dot.setOnClickListener(v->{generation++;busy=false;handler.removeCallbacks(poll);sample(key);});}
+            Dot dot=dots.get(id);if(dot==null){dot=new Dot(context);dots.put(id,dot);overlay.addView(dot);final String key=id;dot.setOnClickListener(v->{generation++;handler.removeCallbacks(poll);sample(key);});}
             String title=row.optString("title");if(title.length()>160)title=title.substring(0,160);
             dot.setContentDescription("Video herunterladen"+(title.isEmpty()?"":": "+title));
             ViewGroup.LayoutParams old=dot.getLayoutParams();FrameLayout.LayoutParams previous=old instanceof FrameLayout.LayoutParams?(FrameLayout.LayoutParams)old:null;

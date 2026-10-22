@@ -71,4 +71,13 @@ root.document.getElementById=()=>owner;root.document.hit=vimeoPoster;vimeo.style
 rows=scan().rows;assert.equal(rows.length,1);assert.equal(rows[0].sources.length,4);assert.equal(rows[0].title,'Exact Vimeo film');
 owner.style={display:'none'};assert.equal(scan().rows.length,0);owner.style={};
 root.document.hit={closest:()=>({})};assert.equal(scan().rows.length,0);
-console.log('Video markers: source isolation, live DOM updates, stable IDs, clipping, occlusion, nested frames, cross-origin isolation, visual viewport, YouTube identity and click-only thumbnails passed');
+// A huge feed must copy only the bounded prefix, without materializing its whole NodeList.
+const heavy=page();let linkReads=0;const query=heavy.document.querySelectorAll;
+const millionLinks=new Proxy({}, {get(target,key){
+  if(key==='length')return 1000000;
+  if(key===Symbol.iterator)throw new Error('Do not materialize the whole NodeList');
+  if(/^\d+$/.test(String(key))){linkReads++;return {href:'https://ordinary.example/article'};}
+}});
+heavy.document.querySelectorAll=function(selector){return selector==='a[href]'?millionLinks:query.call(this,selector);};
+vm.runInNewContext('('+source+')(0.11,0.055,"")',{window:heavy,URL});assert.equal(linkReads,300);
+console.log('Video markers: source isolation, live DOM updates, stable IDs, clipping, occlusion, nested frames, cross-origin isolation, visual viewport, YouTube identity, click-only thumbnails and bounded large-feed allocation passed');

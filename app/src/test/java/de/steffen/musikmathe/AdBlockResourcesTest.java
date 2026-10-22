@@ -20,6 +20,19 @@ public class AdBlockResourcesTest {
         String script=AdBlockResources.cosmeticScript(context,Collections.singleton("allowed.example"));
         assertTrue(script.contains("allowed.example"));assertTrue(script.contains("selectors"));
         assertFalse(script.contains("'__FILTER_DATA__'"));assertFalse(script.contains("'__SITE_EXCEPTIONS__'"));
+        assertFalse(script.contains("'__CONFIG_KEY__'"));
+    }
+    @Test public void aBlockedHostFilterWorkerDoesNotBlockCosmeticFiltering()throws Exception{
+        Context context=RuntimeEnvironment.getApplication();AdBlockResources.cosmeticScript(context,Collections.emptySet());
+        java.lang.reflect.Field field=AdBlockResources.class.getDeclaredField("HOST_LOCK");field.setAccessible(true);Object hostLock=field.get(null);
+        java.util.concurrent.CountDownLatch held=new java.util.concurrent.CountDownLatch(1),release=new java.util.concurrent.CountDownLatch(1);
+        Thread loader=new Thread(()->{synchronized(hostLock){held.countDown();try{release.await(5,java.util.concurrent.TimeUnit.SECONDS);}catch(InterruptedException ignored){Thread.currentThread().interrupt();}}});loader.start();
+        java.util.concurrent.ExecutorService requester=java.util.concurrent.Executors.newSingleThreadExecutor();
+        try{
+            assertTrue(held.await(2,java.util.concurrent.TimeUnit.SECONDS));
+            String script=requester.submit(()->AdBlockResources.cosmeticScript(context,Collections.singleton("independent.example"))).get(2,java.util.concurrent.TimeUnit.SECONDS);
+            assertTrue(script.contains("independent.example"));
+        }finally{release.countDown();requester.shutdownNow();loader.join(2000);}
     }
     @Test public void failedUpdateDoesNotReplaceExistingFilters()throws Exception{
         Context context=RuntimeEnvironment.getApplication();AdBlockResources.ensureLoaded(context);
