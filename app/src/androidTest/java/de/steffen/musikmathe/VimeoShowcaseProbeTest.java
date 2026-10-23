@@ -3,7 +3,6 @@ package de.steffen.musikmathe;
 import android.app.Instrumentation;
 import android.content.Context;
 import android.content.Intent;
-import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -11,14 +10,11 @@ import android.util.Log;
 import android.webkit.WebView;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
-import androidx.test.uiautomator.By;
 import androidx.test.uiautomator.UiDevice;
-import androidx.test.uiautomator.UiObject2;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
 import org.json.JSONObject;
 import org.junit.Assume;
 import org.junit.Test;
@@ -34,7 +30,7 @@ public class VimeoShowcaseProbeTest {
     private Object field(String name)throws Exception{Field f=MainActivity.class.getDeclaredField(name);f.setAccessible(true);return f.get(activity);}
     private JSONObject inspect(String stage)throws Exception{
         JSONObject report=new JSONObject().put("stage",stage);long started=SystemClock.elapsedRealtime();CountDownLatch ui=new CountDownLatch(1),js=new CountDownLatch(1);String[] value={null};
-        handler.post(()->{ui.countDown();try{WebView web=(WebView)call("activeView",new Class<?>[0]);web.evaluateJavascript("JSON.stringify({href:location.href,title:document.title,ready:document.readyState,nodes:document.getElementsByTagName('*').length,links:document.links.length,frames:Array.from(document.querySelectorAll('iframe')).slice(0,6).map(f=>({src:f.src,width:f.clientWidth,height:f.clientHeight})),videos:Array.from(document.querySelectorAll('video')).slice(0,4).map(v=>({ready:v.readyState,time:v.currentTime,paused:v.paused,error:v.error&&v.error.code,width:v.videoWidth,height:v.videoHeight})),body:document.body&&document.body.innerText.slice(0,1800),resources:performance.getEntriesByType('resource').length,cosmetic:!!window.__bestBrowserAdblock})",result->{value[0]=result;js.countDown();});}catch(Exception error){value[0]=error.toString();js.countDown();}});
+        handler.post(()->{ui.countDown();try{WebView web=(WebView)call("activeView",new Class<?>[0]);web.evaluateJavascript("JSON.stringify({href:location.href,title:document.title,ready:document.readyState,nodes:document.getElementsByTagName('*').length,links:document.links.length,frameCount:document.querySelectorAll('iframe').length,frames:Array.from(document.querySelectorAll('iframe')).slice(0,2).map(f=>({host:new URL(f.src,location.href).hostname,width:f.clientWidth,height:f.clientHeight,loading:f.loading})),videos:Array.from(document.querySelectorAll('video')).slice(0,4).map(v=>({ready:v.readyState,time:v.currentTime,paused:v.paused,error:v.error&&v.error.code,width:v.videoWidth,height:v.videoHeight})),resources:performance.getEntriesByType('resource').length,cosmetic:!!window.__bestBrowserAdblock})",result->{value[0]=result;js.countDown();});}catch(Exception error){value[0]=error.toString();js.countDown();}});
         report.put("uiResponsive",ui.await(4,TimeUnit.SECONDS));report.put("jsResponsive",js.await(8,TimeUnit.SECONDS));report.put("latencyMs",SystemClock.elapsedRealtime()-started);report.put("dom",value[0]);Log.i("VimeoShowcase",report.toString());return report;
     }
     @Test public void diagnoseReportedShowcase()throws Exception{
@@ -53,9 +49,7 @@ public class VimeoShowcaseProbeTest {
         try{
             Thread.sleep(10000);inspect("loaded");
             java.io.File screenshot=new java.io.File(app.getFilesDir(),"vimeo-showcase-"+mode+".png");device.takeScreenshot(screenshot);
-            UiObject2 play=device.findObject(By.desc(Pattern.compile("(?i).*(play|abspielen|wiedergeben).*")));if(play==null)play=device.findObject(By.text(Pattern.compile("(?i)^(play|abspielen|wiedergeben)$")));if(play!=null){play.click();Log.i("VimeoShowcase","nativePlayClicked=true");}
-            else{CountDownLatch sent=new CountDownLatch(1);handler.post(()->{try{WebView web=(WebView)call("activeView",new Class<?>[0]);web.evaluateJavascript("(function(){var f=Array.from(document.querySelectorAll('iframe')).find(f=>/^https:\\/\\/player\\.vimeo\\.com\\//.test(f.src));if(f){f.contentWindow.postMessage(JSON.stringify({method:'play'}),'https://player.vimeo.com');return true;}var v=document.querySelector('video');if(v){v.play().catch(()=>{});return true;}return false;})()",v->{Log.i("VimeoShowcase","playRequest="+v);sent.countDown();});}catch(Exception error){sent.countDown();}});sent.await(3,TimeUnit.SECONDS);}
-            Thread.sleep(6000);inspect("after-play");
+            Thread.sleep(6000);inspect("settled");
         }finally{handler.post(()->{if(activity!=null)activity.finish();});}
     }
 }

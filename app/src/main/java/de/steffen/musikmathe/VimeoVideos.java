@@ -14,7 +14,10 @@ final class VimeoVideos {
             String id="",hash=url.getQueryParameter("h");
             if("player.vimeo.com".equals(host)){
                 if(!path.matches("/video/[0-9]{1,15}/?"))return "";
-                id=url.getPathSegments().get(1);
+                if(hash!=null&&!hash.isEmpty()&&!hash.matches("[A-Za-z0-9_-]{1,128}"))return "";
+                // The site may supply signed context, privacy and playback parameters.
+                // Preserve their encoded bytes; never reconstruct or invent a player signature.
+                return url.buildUpon().fragment(null).build().toString();
             }else if("vimeo.com".equals(host)||"www.vimeo.com".equals(host)){
                 java.util.regex.Matcher match=java.util.regex.Pattern.compile("^/(?:channels/[^/]+/|groups/[^/]+/videos/|(?:showcase|album)/[0-9]+/video/)?([0-9]{1,15})(?:/([A-Fa-f0-9]{6,64}))?/?$").matcher(path);
                 if(!match.matches())return "";id=match.group(1);if(match.group(2)!=null)hash=match.group(2);

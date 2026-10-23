@@ -81,3 +81,13 @@ const millionLinks=new Proxy({}, {get(target,key){
 heavy.document.querySelectorAll=function(selector){return selector==='a[href]'?millionLinks:query.call(this,selector);};
 vm.runInNewContext('('+source+')(0.11,0.055,"")',{window:heavy,URL});assert.equal(linkReads,300);
 console.log('Video markers: source isolation, live DOM updates, stable IDs, clipping, occlusion, nested frames, cross-origin isolation, visual viewport, YouTube identity, click-only thumbnails and bounded large-feed allocation passed');
+
+// A direct player link may carry a signed showcase context, not only an unlisted hash.
+root.document.videos=[];root.document.frames=[];root.document.posters=[];root.document.hit=null;
+const signedPlayer='https://player.vimeo.com/video/76979871?h=8272103f6e&context=Vimeo%5CController&s=fixture_signature&token=a%2Fb+%2B';
+root.document.links=[card(signedPlayer+'#preview','Signed player',rect(10,30,360,180))];
+assert.equal(scan().rows[0].target,signedPlayer);
+let styleReads=0;const originalStyle=root.getComputedStyle;root.getComputedStyle=v=>{styleReads++;return originalStyle(v);};
+root.document.links=Array.from({length:300},(_,i)=>card('https://vimeo.com/'+(76979871+i),'Offscreen '+i,rect(10,2000+i*200,360,180)));
+assert.equal(scan().rows.length,0);assert.equal(styleReads,0,'Offscreen gallery cards must not request computed styles');
+console.log('Vimeo signed player queries and offscreen gallery style budget passed');

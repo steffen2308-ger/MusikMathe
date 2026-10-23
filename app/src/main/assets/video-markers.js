@@ -55,6 +55,7 @@
         if (vm && !u.username && !u.password && (!u.port || u.port === '443')) {
           var vh = vm[2] || u.searchParams.get('h') || '';
           if (vh && !/^[A-Za-z0-9_-]{1,128}$/.test(vh)) return null;
+          if (h === 'player.vimeo.com') { u.hash = ''; return {url: u.href, youtubeId: ''}; }
           return {url: 'https://player.vimeo.com/video/' + vm[1] + (vh ? '?h=' + encodeURIComponent(vh) : ''), youtubeId: ''};
         }
       }
@@ -170,11 +171,11 @@
       for (var k = 0; k < Math.min(links.length, 308) && rows.length < 24; k++) {
         var link = links[k], poster = link.tagName === 'IMG', target = videoLink(poster ? w.location.href : link.href, w.location.href), image = poster ? link : link.querySelector('img');
         if (!target || !image || targets[target.url]) continue;
+        var ir = image.getBoundingClientRect(), box = intersect(bounds(ir, x, y, sx, sy), clip);
+        if (box.right - box.left < hitX * 1.2 || box.bottom - box.top < hitY * 1.2) continue;
         var imageStyle = w.getComputedStyle(image), linkStyle = w.getComputedStyle(link);
         if (imageStyle.visibility === 'hidden' || Number(imageStyle.opacity) === 0 || linkStyle.visibility === 'hidden' || Number(linkStyle.opacity) === 0) continue;
         if (videos.some(function (v) { return link.contains(v); })) continue;
-        var ir = image.getBoundingClientRect(), box = intersect(bounds(ir, x, y, sx, sy), clip);
-        if (box.right - box.left < hitX * 1.2 || box.bottom - box.top < hitY * 1.2) continue;
         if (videoBoxes.some(function (vb) { var overlap = intersect(vb, box); return (overlap.right - overlap.left) > (box.right - box.left) * .5 && (overlap.bottom - overlap.top) > (box.bottom - box.top) * .5; })) continue;
         var px = box.right - hitX * .6, py = box.top + hitY * .6, hit = doc.elementFromPoint((px - x) / sx, (py - y) / sy);
         if (!hit || !link.contains(hit)) continue;
