@@ -99,6 +99,10 @@ public class VideoDownloadQueueTest {
     @Test public void cancellingDuringLateMediaFileCreationWaitsForCleanup()throws Exception{
         documents.holdCreate=true;Intent intent=batch("/late.png");service.onStartCommand(intent,0,++startId);assertTrue(documents.createStarted.await(5,TimeUnit.SECONDS));AtomicInteger callbacks=new AtomicInteger();VideoDownloadService.cancelAll(callbacks::incrementAndGet);assertEquals(0,callbacks.get());documents.releaseCreate.countDown();await(()->!VideoDownloadService.busy());assertEquals(1,callbacks.get());assertFalse(new File(folder,"late.png").exists());assertTrue(requests.isEmpty());
     }
+    @Test public void stoppingAnOldServiceCannotDropANewUnclaimedBatch()throws Exception{
+        Intent next=batch("/next.png");controller.destroy();shadowOf(Looper.getMainLooper()).idle();assertEquals(1,VideoDownloadService.snapshot().waiting.size());assertTrue(VideoDownloadService.busy());
+        controller=Robolectric.buildService(VideoDownloadService.class).create();service=controller.get();service.onStartCommand(next,0,++startId);await(()->!VideoDownloadService.busy());assertEquals("video-data:/next.png",content("next.png"));
+    }
     @Test public void threeRequestsOverlapAndFailureFreesOnlyItsOwnSlot()throws Exception{
         hold("/first","/second","/third");enqueue("/first","one.mp4");enqueue("/second","two.mp4");enqueue("/third","three.mp4");await(()->requests.size()==3);assertEquals(3,connections.get());assertEquals(3,VideoDownloadService.snapshot().active.size());
         enqueue("/bad","bad.mp4");enqueue("/fifth","five.mp4");assertEquals(2,VideoDownloadService.snapshot().waiting.size());assertFalse(requests.contains("/bad"));

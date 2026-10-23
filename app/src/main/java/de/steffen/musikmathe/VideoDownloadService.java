@@ -254,7 +254,7 @@ public class VideoDownloadService extends Service {
     }
     @Override public void onTimeout(int startId,int fgsType){clearAll();stopForeground(true);stopSelf();}
     @Override public void onDestroy(){
-        destroyed=true;pendingBatches.clear();main.removeCallbacks(heartbeat);for(Job job:waiting)discard(job.destination);waiting.clear();for(Job job:new ArrayList<>(running.values()))cancelJob(job);
+        destroyed=true;main.removeCallbacks(heartbeat);for(Job job:waiting)discard(job.destination);waiting.clear();for(Job job:new ArrayList<>(running.values()))cancelJob(job);
         if(current==this)current=null;workers.shutdown();aborts.shutdown();if(running.isEmpty())notifySettled();super.onDestroy();
     }
 }
