@@ -1,0 +1,59 @@
+name: Vimeo showcase diagnosis
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/vimeo-showcase.yml'
+      - 'app/src/androidTest/java/de/steffen/musikmathe/VimeoShowcaseProbeTest.java'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  showcase:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Public showcase response
+        run: |
+          mkdir -p vimeo-diagnostics
+          curl --location --max-time 30 --compressed -A 'Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36' -o vimeo-diagnostics/showcase.html -w 'HTTP %{http_code}, bytes %{size_download}\n' https://vimeo.com/showcase/2600007
+          python3 - <<'PY'
+          import base64,zlib,pathlib
+          value=base64.b64encode(zlib.compress(pathlib.Path('vimeo-diagnostics/showcase.html').read_bytes())).decode()
+          for n in range(0,len(value),2000): print('VIMEO_HTML '+str(n//2000)+' '+value[n:n+2000])
+          PY
+      - name: Enable KVM
+        run: sudo chmod 666 /dev/kvm
+      - name: Compare browser features on the reported gallery
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: default
+          disable-animations: true
+          script: |
+            gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb shell pm grant de.steffen.musikmathe android.permission.POST_NOTIFICATIONS
+            for mode in baseline no-adblock no-markers no-prefetch chrome-agent no-extras; do adb logcat -c; timeout 65s adb shell am instrument -w -e class de.steffen.musikmathe.VimeoShowcaseProbeTest -e vimeoShowcaseProbe true -e vimeoProbeMode "$mode" de.steffen.musikmathe.test/androidx.test.runner.AndroidJUnitRunner > "vimeo-diagnostics/$mode-test.txt" 2>&1 || true; adb logcat -d -s VimeoShowcase:I chromium:E AndroidRuntime:E ActivityManager:E '*:S' > "vimeo-diagnostics/$mode-logcat.txt"; cat "vimeo-diagnostics/$mode-logcat.txt"; adb shell run-as de.steffen.musikmathe cat "files/vimeo-showcase-$mode.png" > "vimeo-diagnostics/$mode.png"; adb shell am force-stop de.steffen.musikmathe; done
+      - name: Upload diagnosis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vimeo-showcase-diagnostics
+          path: vimeo-diagnostics/
