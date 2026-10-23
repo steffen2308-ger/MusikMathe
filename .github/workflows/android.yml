@@ -128,8 +128,13 @@ jobs:
           if-no-files-found: ignore
 
   passwords:
+    name: passwords (Android API ${{ matrix.api }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [35, 36]
     steps:
       - uses: actions/checkout@v4
       - name: Checkout previous APK for performance comparison
@@ -152,7 +157,7 @@ jobs:
       - name: Verify passwords and live ad blocking on modern Android
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: ${{ matrix.api }}
           arch: x86_64
           target: default
           disable-animations: true
@@ -165,13 +170,13 @@ jobs:
             python3 scripts/report-private-opening.py
             mkdir -p private-profile-device-reports
             cp -r app/build/reports/androidTests/. private-profile-device-reports/
-            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest,de.steffen.musikmathe.BrowserFullscreenTest,de.steffen.musikmathe.BrowserMenuDeviceTest,de.steffen.musikmathe.NightModeDeviceTest,de.steffen.musikmathe.ProtectedContentDeviceTest,de.steffen.musikmathe.CastDeviceTest,de.steffen.musikmathe.VideoDownloadProgressTest,de.steffen.musikmathe.MediaBatchDeviceTest,de.steffen.musikmathe.RendererRecoveryDeviceTest,de.steffen.musikmathe.VideoParallelExportTest,de.steffen.musikmathe.VideoDetectionTest,de.steffen.musikmathe.VideoMarkersDeviceTest,de.steffen.musikmathe.VideoWindowDeviceTest,de.steffen.musikmathe.AddressSuggestionsDeviceTest,de.steffen.musikmathe.HomePageDeviceTest,de.steffen.musikmathe.PreloadingDeviceTest,de.steffen.musikmathe.VimeoLiveProbeTest -Pandroid.testInstrumentationRunnerArguments.adblockLive=true -Pandroid.testInstrumentationRunnerArguments.vimeoLive=true
+            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest,de.steffen.musikmathe.BrowserFullscreenTest,de.steffen.musikmathe.BrowserMenuDeviceTest,de.steffen.musikmathe.NightModeDeviceTest,de.steffen.musikmathe.ProtectedContentDeviceTest,de.steffen.musikmathe.CastDeviceTest,de.steffen.musikmathe.VideoDownloadProgressTest,de.steffen.musikmathe.MediaBatchDeviceTest,de.steffen.musikmathe.RendererRecoveryDeviceTest,de.steffen.musikmathe.VideoParallelExportTest,de.steffen.musikmathe.VideoDetectionTest,de.steffen.musikmathe.VideoMarkersDeviceTest,de.steffen.musikmathe.VideoWindowDeviceTest,de.steffen.musikmathe.AddressSuggestionsDeviceTest,de.steffen.musikmathe.HomePageDeviceTest,de.steffen.musikmathe.PreloadingDeviceTest,de.steffen.musikmathe.VimeoLiveProbeTest,de.steffen.musikmathe.VimeoPlaybackDeviceTest,de.steffen.musikmathe.VimeoShowcaseProbeTest -Pandroid.testInstrumentationRunnerArguments.vimeoShowcaseProbe=true -Pandroid.testInstrumentationRunnerArguments.adblockLive=true -Pandroid.testInstrumentationRunnerArguments.vimeoLive=true
             bash scripts/cutout-test.sh
       - name: Upload password test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: password-device-reports
+          name: password-device-reports-api-${{ matrix.api }}
           path: |
             app/build/reports/androidTests/
             private-profile-device-reports/

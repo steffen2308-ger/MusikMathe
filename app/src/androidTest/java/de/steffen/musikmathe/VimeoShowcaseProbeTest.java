@@ -19,6 +19,7 @@ import org.json.JSONObject;
 import org.junit.Assume;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import static org.junit.Assert.*;
 
 /** Opt-in live diagnosis of the exact reported gallery; no private profile or account. */
 @RunWith(AndroidJUnit4.class)
@@ -47,9 +48,9 @@ public class VimeoShowcaseProbeTest {
             call("navigate",new Class<?>[]{String.class},"https://vimeo.com/showcase/2600007");
         }catch(Exception error){throw new RuntimeException(error);}});
         try{
-            Thread.sleep(10000);inspect("loaded");
+            Thread.sleep(10000);JSONObject loaded=inspect("loaded");assertTrue("Native UI must remain responsive on the reported showcase",loaded.optBoolean("uiResponsive"));assertTrue("Showcase JavaScript must respond",loaded.optBoolean("jsResponsive"));
             java.io.File screenshot=new java.io.File(app.getFilesDir(),"vimeo-showcase-"+mode+".png");device.takeScreenshot(screenshot);
-            Thread.sleep(6000);inspect("settled");
+            Thread.sleep(6000);JSONObject settled=inspect("settled");assertTrue("Native UI must remain responsive after gallery loading",settled.optBoolean("uiResponsive"));assertTrue("Gallery JavaScript must remain responsive",settled.optBoolean("jsResponsive"));
         }finally{handler.post(()->{if(activity!=null)activity.finish();});}
     }
 }
