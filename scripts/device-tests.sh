@@ -18,4 +18,8 @@ for path in Path('app/build/outputs/androidTest-results').rglob('*.xml'):
             print((failure.text or '')[:16000])
 PY
 adb logcat -d -s AdBlockLiveProbe:I MenuPreview:I NightPreview:I VideoWindow:I '*:S'
+if test "$test_result" -ne 0; then
+    adb logcat -b crash -d
+    adb logcat -d -t 500 -s AndroidRuntime:E chromium:E ActivityManager:E '*:S'
+fi
 exit "$test_result"

@@ -10,8 +10,34 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  previous-device-failure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Read the most recent Android 16 device failure report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          gh api "repos/$REPOSITORY/actions/artifacts?per_page=50" > /tmp/device-artifacts.json
+          artifact_id=$(python3 -c 'import json; a=next((a for a in json.load(open("/tmp/device-artifacts.json"))["artifacts"] if a["name"]=="password-device-reports-api-36" and not a["expired"]),None); print(a["id"] if a else "")')
+          if test -z "$artifact_id"; then exit 0; fi
+          gh api "repos/$REPOSITORY/actions/artifacts/$artifact_id/zip" > /tmp/device-report.zip
+          python3 - <<'PY'
+          import zipfile,re
+          with zipfile.ZipFile('/tmp/device-report.zip') as z:
+              for name in z.namelist():
+                  if not name.endswith(('.xml','.txt')) or not ('AdBlockLiveProbe' in name or 'logcat' in name.lower()): continue
+                  text=z.read(name).decode('utf-8','replace');lines=text.splitlines();selected=set()
+                  for i,line in enumerate(lines):
+                      if re.search(r'FATAL|Fatal signal|CRASH|crash|AndroidRuntime|Render process|Uncaught|AssertionError|Exception|SIGABRT|SIGSEGV',line,re.I): selected.update(range(max(0,i-3),min(len(lines),i+35)))
+                  if selected:
+                      print('PREVIOUS_DEVICE_REPORT '+name)
+                      for i in sorted(selected)[:220]: print(lines[i][:3000])
+          PY
   chrome-reference:
     runs-on: ubuntu-latest
     timeout-minutes: 5
