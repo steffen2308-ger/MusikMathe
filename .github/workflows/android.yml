@@ -162,15 +162,22 @@ jobs:
           target: default
           disable-animations: true
           script: |
+            adb shell settings put secure show_ime_with_hard_keyboard 1
+            adb shell settings put secure immersive_mode_confirmations confirmed
             adb logcat -G 16M
-            bash scripts/performance-benchmark.sh
+            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.RendererRecoveryDeviceTest,de.steffen.musikmathe.VimeoPlaybackDeviceTest,de.steffen.musikmathe.VimeoShowcaseProbeTest -Pandroid.testInstrumentationRunnerArguments.vimeoLive=true -Pandroid.testInstrumentationRunnerArguments.vimeoShowcaseProbe=true
+            mkdir -p vimeo-device-reports
+            cp -r app/build/reports/androidTests/. vimeo-device-reports/
+            adb logcat -d -s MenuPreview:I VimeoShowcase:I '*:S' > vimeo-device-reports/live-logcat.txt
+            cat vimeo-device-reports/live-logcat.txt
+            if test "${{ matrix.api }}" = "35"; then bash scripts/performance-benchmark.sh; else mkdir -p performance-reports; fi
             adb logcat -c
             bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PrivateIsolationTest,de.steffen.musikmathe.PrivateCryptoDeviceTest
             adb logcat -d -s MenuPreview:I '*:S' > performance-reports/current-private-opening-logcat.txt
             python3 scripts/report-private-opening.py
             mkdir -p private-profile-device-reports
             cp -r app/build/reports/androidTests/. private-profile-device-reports/
-            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest,de.steffen.musikmathe.BrowserFullscreenTest,de.steffen.musikmathe.BrowserMenuDeviceTest,de.steffen.musikmathe.NightModeDeviceTest,de.steffen.musikmathe.ProtectedContentDeviceTest,de.steffen.musikmathe.CastDeviceTest,de.steffen.musikmathe.VideoDownloadProgressTest,de.steffen.musikmathe.MediaBatchDeviceTest,de.steffen.musikmathe.RendererRecoveryDeviceTest,de.steffen.musikmathe.VideoParallelExportTest,de.steffen.musikmathe.VideoDetectionTest,de.steffen.musikmathe.VideoMarkersDeviceTest,de.steffen.musikmathe.VideoWindowDeviceTest,de.steffen.musikmathe.AddressSuggestionsDeviceTest,de.steffen.musikmathe.HomePageDeviceTest,de.steffen.musikmathe.PreloadingDeviceTest,de.steffen.musikmathe.VimeoLiveProbeTest,de.steffen.musikmathe.VimeoPlaybackDeviceTest,de.steffen.musikmathe.VimeoShowcaseProbeTest -Pandroid.testInstrumentationRunnerArguments.vimeoShowcaseProbe=true -Pandroid.testInstrumentationRunnerArguments.adblockLive=true -Pandroid.testInstrumentationRunnerArguments.vimeoLive=true
+            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest,de.steffen.musikmathe.BrowserFullscreenTest,de.steffen.musikmathe.BrowserMenuDeviceTest,de.steffen.musikmathe.NightModeDeviceTest,de.steffen.musikmathe.ProtectedContentDeviceTest,de.steffen.musikmathe.CastDeviceTest,de.steffen.musikmathe.VideoDownloadProgressTest,de.steffen.musikmathe.MediaBatchDeviceTest,de.steffen.musikmathe.VideoParallelExportTest,de.steffen.musikmathe.VideoDetectionTest,de.steffen.musikmathe.VideoMarkersDeviceTest,de.steffen.musikmathe.VideoWindowDeviceTest,de.steffen.musikmathe.AddressSuggestionsDeviceTest,de.steffen.musikmathe.HomePageDeviceTest,de.steffen.musikmathe.PreloadingDeviceTest,de.steffen.musikmathe.VimeoLiveProbeTest -Pandroid.testInstrumentationRunnerArguments.adblockLive=true -Pandroid.testInstrumentationRunnerArguments.vimeoLive=true
             bash scripts/cutout-test.sh
       - name: Upload password test results
         if: always()
@@ -182,6 +189,7 @@ jobs:
             private-profile-device-reports/
             app/build/outputs/androidTest-results/
             performance-reports/
+            vimeo-device-reports/
             cutout-test.txt
           if-no-files-found: ignore
 
