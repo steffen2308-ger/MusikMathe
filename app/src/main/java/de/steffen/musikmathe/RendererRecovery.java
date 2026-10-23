@@ -6,7 +6,7 @@ import android.webkit.WebView;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 import androidx.webkit.WebViewRenderProcessClient;
-import androidx.webkit.WebViewRenderProcessCompat;
+import androidx.webkit.WebViewRenderProcess;
 import java.util.function.Predicate;
 
 /** Native controls remain outside an unresponsive webpage's JavaScript event loop. */
@@ -18,11 +18,11 @@ final class RendererRecovery {
     RendererRecovery(Activity activity,Predicate<WebView> visible){this.activity=activity;this.visible=visible;}
     void attach(WebView web){
         try{if(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_VIEW_RENDERER_CLIENT_BASIC_USAGE))WebViewCompat.setWebViewRenderProcessClient(web,new WebViewRenderProcessClient(){
-            @Override public void onRenderProcessUnresponsive(WebView view,WebViewRenderProcessCompat process){unresponsive(view,process);}
-            @Override public void onRenderProcessResponsive(WebView view,WebViewRenderProcessCompat process){responsive(view);}
+            @Override public void onRenderProcessUnresponsive(WebView view,WebViewRenderProcess process){unresponsive(view,process);}
+            @Override public void onRenderProcessResponsive(WebView view,WebViewRenderProcess process){responsive(view);}
         });}catch(RuntimeException|LinkageError unavailable){/* Older providers still have crash recovery. */}
     }
-    void unresponsive(WebView view,WebViewRenderProcessCompat process){
+    void unresponsive(WebView view,WebViewRenderProcess process){
         if(!visible.test(view)||dialog!=null)return;
         stalled=view;dialog=BrowserDialogs.builder(activity).setTitle("Seite reagiert nicht")
             .setMessage("Die Webseite antwortet nicht. Du kannst weiter warten oder die blockierte Seite beenden. Andere Seiten desselben Webprozesses müssen danach eventuell neu geladen werden.")
