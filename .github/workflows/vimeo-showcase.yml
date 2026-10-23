@@ -12,6 +12,31 @@ permissions:
   contents: read
 
 jobs:
+  chrome-reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Compare with desktop Chrome on the same CI network
+        run: |
+          npm install --no-save --ignore-scripts --no-package-lock playwright-core@1.55.0
+          mkdir -p chrome-reference
+          xvfb-run -a node <<'JS'
+          const fs=require('fs'),{chromium}=require('playwright-core');
+          (async()=>{let browser;const report={errors:[]};try{
+            browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:false,args:['--no-sandbox']});const page=await browser.newPage();
+            page.on('response',r=>{if(r.status()>=400){const u=new URL(r.url());report.errors.push({status:r.status(),host:u.hostname,path:u.pathname});}});
+            await page.goto('https://player.vimeo.com/video/76979871?h=8272103f6e&quality=360p',{waitUntil:'domcontentloaded',timeout:30000});
+            await page.getByRole('button',{name:/^Play/}).first().click({timeout:20000});
+            try{await page.waitForFunction(()=>{const v=document.querySelector('video');return v&&!v.paused&&v.currentTime>.5;},{},{timeout:20000});}catch(e){report.waitError=String(e).slice(0,300);}
+            report.player=await page.evaluate(()=>{const v=document.querySelector('video');return {time:v&&v.currentTime,ready:v&&v.readyState,paused:v&&v.paused,error:v&&v.error&&v.error.code,body:document.body.innerText.slice(0,1300),agent:navigator.userAgent};});
+            report.played=!!report.player&&report.player.time>.5;await page.screenshot({path:'chrome-reference/player.png'});
+          }catch(e){report.error=String(e).slice(0,500);}finally{if(browser)await browser.close();fs.writeFileSync('chrome-reference/report.json',JSON.stringify(report,null,2));console.log('CHROME_VIMEO_REFERENCE '+JSON.stringify(report));}})();
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vimeo-chrome-reference
+          path: chrome-reference/
   showcase:
     runs-on: ubuntu-latest
     timeout-minutes: 15
