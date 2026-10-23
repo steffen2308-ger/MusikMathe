@@ -22,9 +22,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         run: |
-          gh api "repos/$REPOSITORY/actions/artifacts?per_page=50" > /tmp/device-artifacts.json
-          artifact_id=$(python3 -c 'import json; a=next((a for a in json.load(open("/tmp/device-artifacts.json"))["artifacts"] if a["name"]=="password-device-reports-api-36" and not a["expired"]),None); print(a["id"] if a else "")')
+          gh api "repos/$REPOSITORY/actions/artifacts?name=password-device-reports-api-36&per_page=100" > /tmp/device-artifacts.json
+          artifact_id=$(python3 -c 'import json; a=max((a for a in json.load(open("/tmp/device-artifacts.json"))["artifacts"] if a["name"]=="password-device-reports-api-36" and not a["expired"]),key=lambda a:a["created_at"],default=None); print(a["id"] if a else "")')
           if test -z "$artifact_id"; then exit 0; fi
+          echo "DEVICE_REPORT_ARTIFACT $artifact_id"
           gh api "repos/$REPOSITORY/actions/artifacts/$artifact_id/zip" > /tmp/device-report.zip
           python3 - <<'PY'
           import zipfile,re
@@ -33,7 +34,7 @@ jobs:
                   if not name.endswith(('.xml','.txt')) or not ('AdBlockLiveProbe' in name or 'logcat' in name.lower()): continue
                   text=z.read(name).decode('utf-8','replace');lines=text.splitlines();selected=set()
                   for i,line in enumerate(lines):
-                      if re.search(r'FATAL|Fatal signal|CRASH|crash|AndroidRuntime|Render process|Uncaught|AssertionError|Exception|SIGABRT|SIGSEGV',line,re.I): selected.update(range(max(0,i-3),min(len(lines),i+35)))
+                      if re.search(r'FATAL EXCEPTION|Fatal signal|SIGABRT|SIGSEGV|Process.*crash|AssertionError|RuntimeException|<failure|<error',line,re.I): selected.update(range(max(0,i-3),min(len(lines),i+45)))
                   if selected:
                       print('PREVIOUS_DEVICE_REPORT '+name)
                       for i in sorted(selected)[:220]: print(lines[i][:3000])
