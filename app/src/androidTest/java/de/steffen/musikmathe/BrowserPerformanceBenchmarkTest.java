@@ -127,6 +127,9 @@ public class BrowserPerformanceBenchmarkTest {
         try{
             List<Double> passwords=new ArrayList<>(),saves=new ArrayList<>(),restores=new ArrayList<>();
             for(int round=0;round<3;round++){long start=SystemClock.elapsedRealtimeNanos();byte[] next=PrivateCrypto.derive(password,salt);passwords.add((SystemClock.elapsedRealtimeNanos()-start)/1000000.0);if(material==null)material=next;else{assertArrayEquals(material,next);java.util.Arrays.fill(next,(byte)0);}}
+            javax.crypto.spec.PBEKeySpec expectedSpec=new javax.crypto.spec.PBEKeySpec(password,salt,210000,768);byte[] expected=null;
+            try{expected=javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(expectedSpec).getEncoded();assertArrayEquals("Existing platform-derived profile keys remain identical",expected,material);}finally{expectedSpec.clearPassword();if(expected!=null)java.util.Arrays.fill(expected,(byte)0);}
+            report.put("passwordHmacProvider",javax.crypto.Mac.getInstance("HmacSHA256").getProvider().getName());
             String id=PrivateCrypto.id(material);java.io.File source=new java.io.File(root,"source"),cookies=new java.io.File(source,"Default/Cookies");assertTrue(cookies.getParentFile().mkdirs());byte[] data=new byte[512*1024];new java.util.Random(42).nextBytes(data);java.nio.file.Files.write(cookies.toPath(),data);
             byte[] row=java.util.Arrays.copyOf("fixture website storage row;".repeat(40).getBytes(StandardCharsets.UTF_8),1024);java.io.File storage=new java.io.File(source,"Default/Local Storage");assertTrue(storage.mkdirs());for(int i=0;i<64;i++)java.nio.file.Files.write(new java.io.File(storage,"entry-"+i).toPath(),row);
             android.util.AtomicFile archive=new android.util.AtomicFile(new java.io.File(root,"profile.web"));long bytes=0;

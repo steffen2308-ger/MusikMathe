@@ -102,10 +102,10 @@ jobs:
           target: default
           disable-animations: true
           script: |
-            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PrivateIsolationTest
+            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PrivateIsolationTest,de.steffen.musikmathe.PrivateCryptoDeviceTest
             mkdir -p private-profile-device-reports
             cp -r app/build/reports/androidTests/. private-profile-device-reports/
-            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.notClass=de.steffen.musikmathe.PrivateIsolationTest
+            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.notClass=de.steffen.musikmathe.PrivateIsolationTest,de.steffen.musikmathe.PrivateCryptoDeviceTest
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             adb shell am instrument -w -e class de.steffen.musikmathe.YouTubeLiveProbeTest de.steffen.musikmathe.test/androidx.test.runner.AndroidJUnitRunner
@@ -156,7 +156,7 @@ jobs:
             adb logcat -G 16M
             bash scripts/performance-benchmark.sh
             adb logcat -c
-            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PrivateIsolationTest
+            bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PrivateIsolationTest,de.steffen.musikmathe.PrivateCryptoDeviceTest
             adb logcat -d -s MenuPreview:I '*:S' > performance-reports/current-private-opening-logcat.txt
             python3 scripts/report-private-opening.py
             mkdir -p private-profile-device-reports
