@@ -428,3 +428,14 @@ Unit-Tests prüfen Reaktion, Hintergrundwechsel, verspätete Abbruchmeldungen un
 
 
 Die modernen Geräteläufe umfassen jetzt Android 15 (API 35) und Android 16 (API 36). Beide führen die isolierten privaten Bereiche, Vimeo-Quellenzuordnung, Renderer-Wiederherstellung und die ergänzende Showcase-Reaktionsprobe aus. Ein weiterer optionaler Live-Test verwendet ausschließlich Vimeos öffentliche Player-Demonstration: Eine native Play-Berührung muss die tatsächliche Wiedergabezeit erhöhen. Diese Prüfung ersetzt keine Wiedergabe jedes Films einer fremden Sammlung und bildet die Poco-GPU nicht nach.
+
+
+## Geschützte Medien in Vimeo-Sammlungen (0.4.38)
+
+Der native Freigabefilter behandelte bisher alle fremden Frame-Ursprünge gleich. Dadurch wurden Anfragen von `player.vimeo.com` innerhalb einer HTTPS-Vimeo-Sammlung abgewiesen, bevor eine Zustimmung überhaupt möglich war. Für diese genaue Kombination prüft der Browser jetzt zusätzlich, dass der aktive Dokumentausschnitt einen echten HTTPS-Vimeo-Player enthält. Erst danach erscheint **Geschützte Inhalte von Vimeo**. Die Freigabe umfasst ausschließlich die geschützte Medienkennung, weder Kamera noch Mikrofon. Sie wird ausdrücklich erfragt und nicht dauerhaft gespeichert.
+
+Mehrere Player desselben geöffneten Dokuments teilen sich eine Nachfrage. Erlauben oder Ablehnen gilt bis zur Navigation, zum Tabwechsel oder zum Hintergrundwechsel. Es werden höchstens 64 gleichzeitige Anfragen gesammelt; ungültige Ursprünge, zusätzliche Ressourcen, fehlende Frames, abgelaufene Prüfungen und veraltete Entscheidungen werden abgewiesen. Private Dialoge verwenden weiterhin die gesicherte Fensterdarstellung. Die Freigabe erzeugt keine DRM-Lizenz und ersetzt keine Anbieter- oder Geräteunterstützung.
+
+**Einstellungen → WebView-Version und Update** zeigt die tatsächlich verwendete WebView-Version und führt auf Wunsch zur App-Info beziehungsweise zum zuständigen Play-Store-Eintrag. Ein Chrome-Update aktualisiert nicht zwingend die separate WebView.
+
+Die öffentliche Vimeo-Demonstration spielt im regulären Chrome auf dem CI-Rechner ab. Die Android-Emulator-WebView meldet beim selben Film auch ohne Werbefilter und mit geänderter Browserkennung „Unable to play video / supported browser“; daraus wird keine erfolgreiche Vimeo-Wiedergabe abgeleitet. Diese unveränderte Wiedergabeprüfung bleibt als gesonderte Live-Diagnose einschließlich Fehlerprotokollen und Chrome-Referenz erhalten. Die verpflichtenden Gerätetests prüfen dagegen native Freigaben in realen, isolierten Vimeo-Frames, deren Trennung von Mikrofonanfragen sowie die tatsächlich ausgeführte Wiederherstellung blockierter Renderer auf Android 15 und 16. Sie ersetzen keinen Wiedergabetest auf dem betroffenen Poco.

@@ -5,6 +5,9 @@ import android.net.Uri;
 /** Only video pages and the actual HTTPS Vimeo player can be opened from a marker. */
 final class VimeoVideos {
     private VimeoVideos(){}
+    static boolean showcase(String value){
+        try{android.net.Uri url=android.net.Uri.parse(value);String host=url.getHost();return "https".equalsIgnoreCase(url.getScheme())&&("vimeo.com".equalsIgnoreCase(host)||"www.vimeo.com".equalsIgnoreCase(host))&&url.getUserInfo()==null&&(url.getPort()==-1||url.getPort()==443)&&url.getPath()!=null&&url.getPath().matches("/(?:showcase|album)/[0-9]{1,15}(?:/video/[0-9]{1,15})?/?");}catch(RuntimeException invalid){return false;}
+    }
     static String playerUrl(String value){
         try{
             if(value==null||value.length()>8192)return "";

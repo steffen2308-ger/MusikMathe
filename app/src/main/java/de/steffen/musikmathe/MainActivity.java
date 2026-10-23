@@ -108,6 +108,7 @@ public class MainActivity extends AppCompatActivity {
     private VideoDownloadsDialog videoDownloads;
     private PageMediaDownloads pageMediaDownloads;
     private RendererRecovery rendererRecovery;
+    private VimeoMediaConsent vimeoMediaConsent;
     private View recoveryPage;
     private VideoMarkers videoMarkers;
     private BrowserCast browserCast;
@@ -149,6 +150,7 @@ public class MainActivity extends AppCompatActivity {
         if(!isPrivateMode())passwords=new PasswordManager(this,this::activeView);
         buildInterface();
         rendererRecovery=new RendererRecovery(this,web->!destroyed&&browserResumed&&!privateLocked()&&activeView()==web);
+        vimeoMediaConsent=new VimeoMediaConsent(this);
         if (!isPrivateMode()) PrivateSession.cleanIfStopped(this);
         for (BrowserStore.Entry row : store.read("tabs")) tabs.add(new Tab(row.url, row.title, row.desktop));
         if (tabs.isEmpty()) tabs.add(new Tab(Address.HOME, "Neuer Tab", false));
@@ -359,11 +361,13 @@ public class MainActivity extends AppCompatActivity {
             @SuppressWarnings("deprecation") @Override public boolean shouldOverrideUrlLoading(WebView view,String url) { return routeLink(tab,url,false); }
             @Override public void doUpdateVisitedHistory(WebView view,String url,boolean reload){
                 boolean changed=!java.util.Objects.equals(tab.url,url);
+                if(changed&&vimeoMediaConsent!=null)vimeoMediaConsent.navigation(view);
                 String old=YouTubeSources.videoId(tab.url),next=YouTubeSources.videoId(url);
                 if(!next.isEmpty()&&!next.equals(old))tab.videos.clear();
                 tab.url=url;if(active()==tab){updateToolbar();if(changed&&linkPreloader!=null){linkPreloader.navigation(url);root.postDelayed(()->{if(!destroyed)refreshPreloading();},500);}}
             }
             @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap favicon) {
+                if(vimeoMediaConsent!=null)vimeoMediaConsent.navigation(view);
                 if(active()==tab&&linkPreloader!=null)linkPreloader.navigation(url);
                 if(passwords!=null)passwords.pageStarted(view);
                 if(videoMarkers!=null)videoMarkers.navigation(view);
@@ -424,7 +428,7 @@ public class MainActivity extends AppCompatActivity {
                 return true;
             }
             @Override public void onPermissionRequest(PermissionRequest request) { runOnUiThread(() -> requestWebsitePermission(tab,request)); }
-            @Override public void onPermissionRequestCanceled(PermissionRequest request) { runOnUiThread(()->{if(websitePermissionRequest==request)cancelPermission();}); }
+            @Override public void onPermissionRequestCanceled(PermissionRequest request) { runOnUiThread(()->{if(websitePermissionRequest==request)cancelPermission();else if(vimeoMediaConsent!=null)vimeoMediaConsent.cancelled(request);}); }
             @Override public void onGeolocationPermissionsShowPrompt(String origin,GeolocationPermissions.Callback callback) { requestLocation(tab,origin,callback); }
             @Override public void onGeolocationPermissionsHidePrompt() { cancelPermissionFor(tab); }
             @Override public void onShowCustomView(View view,CustomViewCallback callback) {
@@ -526,7 +530,7 @@ public class MainActivity extends AppCompatActivity {
                 case 8: if(linkPreloader!=null)linkPreloader.clear();tab.desktop=!tab.desktop;if(tab.view!=null){applyDesktop(tab.view,tab.desktop);tab.view.reload();}else navigate(tab.url);persist();break;
                 case 9: chooseEngine();break;
                 case 10: clearData();break;
-                case 11: BrowserDialogs.builder(this).setTitle("BestBrowser · 0.4.37").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPasswortgeschützte private Bereiche speichern Verlauf, Tabs, Website-Daten und Einstellungen getrennt und verschlüsselt. Videos in gewählten Android-Ordnern sind separat zugänglich. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
+                case 11: BrowserDialogs.builder(this).setTitle("BestBrowser · 0.4.38").setMessage("Android-Browser mit Chromium-WebView.\n\nTabs, Lesezeichen, Verlauf, Downloads und Dateiuploads. Werbeblocker mit HaGeZi-Serverliste und EasyList-Werbefiltern (GPLv3), Website-Ausnahmen und Ein-/Ausschalter. Browserdaten bleiben auf diesem Gerät.\n\nPasswortgeschützte private Bereiche speichern Verlauf, Tabs, Website-Daten und Einstellungen getrennt und verschlüsselt. Videos in gewählten Android-Ordnern sind separat zugänglich. Video-Extractor: NewPipeExtractor (GPLv3), Quellcode und Lizenzen: github.com/Steffen2308-ger/MusikMathe.\n\nKeine Chrome-Synchronisierung oder Erweiterungen. DRM- und Anmeldefunktionen hängen von der jeweiligen Website und WebView ab.").setPositiveButton("OK",null).show();break;
                 case 12: if (isPrivateMode()) newTab(Address.HOME,true); else openPrivate(true); break;
                 case 13: if (isPrivateMode()) openNormal(); else openPrivate(false); break;
                 case 14: discardPrivateTabs=true;endPrivate(); break;
@@ -625,6 +629,10 @@ public class MainActivity extends AppCompatActivity {
         }catch(Exception e){toast("Download konnte nicht gestartet werden.");}
     }
     private void requestWebsitePermission(Tab tab,PermissionRequest request) {
+        if(!destroyed&&!privateLocked()&&!runtimePermissionPending&&permissionDialog==null&&active()==tab&&tab.view!=null&&vimeoMediaConsent!=null&&VimeoMediaConsent.eligible(tab.url,request)){
+            int page=tab.videoPage;WebView web=tab.view;String url=tab.url;tab.protectedMedia=true;
+            vimeoMediaConsent.request(web,url,request,()->!destroyed&&!privateLocked()&&active()==tab&&tab.view==web&&tab.videoPage==page&&java.util.Objects.equals(url,tab.url));return;
+        }
         if(privateLocked() || runtimePermissionPending || active()!=tab || !"https".equalsIgnoreCase(request.getOrigin().getScheme()) || !origin(tab.url).equals(origin(request.getOrigin().toString()))){request.deny();return;}
         cancelPermission();ArrayList<String> runtime=new ArrayList<>(),resources=new ArrayList<>(),purposes=new ArrayList<>();
         for(String resource:request.getResources()){
@@ -667,6 +675,7 @@ public class MainActivity extends AppCompatActivity {
     }
     private void cancelPermissionFor(Tab tab) { if(permissionTab==tab)cancelPermission(); }
     private void cancelPermission() {
+        if(vimeoMediaConsent!=null)vimeoMediaConsent.reset();
         permissionGeneration++;if(permissionDialog!=null){permissionDialog.dismiss();permissionDialog=null;}Runnable cancel=permissionCancel;permissionCancel=null;permissionResult=null;permissionTab=null;permissionOrigin=null;websitePermissionRequest=null;if(cancel!=null)cancel.run();
     }
     private void completeWebsitePermission(){
@@ -817,7 +826,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
     @Override protected void onSaveInstanceState(Bundle state){state.putBoolean("browser_fullscreen",browserFullscreen);persist();super.onSaveInstanceState(state);}
-    @Override protected void onPause(){if(rendererRecovery!=null)rendererRecovery.clear();if(pageMediaDownloads!=null)pageMediaDownloads.pause();browserResumed=false;if(videoMarkers!=null)videoMarkers.pause();if(linkPreloader!=null)linkPreloader.pause();if(browserMenu!=null)browserMenu.dismiss();if(addressSuggestions!=null)addressSuggestions.dismiss();if(videoDownloads!=null)videoDownloads.pause();if(passwords!=null)passwords.pause();persist();if(store!=null){BrowserPersistence.cookies(CookieManager.getInstance());if(store.profile!=null)store.profile.saveInBackground();}if(activeView()!=null&&(floatingVideo==null||!floatingVideo.keepsPlaying()))activeView().onPause();super.onPause();if(isPrivateMode()&&!isFinishing()&&!isChangingConfigurations()&&privateAccess!=null){privateAccess.background();if(root!=null)root.setVisibility(View.INVISIBLE);BrowserDialogs.hidePrivate(this);cancelPermission();hideFullscreen();browserFullscreen=false;applyFullscreenUi();if(videoSearch!=null)videoSearch.dismiss();if(videoDownloads!=null)videoDownloads.dismiss();}}
+    @Override protected void onPause(){if(vimeoMediaConsent!=null)vimeoMediaConsent.reset();if(rendererRecovery!=null)rendererRecovery.clear();if(pageMediaDownloads!=null)pageMediaDownloads.pause();browserResumed=false;if(videoMarkers!=null)videoMarkers.pause();if(linkPreloader!=null)linkPreloader.pause();if(browserMenu!=null)browserMenu.dismiss();if(addressSuggestions!=null)addressSuggestions.dismiss();if(videoDownloads!=null)videoDownloads.pause();if(passwords!=null)passwords.pause();persist();if(store!=null){BrowserPersistence.cookies(CookieManager.getInstance());if(store.profile!=null)store.profile.saveInBackground();}if(activeView()!=null&&(floatingVideo==null||!floatingVideo.keepsPlaying()))activeView().onPause();super.onPause();if(isPrivateMode()&&!isFinishing()&&!isChangingConfigurations()&&privateAccess!=null){privateAccess.background();if(root!=null)root.setVisibility(View.INVISIBLE);BrowserDialogs.hidePrivate(this);cancelPermission();hideFullscreen();browserFullscreen=false;applyFullscreenUi();if(videoSearch!=null)videoSearch.dismiss();if(videoDownloads!=null)videoDownloads.dismiss();}}
     @Override protected void onResume(){super.onResume();if(privateAccess!=null)privateAccess.foreground();if(floatingVideo!=null)floatingVideo.resumed();browserResumed=floatingVideo==null||!floatingVideo.inMode();if(videoMarkers!=null)videoMarkers.resume();BrowserAppearance.sync(this);applyAppearance();if(videoDownloads!=null&&browserResumed)videoDownloads.resume();if(passwords!=null&&browserResumed)passwords.resume();if(store==null)return;refreshHomeTabs();if(activeView()!=null&&!privateLocked())activeView().onResume();refreshPreloading();if(!isPrivateMode()){
         PrivateSession.cleanIfStopped(this);
         root.postDelayed(() -> { if(!destroyed)PrivateSession.cleanIfStopped(this); },1000);
@@ -842,7 +851,7 @@ public class MainActivity extends AppCompatActivity {
         if(privateAccess!=null)privateAccess.destroy();
         if(linkPreloader!=null)linkPreloader.destroy();
         if(browserCast!=null)browserCast.destroy();
-        destroyed=true;if(rendererRecovery!=null)rendererRecovery.clear();if(pageMediaDownloads!=null)pageMediaDownloads.close();if(pages!=null)pages.removeCallbacks(trimViews);if(browserMenu!=null)browserMenu.dismiss();if(addressSuggestions!=null)addressSuggestions.destroy();if(videoDownloads!=null)videoDownloads.dismiss();if(passwords!=null)passwords.destroy();if(videoResolver!=null)videoResolver.cancel();if(videoSearch!=null)videoSearch.dismiss();videoWorker.shutdownNow();cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs){clearAdBlockScript(tab);if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}}super.onDestroy();
+        destroyed=true;if(vimeoMediaConsent!=null)vimeoMediaConsent.reset();if(rendererRecovery!=null)rendererRecovery.clear();if(pageMediaDownloads!=null)pageMediaDownloads.close();if(pages!=null)pages.removeCallbacks(trimViews);if(browserMenu!=null)browserMenu.dismiss();if(addressSuggestions!=null)addressSuggestions.destroy();if(videoDownloads!=null)videoDownloads.dismiss();if(passwords!=null)passwords.destroy();if(videoResolver!=null)videoResolver.cancel();if(videoSearch!=null)videoSearch.dismiss();videoWorker.shutdownNow();cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs){clearAdBlockScript(tab);if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}}super.onDestroy();
         if (isPrivateMode() && !isChangingConfigurations()) {
             VideoDownloadService.cancelAll();
             PrivateProfiles.Session profile=PrivateProfiles.active;CookieManager cookies=store==null?null:CookieManager.getInstance();
@@ -1053,9 +1062,17 @@ public class MainActivity extends AppCompatActivity {
         int page=tab.videoPage;String url=tab.url;pageMediaDownloads.show(tab.view,url,()->active()==tab&&tab.videoPage==page&&java.util.Objects.equals(url,tab.url));
     }
     private void settings(){
-        BrowserDialogs.builder(this).setTitle("Einstellungen").setItems(new String[]{"Medien-Downloadordner: "+DownloadFolder.label(this),"Suchmaschine","Werbeblocker: "+(adBlockingEnabled?"Ein":"Aus"),"Medien-Downloads · Fortschritt und Warteschlange","Browserdaten löschen","Über BestBrowser","Nachtmodus: "+(BrowserAppearance.night(this)?"Ein":"Aus"),"Links im WLAN vorladen: "+(store.linkPreloadingEnabled()?"Ein":"Aus"),"Alle Medien dieser Seite herunterladen"},(d,which)->{
-            if(which==0){pendingVideo=null;pickDownloadFolder();}else if(which==1)chooseEngine();else if(which==2)showAdBlockingSettings();else if(which==3)showVideoQueue();else if(which==4)clearData();else if(which==5)menuAction(11);else if(which==6)setNightMode(!BrowserAppearance.night(this));else if(which==7)showPreloadingSettings();else showPageMediaDownloads();
+        BrowserDialogs.builder(this).setTitle("Einstellungen").setItems(new String[]{"Medien-Downloadordner: "+DownloadFolder.label(this),"Suchmaschine","Werbeblocker: "+(adBlockingEnabled?"Ein":"Aus"),"Medien-Downloads · Fortschritt und Warteschlange","Browserdaten löschen","Über BestBrowser","Nachtmodus: "+(BrowserAppearance.night(this)?"Ein":"Aus"),"Links im WLAN vorladen: "+(store.linkPreloadingEnabled()?"Ein":"Aus"),"Alle Medien dieser Seite herunterladen","WebView-Version und Update"},(d,which)->{
+            if(which==0){pendingVideo=null;pickDownloadFolder();}else if(which==1)chooseEngine();else if(which==2)showAdBlockingSettings();else if(which==3)showVideoQueue();else if(which==4)clearData();else if(which==5)menuAction(11);else if(which==6)setNightMode(!BrowserAppearance.night(this));else if(which==7)showPreloadingSettings();else if(which==8)showPageMediaDownloads();else showWebViewInfo();
         }).setNegativeButton("Schließen",null).show();
+    }
+    private void showWebViewInfo(){
+        android.content.pm.PackageInfo provider=null;try{provider=androidx.webkit.WebViewCompat.getCurrentWebViewPackage(this);}catch(RuntimeException|LinkageError unavailable){}
+        String packageName=provider==null?"com.google.android.webview":provider.packageName;String version=provider==null?"Nicht verfügbar":provider.versionName;
+        String updatePackage=packageName.startsWith("com.google.android.webview")||packageName.equals("com.android.chrome")||packageName.startsWith("com.chrome.")?packageName:"com.google.android.webview";
+        BrowserDialogs.builder(this).setTitle("WebView und Videowiedergabe").setMessage("Android "+Build.VERSION.RELEASE+"\nWebView: "+packageName+"\nVersion: "+version+"\n\nBestBrowser nutzt die installierte Android-WebView. Chrome wird getrennt aktualisiert. Ein WebView-Update kann Probleme mit Webseiten und Videoplayern beheben.")
+            .setPositiveButton("WebView aktualisieren",(d,w)->{try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("market://details?id="+updatePackage)));}catch(ActivityNotFoundException absent){try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://play.google.com/store/apps/details?id="+updatePackage)));}catch(ActivityNotFoundException ignored){toast("Kein App-Store verfügbar.");}}})
+            .setNeutralButton("App-Info",(d,w)->{try{startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+packageName)));}catch(ActivityNotFoundException absent){toast("App-Informationen sind nicht verfügbar.");}}).setNegativeButton("Schließen",null).show();
     }
     private void refreshPreloading(){
         if(linkPreloader==null)return;
