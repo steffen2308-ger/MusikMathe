@@ -19,3 +19,13 @@ console.log('Video metadata discovery: true video dimensions, duration, live, tr
 const java=fs.readFileSync('app/src/main/java/de/steffen/musikmathe/VideoCatalog.java','utf8');
 const hook=JSON.parse(java.match(/static final String HOOKS=("(?:\\.|[^"\\])*");/)[1]);
 (async()=>{const response={url:'https://cdn.test/movie.mp4',status:206,headers:{get:k=>({'content-type':'video/mp4','content-length':'1024','content-range':'bytes 0-1023/2000000'})[k]||null}};const context={XMLHttpRequest:function(){},fetch:()=>Promise.resolve(response)};context.XMLHttpRequest.prototype.open=function(){};context.window=context;vm.runInNewContext(hook,context);await context.fetch();assert.equal(context.__mmVideos[0].size,2000000);response.headers.get=k=>({'content-type':'video/mp4','content-length':'1024'})[k]||null;await context.fetch();assert.equal(context.__mmVideos[1].size,0);console.log('Video response metadata: full Content-Range size and partial-response guard passed');})().catch(e=>{console.error(e);process.exitCode=1;});
+
+let videoReads=0,sourceReads=0;
+const hugeSources=new Proxy({length:1000000},{get(target,key){if(key==='length')return target.length;if(/^\d+$/.test(String(key))){sourceReads++;return {src:'https://cdn.test/quality-'+key+'.mp4',getAttribute:()=>''};}throw Error('Unexpected source iteration');}});
+const hugeVideos=new Proxy({length:1000000},{get(target,key){if(key==='length')return target.length;if(/^\d+$/.test(String(key))){videoReads++;return {currentSrc:'https://cdn.test/video-'+key+'.mp4',getAttribute:()=>'',querySelectorAll:()=>hugeSources};}throw Error('Unexpected video iteration');}});
+const hugeWindow={document:{title:'Huge feed',querySelectorAll:()=>hugeVideos},frames:[],performance:{getEntriesByType:()=>[]}};
+vm.runInNewContext(source,{window:hugeWindow});assert.equal(videoReads,64);assert.equal(sourceReads,256);
+let linkReads=0;const duplicateLinks=new Proxy({length:1000000},{get(target,key){if(key==='length')return target.length;linkReads++;return {href:'https://same.test/',getAttribute:()=>'',hasAttribute:()=>false};}});
+const preloader=fs.readFileSync('app/src/main/assets/preload-links.js','utf8');
+vm.runInNewContext(preloader,{document:{querySelectorAll:()=>duplicateLinks},location:{href:'https://feed.test/'}});assert.equal(linkReads,512);
+console.log('Large feeds: video/source budgets and duplicate-link traversal remain bounded');

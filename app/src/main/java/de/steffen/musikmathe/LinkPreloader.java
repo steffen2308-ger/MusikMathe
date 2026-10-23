@@ -44,6 +44,7 @@ final class LinkPreloader {
     private WebView view;
     private String page="",script;
     private int generation;
+    private long nextScanAt;
     private boolean scanning,destroyed,watching;
     private ConnectivityManager manager;
     private final Runnable scanAgain=this::scan;
@@ -84,9 +85,10 @@ final class LinkPreloader {
     private void scan(){
         if(!allowed()||scanning)return;
         if(!page.equals(view.getUrl())){navigation(null);return;}
-        if(script==null)try(java.io.InputStream input=context.getAssets().open("preload-links.js");java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream()){
-            byte[] buffer=new byte[8192];int count;while((count=input.read(buffer))!=-1)bytes.write(buffer,0,count);script=new String(bytes.toByteArray(),StandardCharsets.UTF_8);
-        }catch(java.io.IOException unavailable){return;}
+        long now=android.os.SystemClock.elapsedRealtime();
+        if(now<nextScanAt){handler.removeCallbacks(scanAgain);handler.postDelayed(scanAgain,nextScanAt-now);return;}
+        if(script==null)script=BrowserScripts.read(context,"preload-links.js","");if(script.isEmpty())return;
+        nextScanAt=now+10000;
         scanning=true;int epoch=generation;String source=page;WebView owner=view;
         owner.evaluateJavascript(script,value->{
             if(destroyed||epoch!=generation)return;scanning=false;
@@ -102,7 +104,7 @@ final class LinkPreloader {
         });
     }
     void navigation(String adopted){
-        generation++;handler.removeCallbacks(scanAgain);scanning=false;if(adopted!=null&&adopted.contains("#"))adopted=adopted.substring(0,adopted.indexOf('#'));queue.reset(adopted);view=null;page="";unwatch();
+        generation++;handler.removeCallbacks(scanAgain);scanning=false;nextScanAt=0;if(adopted!=null&&adopted.contains("#"))adopted=adopted.substring(0,adopted.indexOf('#'));queue.reset(adopted);view=null;page="";unwatch();
     }
     void clear(){navigation(null);backend.clear();}
     void pause(){navigation(null);}

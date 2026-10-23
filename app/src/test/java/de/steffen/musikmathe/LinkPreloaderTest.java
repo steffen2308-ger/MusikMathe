@@ -9,8 +9,28 @@ import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 import static org.junit.Assert.*;
 
-@RunWith(org.robolectric.RobolectricTestRunner.class) @Config(sdk=28)
+@RunWith(org.robolectric.RobolectricTestRunner.class) @Config(sdk=28) @org.robolectric.annotation.LooperMode(org.robolectric.annotation.LooperMode.Mode.PAUSED)
 public class LinkPreloaderTest {
+    @Test public void repeatedLifecycleCallbacksCoalesceLinkScansButNewPagesScanImmediately(){
+        class Page extends WebView {
+            int scans;String url="https://feed.example/";
+            Page(){super(RuntimeEnvironment.getApplication());}
+            @Override public String getUrl(){return url;}
+            @Override public void evaluateJavascript(String script,android.webkit.ValueCallback<String> callback){scans++;callback.onReceiveValue(org.json.JSONObject.quote("{\"page\":\""+url+"\",\"links\":[]}"));}
+        }
+        LinkPreloader.Backend backend=new LinkPreloader.Backend(){
+            public boolean supported(){return true;}
+            public PreloadQueue.Cancel fetch(WebView view,String url,Consumer<Boolean> done){throw new AssertionError("Empty fixture has no links");}
+            public void clear(){}
+        };
+        Page page=new Page();LinkPreloader controller=new LinkPreloader(RuntimeEnvironment.getApplication(),()->true,url->false,()->true,backend);
+        try{
+            controller.page(page,page.url);assertEquals(1,page.scans);
+            for(int i=0;i<100;i++)controller.recheck();assertEquals(1,page.scans);
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(10));assertEquals(2,page.scans);
+            page.url="https://next.example/";controller.page(page,page.url);assertEquals(3,page.scans);
+        }finally{controller.destroy();page.destroy();}
+    }
     @Test public void unsupportedProviderStaysIdleAndOptOutTakesPriority(){
         AtomicBoolean enabled=new AtomicBoolean(true);
         LinkPreloader.Backend unavailable=new LinkPreloader.Backend(){

@@ -1,7 +1,7 @@
 (function () {
   var links = [], seen = Object.create(null);
   var nodes = document.querySelectorAll('a[href],area[href]');
-  for (var i = 0; i < nodes.length && links.length < 2048; i++) {
+  for (var i = 0; i < Math.min(nodes.length, 512); i++) {
     var a = nodes[i], href = a.href;
     if (!href || href.length > 4096 || seen[href]) continue;
     seen[href] = true;
