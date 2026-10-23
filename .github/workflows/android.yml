@@ -155,8 +155,9 @@ jobs:
           script: |
             adb logcat -G 16M
             bash scripts/performance-benchmark.sh
+            adb logcat -c
             bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PrivateIsolationTest
-            adb shell run-as de.steffen.musikmathe cat files/private-opening-ui.json > performance-reports/current-private-opening-ui.json
+            adb logcat -d -s MenuPreview:I '*:S' > performance-reports/current-private-opening-logcat.txt
             python3 scripts/compare-private-opening.py
             mkdir -p private-profile-device-reports
             cp -r app/build/reports/androidTests/. private-profile-device-reports/
