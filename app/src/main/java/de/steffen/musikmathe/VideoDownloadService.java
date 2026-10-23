@@ -41,6 +41,8 @@ public class VideoDownloadService extends Service {
     static volatile VideoDownloadService current;
     static volatile String status="";
     static final String SHOW_DOWNLOADS="de.steffen.musikmathe.SHOW_VIDEO_DOWNLOADS";
+    // Tickets keep large batches and private source URLs inside this browser process.
+    private static final Map<String,List<Job>> pendingBatches=new LinkedHashMap<>();
     private final Handler main=new Handler(Looper.getMainLooper());
     private final ExecutorService workers=Executors.newFixedThreadPool(MAX_PARALLEL);
     private final ExecutorService aborts=Executors.newFixedThreadPool(MAX_PARALLEL);
@@ -52,8 +54,10 @@ public class VideoDownloadService extends Service {
     private int lastStartId;
     private static final class Job {
         final String id=UUID.randomUUID().toString();
-        final Uri destination;
-        final String url,type,audio,title;
+        volatile Uri destination;
+        final Uri folder;
+        final String url,type,audio,title,mime;
+        final boolean media;
         final boolean original;
         final long clip;
         final Map<String,String> headers=new LinkedHashMap<>();
@@ -65,12 +69,22 @@ public class VideoDownloadService extends Service {
         volatile boolean cancelled;
         volatile VideoProgress progress;
         Job(Intent intent)throws Exception{
+            folder=null;mime="";media=false;
             destination=Uri.parse(intent.getStringExtra("destination"));url=intent.getStringExtra("url");type=intent.getStringExtra("type");
             audio=intent.getStringExtra("audio");String label=intent.getStringExtra("title");title=label==null||label.trim().isEmpty()?"Video":label;
             original=intent.getBooleanExtra("original",false);clip=intent.getLongExtra("clip",0);
             if(!Address.isWeb(url)||!"content".equals(destination.getScheme()))throw new IllegalArgumentException("Ungültiges Videoziel.");
             JSONObject json=new JSONObject(intent.getStringExtra("headers"));Iterator<String> keys=json.keys();while(keys.hasNext()){String key=keys.next();headers.put(key,json.getString(key));}
         }
+        Job(MediaLinks.Item item,Uri folder,String page,String agent){this.folder=folder;url=item.url;type=item.type;audio="";title=item.name;original=item.original();clip=0;media=true;mime=original?item.mime:"video/mp4";headers.putAll(MediaLinks.headers(page,url,agent));}
+    }
+    static void enqueueMedia(android.content.Context context,List<MediaLinks.Item> items,Uri folder,String page,String agent){
+        if(items.isEmpty()||folder==null||!"content".equals(folder.getScheme())||!DownloadFolder.isTree(folder))throw new IllegalArgumentException("Kein Medien-Downloadordner.");
+        if((BrowserApplication.privateProcess||context instanceof PrivateActivity)&&PrivateProfiles.forContext(context)==null)throw new IllegalStateException("Privaten Bereich zuerst entsperren.");
+        List<Job> jobs=new ArrayList<>();for(MediaLinks.Item item:items)jobs.add(new Job(item,folder,page,agent));
+        String ticket=UUID.randomUUID().toString();pendingBatches.put(ticket,jobs);
+        try{Intent intent=new Intent(context,(BrowserApplication.privateProcess||context instanceof PrivateActivity)?PrivateVideoDownloadService.class:VideoDownloadService.class).setAction("media-batch").putExtra("batch",ticket);if(Build.VERSION.SDK_INT>=26)context.startForegroundService(intent);else context.startService(intent);}
+        catch(RuntimeException error){pendingBatches.remove(ticket);throw error;}
     }
     static final class QueuedVideo {
         final String id,title;
@@ -94,16 +108,18 @@ public class VideoDownloadService extends Service {
     static Snapshot snapshot(){
         VideoDownloadService service=current;List<ActiveVideo> active=new ArrayList<>();List<QueuedVideo> queued=new ArrayList<>();
         if(service!=null){long now=SystemClock.elapsedRealtime();for(Job job:service.running.values())active.add(new ActiveVideo(job,now));for(Job job:service.waiting)queued.add(new QueuedVideo(job));}
+        for(List<Job> batch:pendingBatches.values())for(Job job:batch)queued.add(new QueuedVideo(job));
         return new Snapshot(active,queued);
     }
     private final Runnable heartbeat=new Runnable(){public void run(){if(destroyed||current!=VideoDownloadService.this)return;publish(false);main.postDelayed(this,1000);}};
-    static boolean busy(){return current!=null;}
+    static boolean busy(){return current!=null||!pendingBatches.isEmpty();}
     static void cancelCurrent(){VideoDownloadService service=current;if(service!=null&&!service.running.isEmpty())service.cancelJob(service.running.values().iterator().next());}
     static boolean cancelActive(String id){VideoDownloadService service=current;Job job=service==null?null:service.running.get(id);if(job==null||job.cancelled)return false;service.cancelJob(job);return true;}
     static void cancelAll(){cancelAll(null);}
-    static void cancelAll(Runnable completed){VideoDownloadService service=current;if(service==null){if(completed!=null)completed.run();return;}if(completed!=null)service.settled.add(completed);service.clearAll();}
+    static void cancelAll(Runnable completed){pendingBatches.clear();VideoDownloadService service=current;if(service==null){if(completed!=null)completed.run();return;}if(completed!=null)service.settled.add(completed);service.clearAll();}
     /** A stale waiting-row button never cancels a promoted or unrelated job. */
     static boolean cancelWaiting(String id){
+        for(Iterator<List<Job>> batches=pendingBatches.values().iterator();batches.hasNext();){List<Job> batch=batches.next();for(Iterator<Job> rows=batch.iterator();rows.hasNext();)if(rows.next().id.equals(id)){rows.remove();if(batch.isEmpty())batches.remove();return true;}}
         VideoDownloadService service=current;if(service==null)return false;
         for(Iterator<Job> rows=service.waiting.iterator();rows.hasNext();){Job job=rows.next();if(!job.id.equals(id))continue;rows.remove();job.cancelled=true;service.discard(job.destination);service.publish(false);return true;}return false;
     }
@@ -118,11 +134,12 @@ public class VideoDownloadService extends Service {
         if("cancel-job".equals(intent.getAction())){cancelActive(intent.getStringExtra("job"));if(running.isEmpty()&&waiting.isEmpty())stopQueue();return START_NOT_STICKY;}
         if("cancel-all".equals(intent.getAction())){clearAll();return START_NOT_STICKY;}
         current=this;publish(true);main.removeCallbacks(heartbeat);main.postDelayed(heartbeat,1000);
+        if("media-batch".equals(intent.getAction())){List<Job> jobs=pendingBatches.remove(intent.getStringExtra("batch"));if(jobs!=null)waiting.addAll(jobs);advance();return START_NOT_STICKY;}
         try{
             Job job=new Job(intent);
-            if(running.values().stream().anyMatch(row->row.destination.equals(job.destination))||waiting.stream().anyMatch(row->row.destination.equals(job.destination))){Toast.makeText(this,"Diese Zieldatei wird bereits gespeichert.",Toast.LENGTH_LONG).show();return START_NOT_STICKY;}
+            if(running.values().stream().anyMatch(row->job.destination.equals(row.destination))||waiting.stream().anyMatch(row->job.destination.equals(row.destination))){Toast.makeText(this,"Diese Zieldatei wird bereits gespeichert.",Toast.LENGTH_LONG).show();return START_NOT_STICKY;}
             waiting.addLast(job);advance();
-        }catch(Exception error){String raw=intent.getStringExtra("destination");if(raw!=null){Uri destination=Uri.parse(raw);if(running.values().stream().noneMatch(row->row.destination.equals(destination))&&waiting.stream().noneMatch(row->row.destination.equals(destination)))discard(destination);}status="Videospeicherung konnte nicht vorgemerkt werden.";Toast.makeText(this,status,Toast.LENGTH_LONG).show();advance();}
+        }catch(Exception error){String raw=intent.getStringExtra("destination");if(raw!=null){Uri destination=Uri.parse(raw);if(running.values().stream().noneMatch(row->destination.equals(row.destination))&&waiting.stream().noneMatch(row->destination.equals(row.destination)))discard(destination);}status="Download konnte nicht vorgemerkt werden.";Toast.makeText(this,status,Toast.LENGTH_LONG).show();advance();}
         return START_NOT_STICKY;
     }
     private void advance(){
@@ -132,13 +149,16 @@ public class VideoDownloadService extends Service {
     }
     private boolean isActive(Job job){return !destroyed&&running.get(job.id)==job&&!job.cancelled;}
     private void start(Job job){
+        if(job.destination==null){prepare(job);return;}
         try{
             File folder=new File(getCacheDir(),privateMode()?"video-private":"video-export");if(!folder.isDirectory()&&!folder.mkdirs())throw new java.io.IOException("Kein Speicherplatz für den Videoexport.");job.temporary=File.createTempFile("export-",".part",folder);
-            VideoProgress transfer=new VideoProgress(job.original?"Schritt 1/2 · Videodatei herunterladen":"Schritt 1/2 · Video laden und MP4 erstellen",SystemClock.elapsedRealtime());job.progress=transfer;
+            VideoProgress transfer=new VideoProgress(job.original?"Schritt 1/2 · Datei herunterladen":"Schritt 1/2 · Video laden und MP4 erstellen",SystemClock.elapsedRealtime());job.progress=transfer;
             if(job.original)runWork(job,()->{
                 VideoHttpSource source=new VideoHttpSource(job.url,job.headers);job.source=source;
                 try{
-                    check(job);long length=source.open(new DataSpec(Uri.parse(job.url)));transfer.bytes(0,length,SystemClock.elapsedRealtime());long total=0;byte[] buffer=new byte[128*1024];int count;
+                    check(job);long length=source.open(new DataSpec(Uri.parse(job.url)));
+                    if(job.media)for(Map.Entry<String,List<String>> header:source.getResponseHeaders().entrySet())if("Content-Type".equalsIgnoreCase(header.getKey())&&!header.getValue().isEmpty()&&!MediaLinks.accepts(job.mime,header.getValue().get(0)))throw new java.io.IOException("Die Adresse liefert keine passende Mediendatei.");
+                    transfer.bytes(0,length,SystemClock.elapsedRealtime());long total=0;byte[] buffer=new byte[128*1024];int count;
                     try(OutputStream out=new FileOutputStream(job.temporary)){while((count=source.read(buffer,0,buffer.length))!=C.RESULT_END_OF_INPUT){check(job);out.write(buffer,0,count);total+=count;transfer.bytes(total,length,SystemClock.elapsedRealtime());}}
                 }finally{source.close();job.source=null;}
                 copyResult(job);
@@ -157,11 +177,20 @@ public class VideoDownloadService extends Service {
             }
         }catch(Exception error){finish(job,false,"Videospeicherung fehlgeschlagen: "+error.getMessage());}
     }
+    private void prepare(Job job){
+        job.working=true;job.progress=new VideoProgress("Datei wird vorbereitet",SystemClock.elapsedRealtime());
+        workers.execute(()->{
+            synchronized(job){job.thread=Thread.currentThread();}String message=null;
+            try{check(job);Uri destination=DownloadFolder.create(this,job.folder,job.mime,job.title);synchronized(job){job.destination=destination;}check(job);}
+            catch(Exception error){message="Datei konnte nicht angelegt werden: "+error.getMessage();}
+            finally{synchronized(job){job.thread=null;}Thread.interrupted();String failure=message;main.post(()->{job.working=false;if(!isActive(job)||failure!=null)finish(job,false,failure==null?"Download abgebrochen.":failure);else start(job);});}
+        });
+    }
     private interface Work{void run()throws Exception;}
     private void runWork(Job job,Work work){
         job.working=true;workers.execute(()->{
-            synchronized(job){job.thread=Thread.currentThread();}boolean success=false;String message="Video gespeichert.";
-            try{check(job);work.run();check(job);success=true;}catch(Exception error){message="Videodownload fehlgeschlagen: "+error.getMessage();}
+            synchronized(job){job.thread=Thread.currentThread();}boolean success=false;String message=job.media?"Datei gespeichert.":"Video gespeichert.";
+            try{check(job);work.run();check(job);success=true;}catch(Exception error){message="Download fehlgeschlagen: "+error.getMessage();}
             finally{synchronized(job){job.thread=null;}Thread.interrupted();boolean done=success;String result=message;main.post(()->finish(job,done,result));}
         });
     }
@@ -180,14 +209,14 @@ public class VideoDownloadService extends Service {
         Snapshot snapshot=snapshot();String text=snapshot.active.size()+" gleichzeitig"+(waiting.isEmpty()?"":" · "+waiting.size()+" in Warteschlange");
         if(snapshot.active.size()==1&&snapshot.progress!=null)text=snapshot.progress.phase+(snapshot.progress.percent<0?"":" · "+snapshot.progress.percent+" %")+(waiting.isEmpty()?"":" · "+waiting.size()+" in Warteschlange");
         status=text;NotificationManager manager=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
-        if(Build.VERSION.SDK_INT>=26)manager.createNotificationChannel(new NotificationChannel("video-downloads","Videos speichern",NotificationManager.IMPORTANCE_LOW));
+        if(Build.VERSION.SDK_INT>=26)manager.createNotificationChannel(new NotificationChannel("video-downloads","Medien speichern",NotificationManager.IMPORTANCE_LOW));
         PendingIntent clear=PendingIntent.getService(this,33,new Intent(this,getClass()).setAction("cancel-all"),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         Intent open=new Intent(this,privateMode()?PrivateActivity.class:MainActivity.class).setAction(SHOW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT|Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent openAction=PendingIntent.getActivity(this,32,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         Notification.Builder builder=Build.VERSION.SDK_INT>=26?new Notification.Builder(this,"video-downloads"):new Notification.Builder(this);
-        builder.setSmallIcon(android.R.drawable.stat_sys_download).setContentTitle(privateMode()?"Private Videos speichern":"Videos speichern").setContentText(text).setContentIntent(openAction).setOngoing(true).setOnlyAlertOnce(true).setVisibility(privateMode()?Notification.VISIBILITY_SECRET:Notification.VISIBILITY_PRIVATE);
+        builder.setSmallIcon(android.R.drawable.stat_sys_download).setContentTitle(privateMode()?"Private Medien speichern":"Medien speichern").setContentText(text).setContentIntent(openAction).setOngoing(true).setOnlyAlertOnce(true).setVisibility(privateMode()?Notification.VISIBILITY_SECRET:Notification.VISIBILITY_PRIVATE);
         if(snapshot.active.size()==1){ActiveVideo video=snapshot.active.get(0);int percent=video.progress==null?-1:video.progress.percent;builder.setProgress(100,Math.max(0,percent),percent<0);
-            PendingIntent cancel=PendingIntent.getService(this,31,new Intent(this,getClass()).setAction("cancel-job").setData(Uri.parse("bestbrowser://download/"+video.id)).putExtra("job",video.id),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);builder.addAction(android.R.drawable.ic_menu_close_clear_cancel,"Video abbrechen",cancel);}
+            PendingIntent cancel=PendingIntent.getService(this,31,new Intent(this,getClass()).setAction("cancel-job").setData(Uri.parse("bestbrowser://download/"+video.id)).putExtra("job",video.id),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);builder.addAction(android.R.drawable.ic_menu_close_clear_cancel,"Download abbrechen",cancel);}
         else builder.setProgress(0,0,true);
         if(snapshot.active.size()>1||!waiting.isEmpty())builder.addAction(android.R.drawable.ic_menu_close_clear_cancel,"Alle abbrechen",clear);
         StringBuilder detail=new StringBuilder(text);for(ActiveVideo video:snapshot.active){detail.append("\n\n").append(privateMode()?"Video":video.title).append(video.cancelling?" · Wird abgebrochen …":"");if(video.progress!=null)detail.append("\n").append(video.progress.phase).append(video.progress.percent<0?"":" · "+video.progress.percent+" %").append("\n").append(video.progress.detail());}
@@ -196,7 +225,7 @@ public class VideoDownloadService extends Service {
     }
     private void finish(Job job,boolean success,String message){
         if(running.get(job.id)!=job)return;
-        if(job.cancelled){success=false;message="Videospeicherung abgebrochen.";}job.cancelled=true;
+        if(job.cancelled){success=false;message=job.media?"Download abgebrochen.":"Videospeicherung abgebrochen.";}job.cancelled=true;
         if(job.exporter!=null)job.exporter.cancel();if(success)release(job.destination);else discard(job.destination);
         if(job.temporary!=null)job.temporary.delete();running.remove(job.id);status=message;
         if(destroyed){if(running.isEmpty())notifySettled();return;}Toast.makeText(this,message,Toast.LENGTH_LONG).show();advance();
@@ -208,7 +237,7 @@ public class VideoDownloadService extends Service {
         // Delete now and again after the worker exits, covering a provider that was still opening.
         discard(job.destination);if(!job.working)finish(job,false,"Videospeicherung abgebrochen.");else if(!destroyed)publish(false);
     }
-    private void clearAll(){for(Job job:waiting)discard(job.destination);waiting.clear();for(Job job:new ArrayList<>(running.values()))cancelJob(job);if(running.isEmpty())stopQueue();}
+    private void clearAll(){pendingBatches.clear();for(Job job:waiting)discard(job.destination);waiting.clear();for(Job job:new ArrayList<>(running.values()))cancelJob(job);if(running.isEmpty())stopQueue();}
     private void stopQueue(){
         main.removeCallbacks(heartbeat);if(current==this)current=null;stopForeground(true);stopSelfResult(lastStartId);
         notifySettled();
@@ -225,7 +254,7 @@ public class VideoDownloadService extends Service {
     }
     @Override public void onTimeout(int startId,int fgsType){clearAll();stopForeground(true);stopSelf();}
     @Override public void onDestroy(){
-        destroyed=true;main.removeCallbacks(heartbeat);for(Job job:waiting)discard(job.destination);waiting.clear();for(Job job:new ArrayList<>(running.values()))cancelJob(job);
+        destroyed=true;pendingBatches.clear();main.removeCallbacks(heartbeat);for(Job job:waiting)discard(job.destination);waiting.clear();for(Job job:new ArrayList<>(running.values()))cancelJob(job);
         if(current==this)current=null;workers.shutdown();aborts.shutdown();if(running.isEmpty())notifySettled();super.onDestroy();
     }
 }

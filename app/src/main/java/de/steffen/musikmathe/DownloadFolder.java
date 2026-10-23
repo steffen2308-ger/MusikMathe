@@ -53,7 +53,7 @@ final class DownloadFolder {
         try{output=stored.startWrite();output.write(data);stored.finishWrite(output);}catch(Exception error){if(output!=null)stored.failWrite(output);throw error;}
         // Old grants stay valid for downloads already queued in the previous directory.
     }
-    static Uri create(Context context,Uri tree,String mime,String requested)throws Exception{
+    static synchronized Uri create(Context context,Uri tree,String mime,String requested)throws Exception{
         if(tree==null)throw new IOException("Bitte zuerst einen Downloadordner wählen.");
         String name=safeName(requested);Set<String> existing=new HashSet<>();
         Uri children=DocumentsContract.buildChildDocumentsUriUsingTree(tree,DocumentsContract.getTreeDocumentId(tree));

@@ -106,6 +106,7 @@ public class MainActivity extends AppCompatActivity {
     private YouTubeDownloadResolver videoResolver;
     private AlertDialog videoSearch;
     private VideoDownloadsDialog videoDownloads;
+    private PageMediaDownloads pageMediaDownloads;
     private VideoMarkers videoMarkers;
     private BrowserCast browserCast;
     private BrowserPip floatingVideo;
@@ -669,6 +670,7 @@ public class MainActivity extends AppCompatActivity {
         handleActivityResult(request,result,data);
     }
     private void handleActivityResult(int request,int result,Intent data){
+        if(request==PageMediaDownloads.PICK_FOLDER){if(pageMediaDownloads!=null)pageMediaDownloads.folderResult(result,data);return;}
         if(request==PICK_DOWNLOAD_FOLDER){
             VideoCatalog.Item item=pendingVideo;pendingVideo=null;
             if(result!=RESULT_OK||data==null||data.getData()==null)return;
@@ -783,7 +785,7 @@ public class MainActivity extends AppCompatActivity {
         if (!isPrivateMode()||closingPrivate) return;
         if(store==null){closingPrivate=true;openNormal();finish();return;}
         if(VideoDownloadService.busy()){
-            BrowserDialogs.builder(this).setMessage("Im privaten Bereich werden Videos gespeichert oder warten auf den Download. Alle abbrechen und die privaten Tabs schließen?").setNegativeButton("Weiter speichern",(d,w)->discardPrivateTabs=false).setOnCancelListener(d->discardPrivateTabs=false).setPositiveButton("Abbrechen und schließen",(d,w)->{VideoDownloadService.cancelAll(this::endPrivate);}).show();return;
+            BrowserDialogs.builder(this).setMessage("Im privaten Bereich werden Medien gespeichert oder warten auf den Download. Alle abbrechen und die privaten Tabs schließen?").setNegativeButton("Weiter speichern",(d,w)->discardPrivateTabs=false).setOnCancelListener(d->discardPrivateTabs=false).setPositiveButton("Abbrechen und schließen",(d,w)->{VideoDownloadService.cancelAll(this::endPrivate);}).show();return;
         }
         if(discardPrivateTabs){if(pages!=null)pages.removeAllViews();for(Tab tab:tabs)if(tab.view!=null){clearAdBlockScript(tab);tab.view.stopLoading();tab.view.destroy();}tabs.clear();selected=0;}
         persist();closingPrivate=true;
@@ -795,7 +797,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
     @Override protected void onSaveInstanceState(Bundle state){state.putBoolean("browser_fullscreen",browserFullscreen);persist();super.onSaveInstanceState(state);}
-    @Override protected void onPause(){browserResumed=false;if(videoMarkers!=null)videoMarkers.pause();if(linkPreloader!=null)linkPreloader.pause();if(browserMenu!=null)browserMenu.dismiss();if(addressSuggestions!=null)addressSuggestions.dismiss();if(videoDownloads!=null)videoDownloads.pause();if(passwords!=null)passwords.pause();persist();if(store!=null){BrowserPersistence.cookies(CookieManager.getInstance());if(store.profile!=null)store.profile.saveInBackground();}if(activeView()!=null&&(floatingVideo==null||!floatingVideo.keepsPlaying()))activeView().onPause();super.onPause();if(isPrivateMode()&&!isFinishing()&&!isChangingConfigurations()&&privateAccess!=null){privateAccess.background();if(root!=null)root.setVisibility(View.INVISIBLE);BrowserDialogs.hidePrivate(this);cancelPermission();hideFullscreen();browserFullscreen=false;applyFullscreenUi();if(videoSearch!=null)videoSearch.dismiss();if(videoDownloads!=null)videoDownloads.dismiss();}}
+    @Override protected void onPause(){if(pageMediaDownloads!=null)pageMediaDownloads.pause();browserResumed=false;if(videoMarkers!=null)videoMarkers.pause();if(linkPreloader!=null)linkPreloader.pause();if(browserMenu!=null)browserMenu.dismiss();if(addressSuggestions!=null)addressSuggestions.dismiss();if(videoDownloads!=null)videoDownloads.pause();if(passwords!=null)passwords.pause();persist();if(store!=null){BrowserPersistence.cookies(CookieManager.getInstance());if(store.profile!=null)store.profile.saveInBackground();}if(activeView()!=null&&(floatingVideo==null||!floatingVideo.keepsPlaying()))activeView().onPause();super.onPause();if(isPrivateMode()&&!isFinishing()&&!isChangingConfigurations()&&privateAccess!=null){privateAccess.background();if(root!=null)root.setVisibility(View.INVISIBLE);BrowserDialogs.hidePrivate(this);cancelPermission();hideFullscreen();browserFullscreen=false;applyFullscreenUi();if(videoSearch!=null)videoSearch.dismiss();if(videoDownloads!=null)videoDownloads.dismiss();}}
     @Override protected void onResume(){super.onResume();if(privateAccess!=null)privateAccess.foreground();if(floatingVideo!=null)floatingVideo.resumed();browserResumed=floatingVideo==null||!floatingVideo.inMode();if(videoMarkers!=null)videoMarkers.resume();BrowserAppearance.sync(this);applyAppearance();if(videoDownloads!=null&&browserResumed)videoDownloads.resume();if(passwords!=null&&browserResumed)passwords.resume();if(store==null)return;refreshHomeTabs();if(activeView()!=null&&!privateLocked())activeView().onResume();refreshPreloading();if(!isPrivateMode()){
         PrivateSession.cleanIfStopped(this);
         root.postDelayed(() -> { if(!destroyed)PrivateSession.cleanIfStopped(this); },1000);
@@ -820,7 +822,7 @@ public class MainActivity extends AppCompatActivity {
         if(privateAccess!=null)privateAccess.destroy();
         if(linkPreloader!=null)linkPreloader.destroy();
         if(browserCast!=null)browserCast.destroy();
-        destroyed=true;if(pages!=null)pages.removeCallbacks(trimViews);if(browserMenu!=null)browserMenu.dismiss();if(addressSuggestions!=null)addressSuggestions.destroy();if(videoDownloads!=null)videoDownloads.dismiss();if(passwords!=null)passwords.destroy();if(videoResolver!=null)videoResolver.cancel();if(videoSearch!=null)videoSearch.dismiss();videoWorker.shutdownNow();cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs){clearAdBlockScript(tab);if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}}super.onDestroy();
+        destroyed=true;if(pageMediaDownloads!=null)pageMediaDownloads.close();if(pages!=null)pages.removeCallbacks(trimViews);if(browserMenu!=null)browserMenu.dismiss();if(addressSuggestions!=null)addressSuggestions.destroy();if(videoDownloads!=null)videoDownloads.dismiss();if(passwords!=null)passwords.destroy();if(videoResolver!=null)videoResolver.cancel();if(videoSearch!=null)videoSearch.dismiss();videoWorker.shutdownNow();cancelPermission();cancelUpload();hideFullscreen();if(pages!=null)pages.removeAllViews();for(Tab tab:tabs){clearAdBlockScript(tab);if(tab.view!=null){tab.view.stopLoading();tab.view.destroy();}}super.onDestroy();
         if (isPrivateMode() && !isChangingConfigurations()) {
             VideoDownloadService.cancelAll();
             PrivateProfiles.Session profile=PrivateProfiles.active;CookieManager cookies=store==null?null:CookieManager.getInstance();
@@ -1025,9 +1027,14 @@ public class MainActivity extends AppCompatActivity {
         for(Tab tab:tabs)if(tab.view!=null){BrowserWebAppearance.apply(tab.view,BrowserAppearance.night(this));BrowserWebAppearance.pageFinished(tab.view,BrowserAppearance.night(this));}
         applyFullscreenUi();
     }
+    private void showPageMediaDownloads(){
+        Tab tab=active();if(destroyed||privateLocked()||tab==null||tab.view==null)return;
+        if(pageMediaDownloads==null)pageMediaDownloads=new PageMediaDownloads(this,()->!destroyed&&!privateLocked(),this::showVideoQueue);
+        int page=tab.videoPage;String url=tab.url;pageMediaDownloads.show(tab.view,url,()->active()==tab&&tab.videoPage==page&&java.util.Objects.equals(url,tab.url));
+    }
     private void settings(){
-        BrowserDialogs.builder(this).setTitle("Einstellungen").setItems(new String[]{"Video-Downloadordner: "+DownloadFolder.label(this),"Suchmaschine","Werbeblocker: "+(adBlockingEnabled?"Ein":"Aus"),"Video-Downloads · Fortschritt und Warteschlange","Browserdaten löschen","Über BestBrowser","Nachtmodus: "+(BrowserAppearance.night(this)?"Ein":"Aus"),"Links im WLAN vorladen: "+(store.linkPreloadingEnabled()?"Ein":"Aus")},(d,which)->{
-            if(which==0){pendingVideo=null;pickDownloadFolder();}else if(which==1)chooseEngine();else if(which==2)showAdBlockingSettings();else if(which==3)showVideoQueue();else if(which==4)clearData();else if(which==5)menuAction(11);else if(which==6)setNightMode(!BrowserAppearance.night(this));else showPreloadingSettings();
+        BrowserDialogs.builder(this).setTitle("Einstellungen").setItems(new String[]{"Medien-Downloadordner: "+DownloadFolder.label(this),"Suchmaschine","Werbeblocker: "+(adBlockingEnabled?"Ein":"Aus"),"Medien-Downloads · Fortschritt und Warteschlange","Browserdaten löschen","Über BestBrowser","Nachtmodus: "+(BrowserAppearance.night(this)?"Ein":"Aus"),"Links im WLAN vorladen: "+(store.linkPreloadingEnabled()?"Ein":"Aus"),"Alle Medien dieser Seite herunterladen"},(d,which)->{
+            if(which==0){pendingVideo=null;pickDownloadFolder();}else if(which==1)chooseEngine();else if(which==2)showAdBlockingSettings();else if(which==3)showVideoQueue();else if(which==4)clearData();else if(which==5)menuAction(11);else if(which==6)setNightMode(!BrowserAppearance.night(this));else if(which==7)showPreloadingSettings();else showPageMediaDownloads();
         }).setNegativeButton("Schließen",null).show();
     }
     private void refreshPreloading(){
@@ -1158,7 +1165,7 @@ public class MainActivity extends AppCompatActivity {
                     Intent download=new Intent(this,isPrivateMode()?PrivateVideoDownloadService.class:VideoDownloadService.class).putExtra("title",filename).putExtra("url",item.url).putExtra("type",item.type).putExtra("audio",item.audioUrl).putExtra("headers",new org.json.JSONObject(item.headers).toString()).putExtra("destination",destination.toString()).putExtra("original",original).putExtra("clip",clip);
                     if(Build.VERSION.SDK_INT>=26)startForegroundService(download);else startService(download);
                     if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},21);
-                    toast("Video hinzugefügt. Fortschritt unter Einstellungen → Video-Downloads.");
+                    toast("Video hinzugefügt. Fortschritt unter Einstellungen → Medien-Downloads.");
                 }catch(Exception error){videoWorkerCleanup(destination);toast("Videospeicherung konnte nicht gestartet werden.");}
             });
         });
