@@ -18,6 +18,19 @@ import static org.junit.Assert.*;
 public class PrivateArchiveTest {
     private File root;private byte[] key;private String id;private AtomicFile archive;
     @Before public void setup()throws Exception{root=Files.createTempDirectory(RuntimeEnvironment.getApplication().getCacheDir().toPath(),"archive-test").toFile();key=new byte[96];new java.security.SecureRandom().nextBytes(key);id=PrivateCrypto.id(key);archive=new AtomicFile(new File(root,"encrypted.web"));}
+    @Test public void authenticatedSegmentsUseBulkWritesAndLeaveAtomicFileOpen()throws Exception{
+        class Sink extends ByteArrayOutputStream {
+            int singles,blocks,flushes;boolean closed;
+            @Override public synchronized void write(int b){singles++;super.write(b);}
+            @Override public synchronized void write(byte[] bytes,int offset,int length){blocks++;super.write(bytes,offset,length);}
+            @Override public void flush(){flushes++;}
+            @Override public void close(){closed=true;}
+        }
+        Sink sink=new Sink();byte[] data=new byte[190000];new java.security.SecureRandom().nextBytes(data);
+        try(OutputStream encrypted=PrivateCrypto.stream(key).newEncryptingStream(PrivateArchive.retained(sink),PrivateCrypto.aad("web",id))){encrypted.write(data);}
+        assertEquals("No per-byte writes for authenticated segments",0,sink.singles);assertTrue(sink.blocks>0);assertTrue(sink.blocks<20);assertTrue(sink.flushes>0);assertFalse("AtomicFile must retain its descriptor for fsync",sink.closed);
+        try(InputStream plain=PrivateCrypto.stream(key).newDecryptingStream(new ByteArrayInputStream(sink.toByteArray()),PrivateCrypto.aad("web",id))){ByteArrayOutputStream restored=new ByteArrayOutputStream();byte[] buffer=new byte[16384];int n;while((n=plain.read(buffer))!=-1)restored.write(buffer,0,n);assertArrayEquals(data,restored.toByteArray());}
+    }
     @Test public void websiteDatabasesAndStorageRoundTripAcrossAuthenticatedSegments()throws Exception{
         File source=new File(root,"source"),db=new File(source,"Default/Cookies"),storage=new File(source,"Default/Local Storage/database");assertTrue(storage.getParentFile().mkdirs());byte[] data=new byte[190000];new java.security.SecureRandom().nextBytes(data);Files.write(db.toPath(),"secret-cookie-for-private.example".getBytes(StandardCharsets.UTF_8));Files.write(storage.toPath(),data);File cache=new File(source,"Default/Cache/test");assertTrue(cache.getParentFile().mkdirs());Files.write(cache.toPath(),new byte[]{9});
         PrivateArchive.save(source,archive,key,id);assertFalse(new String(Files.readAllBytes(archive.getBaseFile().toPath()),StandardCharsets.ISO_8859_1).contains("secret-cookie-for-private.example"));File restored=new File(root,"restored");PrivateArchive.restore(archive,new File(root,"staging"),restored,key,id);

@@ -26,6 +26,7 @@ public class PrivateIsolationTest {
     private final java.util.List<String> requests=java.util.Collections.synchronizedList(new java.util.ArrayList<>());
     private final Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
     private long actionAt;
+    private final org.json.JSONArray openingTimes=new org.json.JSONArray();
     private void menu(String label){UiObject2 button=device.wait(Until.findObject(By.desc("Menü")),10000);assertNotNull("Browser menu",button);button.click();UiObject2 item=device.findObject(By.text(label));if(item==null)try{new androidx.test.uiautomator.UiScrollable(new androidx.test.uiautomator.UiSelector().className("android.widget.ListView")).scrollIntoView(new androidx.test.uiautomator.UiSelector().text(label));}catch(Exception error){throw new AssertionError(label,error);}item=device.wait(Until.findObject(By.text(label)),5000);assertNotNull(label,item);actionAt=android.os.SystemClock.elapsedRealtime();item.click();}
     private void navigate(String path,String expected)throws Exception{
         UiObject2 link=device.wait(Until.findObject(By.text("Open "+path)),10000);assertNotNull("Fixture link "+path,link);link.click();
@@ -37,7 +38,13 @@ public class PrivateIsolationTest {
         UiObject2 address=device.findObject(By.desc("Adresse oder Suchbegriff"));
         fail("Expected page state: "+expected+"; actual="+visible+"; address="+(address==null?"none":address.getText())+"; fixture requests="+requests);
     }
-    private void open(String password)throws Exception{context.startActivity(new Intent(context,PrivateActivity.class).setAction(Intent.ACTION_VIEW).setData(android.net.Uri.parse(base+"/probe")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT|Intent.FLAG_ACTIVITY_SINGLE_TOP));PrivateTestSupport.unlock(device,password);assertTrue(device.wait(Until.hasObject(By.text("Route /probe")),25000));}
+    private void open(String password)throws Exception{
+        long started=android.os.SystemClock.elapsedRealtime();context.startActivity(new Intent(context,PrivateActivity.class).setAction(Intent.ACTION_VIEW).setData(android.net.Uri.parse(base+"/probe")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT|Intent.FLAG_ACTIVITY_SINGLE_TOP));
+        long authenticated=PrivateTestSupport.unlockTimed(device,password);assertTrue(device.wait(Until.hasObject(By.text("Route /probe")),25000));
+        org.json.JSONObject sample=new org.json.JSONObject().put("ordinal",openingTimes.length()+1).put("submitToBrowserMs",authenticated).put("activityToPageMs",android.os.SystemClock.elapsedRealtime()-started);openingTimes.put(sample);
+        android.util.Log.i("MenuPreview","private-opening "+sample);
+        try(FileOutputStream out=context.openFileOutput("private-opening-ui.json",Context.MODE_PRIVATE)){out.write(openingTimes.toString().getBytes(StandardCharsets.UTF_8));}
+    }
     private void home(){
         device.pressHome();long deadline=android.os.SystemClock.uptimeMillis()+10000;String foreground=null;
         do{foreground=device.getCurrentPackageName();if(foreground!=null&&!foreground.equals(context.getPackageName())&&!foreground.equals(context.getPackageName()+".test")){android.util.Log.i("MenuPreview","private-home-package="+foreground);return;}android.os.SystemClock.sleep(100);}while(android.os.SystemClock.uptimeMillis()<deadline);

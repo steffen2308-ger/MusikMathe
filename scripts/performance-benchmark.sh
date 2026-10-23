@@ -18,13 +18,23 @@ for variant in baseline current; do
     exit 1
   fi
   adb shell run-as de.steffen.musikmathe cat "files/browser-performance-$variant.json" > "performance-reports/$variant.json"
+  if test "$variant" = baseline; then
+    adb shell am force-stop de.steffen.musikmathe
+    adb shell am instrument -w -e class de.steffen.musikmathe.PrivateIsolationTest de.steffen.musikmathe.test/androidx.test.runner.AndroidJUnitRunner > performance-reports/baseline-private-isolation.txt
+    cat performance-reports/baseline-private-isolation.txt
+    if ! grep -Fq 'OK (1 test)' performance-reports/baseline-private-isolation.txt; then
+      adb logcat -d -s MenuPreview:I AndroidRuntime:E '*:S'
+      exit 1
+    fi
+    adb shell run-as de.steffen.musikmathe cat files/private-opening-ui.json > performance-reports/baseline-private-opening-ui.json
+  fi
 done
 python3 - <<'PY'
 import json
 from pathlib import Path
 before=json.loads(Path('performance-reports/baseline.json').read_text())
 after=json.loads(Path('performance-reports/current.json').read_text())
-report={'baseline':before,'current':after,'relative_change_percent':{key:round(100*(after[key]-before[key])/before[key],1) for key in ['warmActivityReadyMedianMs','tabSwitchUiMedianMs','tabSwitchFrameMedianMs','privateTabSaveUiMedianMs','privateHistorySaveUiMedianMs','normalHistorySaveUiMedianMs'] if before[key]>0}}
+report={'baseline':before,'current':after,'relative_change_percent':{key:round(100*(after[key]-before[key])/before[key],1) for key in ['warmActivityReadyMedianMs','tabSwitchUiMedianMs','tabSwitchFrameMedianMs','privateTabSaveUiMedianMs','privateHistorySaveUiMedianMs','normalHistorySaveUiMedianMs','privatePasswordDeriveMedianMs','privateArchiveSaveMedianMs','privateArchiveRestoreMedianMs'] if before[key]>0}}
 Path('performance-reports/comparison.json').write_text(json.dumps(report,indent=2))
 print('BROWSER PERFORMANCE COMPARISON '+json.dumps(report))
 PY

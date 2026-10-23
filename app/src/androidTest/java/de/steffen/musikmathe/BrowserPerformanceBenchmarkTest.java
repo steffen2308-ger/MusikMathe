@@ -86,6 +86,7 @@ public class BrowserPerformanceBenchmarkTest {
             main(activity::finish);instrumentation.waitForIdleSync();activity=null;
             benchmarkNormalHistory(report);
             benchmarkPrivateStorage(report);
+            benchmarkPrivateArchive(report);
             Log.i("MenuPreview","browser-performance "+report);
             try(java.io.FileOutputStream out=app.openFileOutput("browser-performance-"+label+".json",Context.MODE_PRIVATE)){out.write(report.toString().getBytes(StandardCharsets.UTF_8));}
         }finally{if(activity!=null)main(activity::finish);}
@@ -119,6 +120,26 @@ public class BrowserPerformanceBenchmarkTest {
             assertEquals(9,durable.getInt("selected"));assertEquals("https://private-history.example/29",new org.json.JSONArray(durable.getString("history")).getJSONObject(0).getString("url"));
             report.put("privateTabSaveUiMedianMs",median(selection)).put("privateHistorySaveUiMedianMs",median(visits)).put("privatePersistenceBarrierMs",barrier).put("privateStorageRounds",30);
         }finally{session.close();PrivateProfiles.active=null;PrivateProfiles.dataFile(app,session.id).delete();}
+    }
+    private void benchmarkPrivateArchive(JSONObject report)throws Exception{
+        java.io.File root=java.nio.file.Files.createTempDirectory(app.getCacheDir().toPath(),"private-open-benchmark").toFile();
+        byte[] salt=new byte[32],material=null;java.util.Arrays.fill(salt,(byte)7);char[] password="Benchmark-only-password-42".toCharArray();
+        try{
+            List<Double> passwords=new ArrayList<>(),saves=new ArrayList<>(),restores=new ArrayList<>();
+            for(int round=0;round<3;round++){long start=SystemClock.elapsedRealtimeNanos();byte[] next=PrivateCrypto.derive(password,salt);passwords.add((SystemClock.elapsedRealtimeNanos()-start)/1000000.0);if(material==null)material=next;else{assertArrayEquals(material,next);java.util.Arrays.fill(next,(byte)0);}}
+            String id=PrivateCrypto.id(material);java.io.File source=new java.io.File(root,"source"),cookies=new java.io.File(source,"Default/Cookies");assertTrue(cookies.getParentFile().mkdirs());byte[] data=new byte[512*1024];new java.util.Random(42).nextBytes(data);java.nio.file.Files.write(cookies.toPath(),data);
+            byte[] row=java.util.Arrays.copyOf("fixture website storage row;".repeat(40).getBytes(StandardCharsets.UTF_8),1024);java.io.File storage=new java.io.File(source,"Default/Local Storage");assertTrue(storage.mkdirs());for(int i=0;i<64;i++)java.nio.file.Files.write(new java.io.File(storage,"entry-"+i).toPath(),row);
+            android.util.AtomicFile archive=new android.util.AtomicFile(new java.io.File(root,"profile.web"));long bytes=0;
+            for(int round=0;round<4;round++){
+                long start=SystemClock.elapsedRealtimeNanos();PrivateArchive.save(source,archive,material,id);double save=(SystemClock.elapsedRealtimeNanos()-start)/1000000.0;
+                java.io.File restored=new java.io.File(root,"restored-"+round);start=SystemClock.elapsedRealtimeNanos();PrivateArchive.restore(archive,new java.io.File(root,"staging-"+round),restored,material,id);double restore=(SystemClock.elapsedRealtimeNanos()-start)/1000000.0;
+                assertArrayEquals(data,java.nio.file.Files.readAllBytes(new java.io.File(restored,"Default/Cookies").toPath()));for(int i=0;i<64;i++)assertArrayEquals(row,java.nio.file.Files.readAllBytes(new java.io.File(restored,"Default/Local Storage/entry-"+i).toPath()));
+                PrivateSession.remove(restored);bytes=archive.getBaseFile().length();if(round>0){saves.add(save);restores.add(restore);}
+            }
+            class Sink extends java.io.OutputStream {int singles,blocks;public void write(int b){singles++;}public void write(byte[] b,int offset,int length){blocks++;}}
+            Sink sink=new Sink();new java.io.FilterOutputStream(sink){@Override public void close()throws java.io.IOException{flush();}}.write(new byte[65536]);
+            report.put("privatePasswordDeriveMedianMs",median(passwords)).put("privateArchiveSaveMedianMs",median(saves)).put("privateArchiveRestoreMedianMs",median(restores)).put("privateArchiveBytes",bytes).put("privateArchiveInputBytes",data.length+64*row.length).put("privateArchiveFiles",65).put("legacyFilterSingleWritesPer64KiB",sink.singles);
+        }finally{java.util.Arrays.fill(password,'\0');if(material!=null)java.util.Arrays.fill(material,(byte)0);PrivateSession.remove(root);}
     }
     private static final class Fixture implements AutoCloseable{
         final ServerSocket server=new ServerSocket(0);final AtomicInteger requests=new AtomicInteger();

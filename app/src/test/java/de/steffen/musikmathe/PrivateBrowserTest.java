@@ -17,6 +17,19 @@ import static org.junit.Assert.*;
 @RunWith(org.robolectric.RobolectricTestRunner.class)
 @Config(sdk=28)
 public class PrivateBrowserTest {
+    @Test public void coldNewPrivateTabDoesNotLoadThePreviouslySelectedRemotePage()throws Exception{
+        BrowserApplication.privateReady=true;
+        android.content.Intent intent=new android.content.Intent(RuntimeEnvironment.getApplication(),PrivateActivity.class).putExtra("new_private_tab",true);
+        ActivityController<PrivateActivity> controller=Robolectric.buildActivity(PrivateActivity.class,intent).setup();
+        try{
+            PrivateActivity activity=controller.get();PrivateProfiles.active=PrivateUnitSupport.session(activity);
+            BrowserStore store=new BrowserStore(activity,true);store.saveTabs(Collections.singletonList(new BrowserStore.Entry("https://previous-private.example/","Previous private page",0)),0);
+            java.lang.reflect.Field access=MainActivity.class.getDeclaredField("privateAccess");access.setAccessible(true);Method unlock=PrivateAccess.class.getDeclaredMethod("unlock");unlock.setAccessible(true);unlock.invoke(access.get(activity));
+            java.lang.reflect.Field field=MainActivity.class.getDeclaredField("tabs");field.setAccessible(true);
+            @SuppressWarnings("unchecked") java.util.List<MainActivity.Tab> tabs=(java.util.List<MainActivity.Tab>)field.get(activity);
+            assertEquals(2,tabs.size());assertNull("The old website stays lazy",tabs.get(0).view);assertNotNull(tabs.get(1).view);assertEquals(Address.HOME,tabs.get(1).url);assertFalse(intent.hasExtra("new_private_tab"));
+        }finally{controller.pause().stop().destroy();BrowserApplication.privateReady=false;}
+    }
     @Test public void switchingToNormalRetainsTheAreaAndDeferredNewTabOpensExactlyOnce()throws Exception{
         BrowserApplication.privateReady=true;
         ActivityController<PrivateActivity> controller=Robolectric.buildActivity(PrivateActivity.class).setup();

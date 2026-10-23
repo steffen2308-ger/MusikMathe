@@ -12,17 +12,21 @@ final class PrivateTestSupport {
     static String password(){return "Device-test-"+UUID.randomUUID();}
     static void unlock(UiDevice device)throws Exception{unlock(device,password());}
     static void unlock(UiDevice device,String password)throws Exception{
+        unlockTimed(device,password);
+    }
+    static long unlockTimed(UiDevice device,String password)throws Exception{
         UiObject2 input=device.wait(Until.findObject(By.desc("Passwort für privaten Bereich")),20000);assertNotNull("Private password gate",input);input.setText(password);
-        UiObject2 open=device.findObject(By.text("Öffnen"));assertNotNull(open);open.click();
+        UiObject2 open=device.findObject(By.text("Öffnen"));assertNotNull(open);long started=android.os.SystemClock.elapsedRealtime();open.click();
         long end=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(70);
         while(System.nanoTime()<end){
             try{
                 UiObject2 confirmation=device.findObject(By.desc("Passwort bestätigen"));
                 if(confirmation!=null&&confirmation.isEnabled()){confirmation.setText(password);UiObject2 create=device.findObject(By.text("Bereich anlegen"));assertNotNull(create);create.click();}
-                if(device.hasObject(By.descStartsWith("Privater Tab"))&&!device.hasObject(By.desc("Passwort für privaten Bereich"))&&!device.hasObject(By.desc("Passwort bestätigen")))return;
+                if(device.hasObject(By.descStartsWith("Privater Tab"))&&!device.hasObject(By.desc("Passwort für privaten Bereich"))&&!device.hasObject(By.desc("Passwort bestätigen")))return android.os.SystemClock.elapsedRealtime()-started;
             }catch(androidx.test.uiautomator.StaleObjectException replaced){/* The authenticated view just replaced the confirmation dialog. Retry the condition. */}
             Thread.sleep(150);
         }
         fail("Private password did not open its area");
+        return -1;
     }
 }

@@ -154,9 +154,14 @@ public class MainActivity extends AppCompatActivity {
             String url=getIntent().getData().toString();
             if(Address.isWeb(url)&&tabs.size()<BrowserStore.MAX_TABS){tabs.add(new Tab(url,url,false));selected=tabs.size()-1;incoming=true;}
         }
+        // Select the requested blank private tab before constructing any WebView.
+        // Restoring the previous remote page first creates a second, immediately hidden view.
+        if(isPrivateMode()&&getIntent().getBooleanExtra("new_private_tab",false)&&!Address.HOME.equals(active().url)){
+            if(tabs.size()<BrowserStore.MAX_TABS){tabs.add(new Tab(Address.HOME,"Neuer Tab",false));selected=tabs.size()-1;}
+            else toast("Bitte zuerst einen Tab schließen (maximal 20).");
+        }
         switchTab(selected);
         if (saved == null&&!incoming) acceptIntent(getIntent());
-        if(isPrivateMode()&&getIntent().getBooleanExtra("new_private_tab",false)&&tabs.size()>0&&!Address.HOME.equals(active().url))newTab(Address.HOME,true);
         getIntent().removeExtra("new_private_tab");
         applyFullscreenUi();
     }
