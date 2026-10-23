@@ -13,7 +13,7 @@ final class BrowserAppearance {
         return context.getSharedPreferences("appearance",Context.MODE_MULTI_PROCESS).getBoolean("night",false);
     }
     static void saveNight(Context context,boolean enabled){
-        PrivateProfiles.Session profile=PrivateProfiles.forContext(context);if(profile!=null){profile.put("night",enabled);return;}
+        PrivateProfiles.Session profile=PrivateProfiles.forContext(context);if(profile!=null){profile.putAsync("night",enabled);return;}
         context.getSharedPreferences("appearance",0).edit().putBoolean("night",enabled).commit();
     }
     static void sync(Context context){

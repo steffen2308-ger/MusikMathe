@@ -36,6 +36,8 @@ final class BrowserStore {
         CachedRows(String raw,List<Entry> rows){this.raw=raw;this.rows=new ArrayList<>(rows);}
     }
     final PrivateProfiles.Session profile;
+    private List<Entry> savedTabs;
+    private String savedTabsEncoded;
     private String privateEngine;
     private boolean privateAdBlocking;
     private final Set<String> privateAdBlockExceptions;
@@ -86,13 +88,22 @@ final class BrowserStore {
         if (privateMode&&profile==null) return;
         String encoded=encode(key,rows),stored=profile==null?prefs.getString("tabs".equals(key)?tabPrefix+key:key,"[]"):profile.string(key,"[]");
         if(encoded.equals(stored))return;
-        if(profile!=null)profile.put(key,encoded);else prefs.edit().putString("tabs".equals(key)?tabPrefix+key:key,encoded).apply();
+        if(profile!=null)profile.putAsync(key,encoded);else prefs.edit().putString("tabs".equals(key)?tabPrefix+key:key,encoded).apply();
+    }
+    private String tabSnapshot(List<Entry> rows){
+        boolean same=savedTabs!=null&&savedTabs.size()==rows.size();
+        if(same)for(int i=0;i<rows.size();i++){
+            Entry a=savedTabs.get(i),b=rows.get(i);
+            if(a.time!=b.time||a.desktop!=b.desktop||!a.url.equals(b.url)||!a.title.equals(b.title)){same=false;break;}
+        }
+        if(!same){savedTabsEncoded=encode("tabs",rows);savedTabs=new ArrayList<>(rows);}
+        return savedTabsEncoded;
     }
     void saveTabs(List<Entry> rows,int selected){
         if(privateMode&&profile==null)return;
-        String encoded=encode("tabs",rows);
+        String encoded=tabSnapshot(rows);
         if(profile!=null){
-            try{profile.putAll(new JSONObject().put("tabs",encoded).put("selected",selected));}catch(org.json.JSONException ignored){}
+            try{profile.putAllAsync(new JSONObject().put("tabs",encoded).put("selected",selected));}catch(org.json.JSONException ignored){}
         }else{
             boolean changed=!encoded.equals(prefs.getString(tabPrefix+"tabs","[]")),selection=selected!=prefs.getInt(tabPrefix+"selected",0);
             if(!changed&&!selection)return;
@@ -126,14 +137,14 @@ final class BrowserStore {
         write("bookmarks", rows); return !removed;
     }
     int selected() { return profile!=null?profile.integer("selected",0):privateMode ? 0 : prefs.getInt(tabPrefix+"selected", 0); }
-    void selected(int index) { if(profile!=null)profile.put("selected",index);else if (!privateMode) prefs.edit().putInt(tabPrefix+"selected", index).apply(); }
+    void selected(int index) { if(profile!=null)profile.putAsync("selected",index);else if (!privateMode) prefs.edit().putInt(tabPrefix+"selected", index).apply(); }
     String engine() { return privateMode ? privateEngine : prefs.getString("engine", "google"); }
     boolean linkPreloadingEnabled(){return !privateMode&&prefs.getBoolean("wifi_link_preloading",true);}
     void linkPreloadingEnabled(boolean enabled){if(!privateMode)prefs.edit().putBoolean("wifi_link_preloading",enabled).apply();}
-    void engine(String engine) { if (privateMode){privateEngine = engine;if(profile!=null)profile.put("engine",engine);} else prefs.edit().putString("engine", engine).apply(); }
+    void engine(String engine) { if (privateMode){privateEngine = engine;if(profile!=null)profile.putAsync("engine",engine);} else prefs.edit().putString("engine", engine).apply(); }
     boolean adBlockingEnabled() { return privateMode ? privateAdBlocking : prefs.getBoolean("ad_blocking", true); }
     void adBlockingEnabled(boolean enabled) {
-        if (privateMode){privateAdBlocking = enabled;if(profile!=null)profile.put("ad_blocking",enabled);}
+        if (privateMode){privateAdBlocking = enabled;if(profile!=null)profile.putAsync("ad_blocking",enabled);}
         else prefs.edit().putBoolean("ad_blocking", enabled).apply();
     }
     Set<String> adBlockExceptions(){
@@ -146,7 +157,7 @@ final class BrowserStore {
             for(String existing:next)if(host.equals(existing)||host.endsWith("."+existing))return;
             next.removeIf(existing->existing.endsWith("."+host));next.add(host);
         }else next.remove(host);
-        if(privateMode){privateAdBlockExceptions.clear();privateAdBlockExceptions.addAll(next);if(profile!=null)profile.put("ad_block_exceptions",new JSONArray(next).toString());}
+        if(privateMode){privateAdBlockExceptions.clear();privateAdBlockExceptions.addAll(next);if(profile!=null)profile.putAsync("ad_block_exceptions",new JSONArray(next).toString());}
         else prefs.edit().putStringSet("ad_block_exceptions",next).apply();
     }
 }

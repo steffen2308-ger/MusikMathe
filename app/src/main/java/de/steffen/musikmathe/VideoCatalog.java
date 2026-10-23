@@ -9,7 +9,7 @@ import java.util.Map;
 
 /** Per-page, memory-only candidates; media segments are not offered as complete videos. */
 final class VideoCatalog {
-    static String scanScript(android.content.Context context){try(java.io.InputStream in=context.getAssets().open("video-scan.js");java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream()){byte[] buffer=new byte[8192];int n;while((n=in.read(buffer))!=-1)out.write(buffer,0,n);return new String(out.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);}catch(java.io.IOException error){return "JSON.stringify([])";}}
+    static String scanScript(android.content.Context context){return BrowserScripts.read(context,"video-scan.js","JSON.stringify([])");}
     static final class Item {
         final String url, type, audioUrl, youtubeId, description,thumbnail;
         final Map<String,String> headers;

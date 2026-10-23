@@ -57,10 +57,8 @@ final class PasswordManager {
     void pageStarted(WebView web){State s=states.get(web);if(s!=null){s.token=UUID.randomUUID().toString();s.touch=-10000;s.prompt=-100000;}}
     void pageFinished(WebView web){
         State state=states.get(web);if(state==null||PasswordVault.origin(web.getUrl()).isEmpty())return;
-        try(java.io.InputStream in=activity.getAssets().open("passwords.js");java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream()){
-            byte[] buffer=new byte[8192];int n;while((n=in.read(buffer))!=-1)out.write(buffer,0,n);
-            web.evaluateJavascript(new String(out.toByteArray(),StandardCharsets.UTF_8).replace("__MM_TOKEN__",quote(state.token)),null);
-        }catch(Exception ignored){}
+        String script=BrowserScripts.read(activity,"passwords.js","");
+        if(!script.isEmpty())web.evaluateJavascript(script.replace("__MM_TOKEN__",quote(state.token)),null);
     }
     private static String quote(String value){return JSONObject.quote(value).replace("\u2028","\\u2028").replace("\u2029","\\u2029");}
     // Reject nested data before Android's recursive JSON parser sees an untrusted message.

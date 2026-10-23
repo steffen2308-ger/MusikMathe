@@ -79,12 +79,7 @@ final class FreeSpaceGesture {
     }
     @SuppressLint("ClickableViewAccessibility") // Controls keep their native clicks; fullscreen also has an accessible menu action.
     static void attach(WebView web,BooleanSupplier active,IntSupplier page,Runnable toggle,Consumer<MotionEvent> touchObserver){
-        String script;
-        try(InputStream input=web.getContext().getAssets().open("free-space.js");ByteArrayOutputStream out=new ByteArrayOutputStream()){
-            byte[] buffer=new byte[4096];int length;
-            while((length=input.read(buffer))!=-1)out.write(buffer,0,length);
-            script=new String(out.toByteArray(),StandardCharsets.UTF_8);
-        }catch(IOException failure){return;}
+        String script=BrowserScripts.read(web.getContext(),"free-space.js","");if(script.isEmpty())return;
         FreeSpaceGesture gesture=new FreeSpaceGesture(web,active,page,toggle,script);
         web.setTag(gesture);
         web.setOnTouchListener((view,event)->{

@@ -131,7 +131,7 @@ jobs:
       - name: Checkout previous APK for performance comparison
         uses: actions/checkout@v4
         with:
-          ref: 57aa7ef5c484863f45a999ed7deb67f8f78a085b
+          ref: b7254ab827ced1c37e09027078531cec5cb1130e
           path: performance-baseline
       - uses: actions/setup-java@v4
         with:

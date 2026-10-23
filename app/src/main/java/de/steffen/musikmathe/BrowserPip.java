@@ -95,9 +95,7 @@ final class BrowserPip {
     @android.annotation.TargetApi(26) private void requestPip(){
             if(destroyed||!pending||activity.isFinishing()||fullscreen.get()==null){pending=false;return;}
             try{
-                if(activity.enterPictureInPictureMode(params())){
-                    handler.post(()->{if(!destroyed&&keepsPlaying())browse.run();});
-                }else failed();
+                if(!activity.enterPictureInPictureMode(params()))failed();
             }catch(IllegalStateException|IllegalArgumentException|SecurityException error){failed();}
     }
     private void failed(){pending=false;if(owner.get()==this)owner.clear();restoreFullscreen.run();message("Android konnte das schwebende Fenster nicht öffnen. Prüfe in den App-Einstellungen, ob Bild-in-Bild für BestBrowser erlaubt ist.");}
@@ -133,7 +131,10 @@ final class BrowserPip {
     }
     void modeChanged(boolean pip){
         pending=false;handler.removeCallbacks(poll);if(button!=null)button.setVisibility(pip?View.GONE:View.VISIBLE);
-        if(pip){entered=true;publishedWidth=-1;owner=new WeakReference<>(this);if(video!=null)video.onResume();handler.post(poll);}
+        if(pip){entered=true;publishedWidth=-1;owner=new WeakReference<>(this);if(video!=null)video.onResume();handler.post(poll);
+            // Launch after Android confirms the PiP transition. The return from
+            // enterPictureInPictureMode can precede the Activity's mode flag.
+            handler.post(()->{if(!destroyed&&entered)browse.run();});}
         else{if(owner.get()==this)owner.clear();}
     }
     void resumed(){if(!inMode()){entered=false;pending=false;}}

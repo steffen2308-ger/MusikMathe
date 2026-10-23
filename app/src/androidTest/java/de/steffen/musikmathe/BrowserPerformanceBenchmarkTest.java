@@ -78,9 +78,35 @@ public class BrowserPerformanceBenchmarkTest {
             if("current".equals(label)){assertEquals("Recent tabs keep their native attachment",0,attaches.get());assertEquals(0,detaches.get());}
             main(()->{for(int i:new int[]{0,1,19})tabs().get(i).view.removeOnAttachStateChangeListener(listener);});
             JSONObject report=new JSONObject().put("version",label).put("restoredTabs",19).put("historyRows",500).put("startupCreatedWebViews",created[0]).put("firstActivityReadyMs",starts.get(0)).put("warmActivityReadyMedianMs",median(starts.subList(1,starts.size()))).put("tabSwitchUiMedianMs",median(switchUi)).put("tabSwitchFrameMedianMs",median(switchFrames)).put("warmSwitches",30).put("attachEvents",attaches.get()).put("detachEvents",detaches.get());
+            if("current".equals(label))main(()->{
+                WebView first=tabs().get(0).view,second=tabs().get(1).view;
+                activity.onTrimMemory(android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN);
+                assertSame("Backgrounding preserves recently used tabs",first,tabs().get(0).view);assertSame(second,tabs().get(1).view);
+            });
+            main(activity::finish);instrumentation.waitForIdleSync();activity=null;
+            benchmarkPrivateStorage(report);
             Log.i("MenuPreview","browser-performance "+report);
             try(java.io.FileOutputStream out=app.openFileOutput("browser-performance-"+label+".json",Context.MODE_PRIVATE)){out.write(report.toString().getBytes(StandardCharsets.UTF_8));}
         }finally{if(activity!=null)main(activity::finish);}
+    }
+    private void benchmarkPrivateStorage(JSONObject report)throws Exception{
+        assertNull(PrivateProfiles.active);byte[] material=new byte[96];new java.security.SecureRandom().nextBytes(material);
+        PrivateProfiles.Session session=new PrivateProfiles.Session(app,PrivateCrypto.id(material),material,new JSONObject().put("schema",1),true);
+        PrivateProfiles.active=session;
+        try{
+            BrowserStore store=new BrowserStore(app,true);List<BrowserStore.Entry> rows=new ArrayList<>(),history=new ArrayList<>();
+            for(int i=0;i<20;i++)rows.add(new BrowserStore.Entry("https://private-"+i+".example/page","Private tab "+i,0));
+            for(int i=0;i<500;i++)history.add(new BrowserStore.Entry("https://private-history.example/"+i,"Private article "+i+" · stored title and metadata",i));
+            store.write("history",history);assertTrue(session.flush());List<Double> selection=new ArrayList<>(),visits=new ArrayList<>();
+            for(int i=0;i<30;i++){
+                int selected=i%20;String url="https://private-history.example/"+i;double[] elapsed=new double[2];
+                main(()->{long start=SystemClock.elapsedRealtimeNanos();store.saveTabs(rows,selected);elapsed[0]=(SystemClock.elapsedRealtimeNanos()-start)/1000000.0;start=SystemClock.elapsedRealtimeNanos();store.visit(url,"Updated private article");elapsed[1]=(SystemClock.elapsedRealtimeNanos()-start)/1000000.0;});selection.add(elapsed[0]);visits.add(elapsed[1]);
+            }
+            long start=SystemClock.elapsedRealtimeNanos();assertTrue(session.flush());double barrier=(SystemClock.elapsedRealtimeNanos()-start)/1000000.0;
+            JSONObject durable=new JSONObject(new String(PrivateCrypto.decrypt(PrivateCrypto.dataKey(material),PrivateCrypto.aad("data",session.id),PrivateProfiles.dataFile(app,session.id).readFully()),StandardCharsets.UTF_8));
+            assertEquals(9,durable.getInt("selected"));assertEquals("https://private-history.example/29",new org.json.JSONArray(durable.getString("history")).getJSONObject(0).getString("url"));
+            report.put("privateTabSaveUiMedianMs",median(selection)).put("privateHistorySaveUiMedianMs",median(visits)).put("privatePersistenceBarrierMs",barrier).put("privateStorageRounds",30);
+        }finally{session.close();PrivateProfiles.active=null;PrivateProfiles.dataFile(app,session.id).delete();}
     }
     private static final class Fixture implements AutoCloseable{
         final ServerSocket server=new ServerSocket(0);final AtomicInteger requests=new AtomicInteger();

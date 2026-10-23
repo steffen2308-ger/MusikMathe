@@ -41,11 +41,7 @@ final class VideoMarkers {
     VideoMarkers(Context context,FrameLayout host,BooleanSupplier available,BiConsumer<WebView,JSONObject> selected){
         this.context=context;this.host=host;this.available=available;this.selected=selected;
         overlay=new FrameLayout(context);overlay.setClipChildren(true);overlay.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        String source="function(){return JSON.stringify({rows:[]});}";
-        try(java.io.InputStream in=context.getAssets().open("video-markers.js");java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream()){
-            byte[] buffer=new byte[8192];int n;while((n=in.read(buffer))!=-1)out.write(buffer,0,n);source=new String(out.toByteArray(),StandardCharsets.UTF_8);
-        }catch(java.io.IOException ignored){}
-        script=source;
+        script=BrowserScripts.read(context,"video-markers.js","function(){return JSON.stringify({rows:[]});}");
     }
     private int dp(int value){return Math.round(value*context.getResources().getDisplayMetrics().density);}
     void attach(WebView view){

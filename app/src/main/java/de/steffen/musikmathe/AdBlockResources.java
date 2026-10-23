@@ -22,6 +22,7 @@ import org.json.JSONArray;
 final class AdBlockResources {
     static final String UPDATE_URL = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/light-onlydomains.txt";
     static final String CLEANUP_SCRIPT = "if(window.__bestBrowserAdblock)window.__bestBrowserAdblock.stop();";
+    static final String HEALTH_CHECK="!!(window.__bestBrowserAdblock&&window.__bestBrowserAdblock.installed())";
     private static final int MAX_BYTES = 4*1024*1024;
     private static volatile boolean loaded;
     private static volatile String problem = "";

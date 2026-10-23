@@ -46,28 +46,53 @@ final class PrivateProfiles {
     static final class Session implements AutoCloseable {
         final Context context;final String id;final byte[] material;final boolean fresh;
         private JSONObject data;
-        String failure="";
-        private boolean closed;
-        Session(Context c,String id,byte[] material,JSONObject data,boolean fresh){this.context=c.getApplicationContext();this.id=id;this.material=material;this.data=data;this.fresh=fresh;}
+        volatile String failure="";
+        private boolean closed,sealing;
+        private final Object diskLock=new Object();
+        private long revision,savedRevision;
+        private boolean saveQueued;
+        Session(Context c,String id,byte[] material,JSONObject data,boolean fresh){this.context=c.getApplicationContext();this.id=id;this.material=material;this.data=data;this.fresh=fresh;savedRevision=fresh?-1:0;}
         synchronized String string(String key,String fallback){check();return data.optString(key,fallback);}
         synchronized int integer(String key,int fallback){check();return data.optInt(key,fallback);}
         synchronized boolean bool(String key,boolean fallback){check();return data.optBoolean(key,fallback);}
         synchronized JSONObject object(String key){check();JSONObject value=data.optJSONObject(key);return value==null?new JSONObject():value;}
-        synchronized void put(String key,Object value){check();try{data.put(key,value);flush();}catch(Exception e){failure="Private Daten konnten nicht gespeichert werden. Bitte den freien Speicher prüfen.";}}
-        synchronized void putAll(JSONObject changes){
-            check();try{
+        void put(String key,Object value){try{putAll(new JSONObject().put(key,value));}catch(org.json.JSONException e){saveFailed();}}
+        void putAll(JSONObject changes){if(change(changes))flush();}
+        void putAsync(String key,Object value){try{putAllAsync(new JSONObject().put(key,value));}catch(org.json.JSONException e){saveFailed();}}
+        void putAllAsync(JSONObject changes){if(change(changes))saveInBackground();}
+        private synchronized boolean change(JSONObject changes){
+            check();if(sealing)throw new IllegalStateException("Der private Bereich wird geschlossen.");try{
                 boolean changed=false;java.util.Iterator<String> keys=changes.keys();
                 while(keys.hasNext()){String key=keys.next();Object next=changes.get(key);if(!java.util.Objects.equals(data.opt(key),next)){data.put(key,next);changed=true;}}
-                if(changed||!failure.isEmpty())flush();
-            }catch(Exception e){failure="Private Daten konnten nicht gespeichert werden. Bitte den freien Speicher prüfen.";}
+                if(changed)revision++;
+                return changed||!failure.isEmpty();
+            }catch(Exception e){saveFailed();return false;}
         }
-        synchronized boolean flush(){
-            check();try{byte[] plain=data.toString().getBytes(StandardCharsets.UTF_8);if(plain.length>8*1024*1024-29)throw new IOException("Privater Speicher zu groß");write(dataFile(context,id),PrivateCrypto.encrypt(PrivateCrypto.dataKey(material),PrivateCrypto.aad("data",id),plain));failure="";return true;}
-            catch(Exception e){failure="Private Daten konnten nicht gespeichert werden. Bitte den freien Speicher prüfen.";return false;}
+        synchronized void saveInBackground(){
+            if(closed||saveQueued)return;saveQueued=true;
+            BrowserPersistence.later(()->{synchronized(this){saveQueued=false;if(closed)return;}flush();});
         }
+        boolean flush(){synchronized(diskLock){
+            byte[] plain=null;try{
+                long snapshot;SecretKey key;
+                synchronized(this){check();if(savedRevision==revision&&failure.isEmpty())return true;snapshot=revision;plain=data.toString().getBytes(StandardCharsets.UTF_8);key=PrivateCrypto.dataKey(material);}
+                // Encryption and AtomicFile's fsync hold only the disk lock. Reads and new
+                // changes remain available; a later revision cannot be overwritten by an old one.
+                if(plain.length>8*1024*1024-29)throw new IOException("Privater Speicher zu groß");
+                write(dataFile(context,id),PrivateCrypto.encrypt(key,PrivateCrypto.aad("data",id),plain));
+                synchronized(this){savedRevision=snapshot;failure="";}return true;
+            }catch(Exception e){saveFailed();return false;}
+            finally{if(plain!=null)Arrays.fill(plain,(byte)0);}
+        }}
+        private void saveFailed(){failure="Private Daten konnten nicht gespeichert werden. Bitte den freien Speicher prüfen.";}
         boolean matches(char[] password)throws Exception{byte[] next=PrivateCrypto.derive(password,salt(context));try{return MessageDigest.isEqual(material,next);}finally{Arrays.fill(next,(byte)0);}}
         private void check(){if(closed)throw new IllegalStateException("Der private Bereich ist gesperrt.");}
-        @Override public synchronized void close(){if(closed)return;closed=true;Arrays.fill(material,(byte)0);data=new JSONObject();if(active==this)active=null;}
+        @Override public void close(){synchronized(diskLock){
+            synchronized(this){if(closed)return;sealing=true;}
+            // An unconfirmed, untouched password must never create a profile on disk.
+            if(revision>0)flush();
+            synchronized(this){closed=true;Arrays.fill(material,(byte)0);data=new JSONObject();if(active==this)active=null;}
+        }}
     }
     static Session probe(Context c,char[] password)throws Exception{
         byte[] material=PrivateCrypto.derive(password,salt(c));boolean retained=false;

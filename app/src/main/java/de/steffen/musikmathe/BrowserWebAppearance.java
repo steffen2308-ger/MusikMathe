@@ -7,7 +7,11 @@ import androidx.webkit.WebViewFeature;
 /** Native WebView darkening preserves media colours and site-provided dark themes. */
 final class BrowserWebAppearance {
     private BrowserWebAppearance(){}
-    private static boolean supported(String feature){try{return WebViewFeature.isFeatureSupported(feature);}catch(RuntimeException|LinkageError ignored){return false;}}
+    private static final java.util.Map<String,Boolean> FEATURES=new java.util.HashMap<>();
+    private static boolean supported(String feature){
+        Boolean cached=FEATURES.get(feature);if(cached!=null)return cached;
+        boolean value;try{value=WebViewFeature.isFeatureSupported(feature);}catch(RuntimeException|LinkageError ignored){value=false;}FEATURES.put(feature,value);return value;
+    }
     @SuppressWarnings("deprecation") static void apply(WebView web,boolean night){
         web.setBackgroundColor(web.getContext().getColor(R.color.browser_page));
         if(supported(WebViewFeature.ALGORITHMIC_DARKENING)){
