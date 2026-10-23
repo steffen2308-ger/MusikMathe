@@ -81,7 +81,10 @@ final class PrivateAccess {
             });
         });
     }
-    private void unlock(){locked=false;if(dialog!=null)dialog.dismiss();unlocked.run();List<Runnable> actions=new ArrayList<>(deferred);deferred.clear();for(Runnable action:actions)action.run();}
+    private void unlock(){
+        if(input!=null&&input.getWindowToken()!=null){android.view.inputmethod.InputMethodManager keyboard=(android.view.inputmethod.InputMethodManager)activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE);if(keyboard!=null)keyboard.hideSoftInputFromWindow(input.getWindowToken(),0);input.clearFocus();}
+        locked=false;if(dialog!=null)dialog.dismiss();unlocked.run();List<Runnable> actions=new ArrayList<>(deferred);deferred.clear();for(Runnable action:actions)action.run();
+    }
     void background(){
         if(destroyed||!foreground)return;resumeWithoutPassword=!locked&&!busy&&PrivateProfiles.active!=null;backgroundAt=clock.getAsLong();foreground=false;locked=true;generation++;if(pending!=null){pending.close();pending=null;}if(input!=null)input.getText().clear();if(dialog!=null)dialog.dismiss();
     }

@@ -97,7 +97,9 @@ public class PasswordFeatureTest {
             org.json.JSONArray position=new org.json.JSONArray(new org.json.JSONTokener(js(web,"JSON.stringify((function(){var r=document.getElementById('username').getBoundingClientRect();return [(r.left+r.width/2)/innerWidth,(r.top+r.height/2)/innerHeight];})())")).nextValue().toString());
             int[] point=new int[2];main(()->{int[] location=new int[2];web.getLocationOnScreen(location);point[0]=location[0]+(int)(web.getWidth()*position.optDouble(0));point[1]=location[1]+(int)(web.getHeight()*position.optDouble(1));});
             device.click(point[0],point[1]);click("focus-user");
-            assertEquals("\"Dummy-focus-password\"",js(web,"document.getElementById('password').value"));
+            long deadline=android.os.SystemClock.uptimeMillis()+10000;String filled;
+            do{filled=js(web,"document.getElementById('password').value");if("\"Dummy-focus-password\"".equals(filled))break;Thread.sleep(50);}while(android.os.SystemClock.uptimeMillis()<deadline);
+            assertEquals("\"Dummy-focus-password\"",filled);
             assertTrue("Normal browser controls stay visible",device.hasObject(By.desc("Menü")));
         }finally{main(activity::finish);vault.clear();}
     }
