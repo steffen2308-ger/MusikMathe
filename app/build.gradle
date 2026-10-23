@@ -27,6 +27,8 @@ android {
         unitTests.includeAndroidResources = true
         unitTests.all { testLogging { exceptionFormat = 'full' } }
     }
+    // JVM OSGi manifests from BC and JSpecify are unused by Android and share this path.
+    packaging { resources.excludes += 'META-INF/versions/9/OSGI-INF/MANIFEST.MF' }
 }
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.1'
