@@ -28,7 +28,10 @@ public class PasswordFeatureTest {
     private Context app(){return InstrumentationRegistry.getInstrumentation().getTargetContext();}
     private void main(Runnable run){InstrumentationRegistry.getInstrumentation().runOnMainSync(run);}
     private static WebView find(View v){if(v instanceof WebView)return (WebView)v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=g.getChildCount()-1;i>=0;i--){WebView w=find(g.getChildAt(i));if(w!=null)return w;}}return null;}
-    private String js(WebView web,String script)throws Exception{CountDownLatch done=new CountDownLatch(1);AtomicReference<String> result=new AtomicReference<>();main(()->web.evaluateJavascript(script,value->{result.set(value);done.countDown();}));assertTrue(done.await(8,TimeUnit.SECONDS));return result.get();}
+    private String js(WebView web,String script)throws Exception{CountDownLatch done=new CountDownLatch(1);AtomicReference<String> result=new AtomicReference<>();main(()->web.evaluateJavascript(script,value->{result.set(value);done.countDown();}));if(!done.await(8,TimeUnit.SECONDS)){
+            AtomicReference<String> state=new AtomicReference<>();main(()->state.set("attached="+web.isAttachedToWindow()+", visible="+web.getVisibility()+", url="+web.getUrl()+", activityDestroyed="+(web.getContext() instanceof Activity&&((Activity)web.getContext()).isDestroyed())));
+            fail("WebView script callback timed out: "+state.get());
+        }return result.get();}
     private Activity launch()throws Exception{UiDevice device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());device.wakeUp();device.executeShellCommand("wm dismiss-keyguard");return InstrumentationRegistry.getInstrumentation().startActivitySync(new Intent(app(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));}
     private WebView view(Activity a){AtomicReference<WebView> web=new AtomicReference<>();main(()->web.set(find(a.getWindow().getDecorView())));assertNotNull(web.get());return web.get();}
     private void page(WebView web,String host)throws Exception{
@@ -80,6 +83,24 @@ public class PasswordFeatureTest {
             assertEquals("\"dummy-user\"",js(web,"document.getElementById('username').value"));assertEquals("\"Dummy-42-password\"",js(web,"document.getElementById('password').value"));
             option("Zugangsdaten ausfüllen");page(web,"other.example.test");click("dummy-user");
             assertEquals("\"\"",js(web,"document.getElementById('password').value"));
+        }finally{main(activity::finish);vault.clear();}
+    }
+    @Test public void realTouchStillOffersAutofillAfterFullscreenGesturesAreAttached()throws Exception{
+        PasswordVault vault=new PasswordVault(app(),false);vault.clear();Activity activity=launch();WebView web=view(activity);
+        try{
+            Assume.assumeTrue("Older WebView uses explicit fill menu",WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER));
+            vault.save("https://focus.example.test","focus-user","Dummy-focus-password");page(web,"focus.example.test");
+            js(web,"document.getElementById('username').focus();true");
+            UiDevice device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
+            assertFalse("Script focus alone must not open autofill",device.wait(Until.hasObject(By.text("focus-user")),500));
+            js(web,"document.getElementById('username').blur();true");
+            org.json.JSONArray position=new org.json.JSONArray(new org.json.JSONTokener(js(web,"JSON.stringify((function(){var r=document.getElementById('username').getBoundingClientRect();return [(r.left+r.width/2)/innerWidth,(r.top+r.height/2)/innerHeight];})())")).nextValue().toString());
+            int[] point=new int[2];main(()->{int[] location=new int[2];web.getLocationOnScreen(location);point[0]=location[0]+(int)(web.getWidth()*position.optDouble(0));point[1]=location[1]+(int)(web.getHeight()*position.optDouble(1));});
+            device.click(point[0],point[1]);click("focus-user");
+            long deadline=android.os.SystemClock.uptimeMillis()+10000;String filled;
+            do{filled=js(web,"document.getElementById('password').value");if("\"Dummy-focus-password\"".equals(filled))break;Thread.sleep(50);}while(android.os.SystemClock.uptimeMillis()<deadline);
+            assertEquals("\"Dummy-focus-password\"",filled);
+            assertTrue("Normal browser controls stay visible",device.hasObject(By.desc("Menü")));
         }finally{main(activity::finish);vault.clear();}
     }
     @Test public void formSubmissionOffersNativeSaveOnSupportedWebViews()throws Exception{

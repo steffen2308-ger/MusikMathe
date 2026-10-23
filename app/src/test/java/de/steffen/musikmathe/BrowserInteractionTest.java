@@ -19,6 +19,15 @@ import static org.junit.Assert.*;
 @RunWith(org.robolectric.RobolectricTestRunner.class)
 @Config(sdk=28)
 public class BrowserInteractionTest {
+    @Test public void completedNavigationCountsOnceEvenWithRepeatedFinishCallbacks()throws Exception{
+        clear();ActivityController<MainActivity> c=Robolectric.buildActivity(MainActivity.class).setup();
+        try{
+            WebView view=web(c.get());android.webkit.WebViewClient client=view.getWebViewClient();
+            client.onPageStarted(view,"https://visits.example/",null);client.onPageFinished(view,"https://visits.example/");client.onPageFinished(view,"https://visits.example/");
+            BrowserStore store=new BrowserStore(c.get());assertEquals(1,store.read("history").get(0).visits);
+            client.onPageStarted(view,"https://visits.example/",null);client.onPageFinished(view,"https://visits.example/");assertEquals(2,store.read("history").get(0).visits);
+        }finally{c.pause().stop().destroy();}
+    }
     private void clear(){RuntimeEnvironment.getApplication().getSharedPreferences("browser",0).edit().clear().commit();}
     private Object invoke(MainActivity activity,String name,Class<?>[] types,Object...args)throws Exception{Method m=MainActivity.class.getDeclaredMethod(name,types);m.setAccessible(true);return m.invoke(activity,args);}
     @SuppressWarnings("unchecked") private List<MainActivity.Tab> tabs(MainActivity a)throws Exception{Field f=MainActivity.class.getDeclaredField("tabs");f.setAccessible(true);return (List<MainActivity.Tab>)f.get(a);}
@@ -32,6 +41,26 @@ public class BrowserInteractionTest {
         assertEquals(2,tabs(next.get()).size());assertEquals("https://wikipedia.org",Shadows.shadowOf(web(next.get())).getLastLoadedUrl());
         invoke(next.get(),"closeTab",new Class<?>[]{int.class},1);assertEquals(1,tabs(next.get()).size());
         invoke(next.get(),"closeTab",new Class<?>[]{int.class},0);assertEquals(Address.HOME,tabs(next.get()).get(0).url);next.pause().stop().destroy();
+    }
+    @Test public void incomingLinkCreatesOnlyItsWebViewAndKeepsRestoredTabsLazy()throws Exception{
+        clear();BrowserStore stored=new BrowserStore(RuntimeEnvironment.getApplication());stored.write("tabs",java.util.Arrays.asList(new BrowserStore.Entry("https://old.example/","Old",0),new BrowserStore.Entry(Address.HOME,"Start",0)));stored.selected(0);
+        ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class,new Intent(Intent.ACTION_VIEW,Uri.parse("https://new.example/"))).setup();
+        try{assertEquals(3,tabs(controller.get()).size());assertNull(tabs(controller.get()).get(0).view);assertNull(tabs(controller.get()).get(1).view);assertEquals("https://new.example/",Shadows.shadowOf(web(controller.get())).getLastLoadedUrl());}finally{controller.pause().stop().destroy();}
+    }
+    @Test public void closingActiveAndBackgroundCachedTabsKeepsTheRightTabVisibleAndPersisted()throws Exception{
+        clear();ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity a=controller.get();
+        try{invoke(a,"newTab",new Class<?>[]{String.class,boolean.class},"https://second.example/",true);WebView second=web(a);invoke(a,"switchTab",new Class<?>[]{int.class},0);invoke(a,"closeTab",new Class<?>[]{int.class},0);assertSame(second,web(a));assertEquals(android.view.View.VISIBLE,second.getVisibility());
+            invoke(a,"newTab",new Class<?>[]{String.class,boolean.class},Address.HOME,true);invoke(a,"closeTab",new Class<?>[]{int.class},0);assertEquals(1,new BrowserStore(a).read("tabs").size());assertEquals(0,new BrowserStore(a).selected());
+        }finally{controller.pause().stop().destroy();}
+    }
+    @Test public void recentlyAttachedTabsAreBoundedAndMemoryPressureReleasesInactiveViews()throws Exception{
+        clear();ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity a=controller.get();
+        try{
+            for(int i=0;i<5;i++)invoke(a,"newTab",new Class<?>[]{String.class,boolean.class},"about:blank",true);
+            int attached=0,visible=0;for(MainActivity.Tab tab:tabs(a))if(tab.view!=null&&tab.view.getParent()!=null){attached++;if(tab.view.getVisibility()==android.view.View.VISIBLE)visible++;}
+            assertEquals(3,attached);assertEquals(1,visible);WebView active=web(a);a.onTrimMemory(android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW);assertSame(active,web(a));
+            for(MainActivity.Tab tab:tabs(a))if(tab.view!=active)assertNull(tab.view);
+        }finally{controller.pause().stop().destroy();}
     }
     @Test public void untrustedLocalAccessIsDisabledAndExternalUrlsOpen()throws Exception{
         clear();Intent intent=new Intent(Intent.ACTION_VIEW,Uri.parse("https://example.com"));
@@ -50,9 +79,10 @@ public class BrowserInteractionTest {
     static final class WebsiteRequest extends android.webkit.PermissionRequest {
         boolean denied; String[] granted;
         private final String site;
-        WebsiteRequest(String site){this.site=site;}
+        private final String[] resources;
+        WebsiteRequest(String site,String...resources){this.site=site;this.resources=resources.length==0?new String[]{RESOURCE_AUDIO_CAPTURE}:resources;}
         @Override public Uri getOrigin(){return Uri.parse(site);}
-        @Override public String[] getResources(){return new String[]{RESOURCE_AUDIO_CAPTURE};}
+        @Override public String[] getResources(){return resources;}
         @Override public void grant(String[] resources){granted=resources;}
         @Override public void deny(){denied=true;}
     }
@@ -74,5 +104,76 @@ public class BrowserInteractionTest {
         WebsiteRequest insecure=new WebsiteRequest("http://example.com");
         invoke(a,"requestWebsitePermission",new Class<?>[]{MainActivity.Tab.class,android.webkit.PermissionRequest.class},tabs(a).get(1),insecure);
         assertTrue(insecure.denied);assertNull(insecure.granted);c.pause().stop().destroy();
+    }
+    private WebsiteRequest protectedRequest(String site){return new WebsiteRequest(site,android.webkit.PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID);}
+    private void request(MainActivity activity,MainActivity.Tab tab,WebsiteRequest request)throws Exception{
+        invoke(activity,"requestWebsitePermission",new Class<?>[]{MainActivity.Tab.class,android.webkit.PermissionRequest.class},tab,request);
+    }
+    private void choose(android.app.AlertDialog dialog,int button){
+        dialog.getButton(button).performClick();
+        // AlertDialog delivers button callbacks through its main-thread Handler.
+        Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+    }
+    @Test public void protectedMediaNeedsConsentAndGrantsWithoutCameraOrMicrophonePermission()throws Exception{
+        clear();ActivityController<MainActivity> c=Robolectric.buildActivity(MainActivity.class).setup();MainActivity a=c.get();
+        try{
+            invoke(a,"navigate",new Class<?>[]{String.class},"https://www.netflix.com/watch/1");WebsiteRequest request=protectedRequest("https://www.netflix.com/");
+            request(a,tabs(a).get(0),request);assertNull(request.granted);assertFalse(request.denied);
+            android.app.AlertDialog dialog=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
+            assertEquals("Geschützte Inhalte",Shadows.shadowOf(dialog).getTitle());assertTrue(Shadows.shadowOf(dialog).getMessage().toString().contains("www.netflix.com"));
+            assertNull(Shadows.shadowOf(a).getLastRequestedPermission());
+            choose(dialog,android.app.AlertDialog.BUTTON_POSITIVE);
+            assertArrayEquals(new String[]{android.webkit.PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID},request.granted);assertFalse(request.denied);
+            assertNull(Shadows.shadowOf(a).getLastRequestedPermission());
+            invoke(a,"navigate",new Class<?>[]{String.class},"https://other.example/");assertFalse("Completed grant must not be denied later",request.denied);
+        }finally{c.pause().stop().destroy();}
+    }
+    @Test public void protectedMediaCanBeDeniedAndPendingConsentIsCancelledOnNavigation()throws Exception{
+        clear();ActivityController<MainActivity> c=Robolectric.buildActivity(MainActivity.class).setup();MainActivity a=c.get();
+        try{
+            invoke(a,"navigate",new Class<?>[]{String.class},"https://www.netflix.com/watch/1");WebsiteRequest denied=protectedRequest("https://www.netflix.com");request(a,tabs(a).get(0),denied);
+            choose(org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog(),android.app.AlertDialog.BUTTON_NEGATIVE);assertTrue(denied.denied);assertNull(denied.granted);
+            WebsiteRequest stale=protectedRequest("https://www.netflix.com");request(a,tabs(a).get(0),stale);android.app.AlertDialog old=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
+            invoke(a,"navigate",new Class<?>[]{String.class},"https://other.example/");choose(old,android.app.AlertDialog.BUTTON_POSITIVE);assertTrue(stale.denied);assertNull(stale.granted);
+        }finally{c.pause().stop().destroy();}
+    }
+    @Test public void protectedMediaRejectsHttpOtherOriginsInactiveTabsAndUnknownResources()throws Exception{
+        clear();ActivityController<MainActivity> c=Robolectric.buildActivity(MainActivity.class).setup();MainActivity a=c.get();
+        try{
+            invoke(a,"navigate",new Class<?>[]{String.class},"https://www.netflix.com/watch/1");MainActivity.Tab first=tabs(a).get(0);
+            for(String origin:new String[]{"http://www.netflix.com","https://evil.example","https://www.netflix.com:444"}){
+                WebsiteRequest blocked=protectedRequest(origin);request(a,first,blocked);assertTrue(origin,blocked.denied);assertNull(blocked.granted);
+            }
+            WebsiteRequest unknown=new WebsiteRequest("https://www.netflix.com",android.webkit.PermissionRequest.RESOURCE_MIDI_SYSEX,"future-resource");request(a,first,unknown);assertTrue(unknown.denied);assertNull(unknown.granted);
+            invoke(a,"newTab",new Class<?>[]{String.class,boolean.class},Address.HOME,true);WebsiteRequest inactive=protectedRequest("https://www.netflix.com");request(a,first,inactive);assertTrue(inactive.denied);assertNull(inactive.granted);
+        }finally{c.pause().stop().destroy();}
+    }
+    @Test public void mixedRequestNeverGrantsUnknownOrDeniedCameraResources()throws Exception{
+        clear();ActivityController<MainActivity> c=Robolectric.buildActivity(MainActivity.class).setup();MainActivity a=c.get();
+        try{
+            invoke(a,"navigate",new Class<?>[]{String.class},"https://media.example/");
+            Shadows.shadowOf(RuntimeEnvironment.getApplication()).denyPermissions(android.Manifest.permission.CAMERA,android.Manifest.permission.RECORD_AUDIO);
+            WebsiteRequest mixed=new WebsiteRequest("https://media.example",android.webkit.PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID,android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE,"future-resource");request(a,tabs(a).get(0),mixed);
+            choose(org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog(),android.app.AlertDialog.BUTTON_POSITIVE);
+            assertNull(mixed.granted);assertArrayEquals(new String[]{android.Manifest.permission.CAMERA},Shadows.shadowOf(a).getLastRequestedPermission().requestedPermissions);
+            a.onRequestPermissionsResult(11,new String[]{android.Manifest.permission.CAMERA},new int[]{android.content.pm.PackageManager.PERMISSION_DENIED});
+            assertArrayEquals(new String[]{android.webkit.PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID},mixed.granted);
+        }finally{c.pause().stop().destroy();}
+    }
+    @Test public void lateCancellationOfOldRequestDoesNotDismissNewProtectedMediaPrompt()throws Exception{
+        clear();ActivityController<MainActivity> c=Robolectric.buildActivity(MainActivity.class).setup();MainActivity a=c.get();
+        try{
+            invoke(a,"navigate",new Class<?>[]{String.class},"https://media.example/");MainActivity.Tab tab=tabs(a).get(0);
+            WebsiteRequest old=protectedRequest("https://media.example"),fresh=protectedRequest("https://media.example");request(a,tab,old);request(a,tab,fresh);assertTrue(old.denied);
+            web(a).getWebChromeClient().onPermissionRequestCanceled(old);Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            assertFalse(fresh.denied);choose(org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog(),android.app.AlertDialog.BUTTON_POSITIVE);assertNotNull(fresh.granted);
+        }finally{c.pause().stop().destroy();}
+    }
+    @Test public void privateTabsAlsoRequireTheirOwnProtectedMediaConsent()throws Exception{
+        clear();BrowserApplication.privateReady=true;ActivityController<PrivateActivity> c=Robolectric.buildActivity(PrivateActivity.class).setup();MainActivity a=c.get();PrivateUnitSupport.authenticated(a);
+        try{
+            invoke(a,"navigate",new Class<?>[]{String.class},"https://media.example/");WebsiteRequest request=protectedRequest("https://media.example");request(a,tabs(a).get(0),request);assertNull(request.granted);
+            choose(org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog(),android.app.AlertDialog.BUTTON_POSITIVE);assertNotNull(request.granted);
+        }finally{c.pause().stop().destroy();BrowserApplication.privateReady=false;}
     }
 }

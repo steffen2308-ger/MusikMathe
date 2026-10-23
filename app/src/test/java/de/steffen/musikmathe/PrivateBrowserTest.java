@@ -17,6 +17,47 @@ import static org.junit.Assert.*;
 @RunWith(org.robolectric.RobolectricTestRunner.class)
 @Config(sdk=28)
 public class PrivateBrowserTest {
+    @Test public void coldNewPrivateTabDoesNotLoadThePreviouslySelectedRemotePage()throws Exception{
+        BrowserApplication.privateReady=true;
+        android.content.Intent intent=new android.content.Intent(RuntimeEnvironment.getApplication(),PrivateActivity.class).putExtra("new_private_tab",true);
+        ActivityController<PrivateActivity> controller=Robolectric.buildActivity(PrivateActivity.class,intent).setup();
+        try{
+            PrivateActivity activity=controller.get();PrivateProfiles.active=PrivateUnitSupport.session(activity);
+            BrowserStore store=new BrowserStore(activity,true);store.saveTabs(Collections.singletonList(new BrowserStore.Entry("https://previous-private.example/","Previous private page",0)),0);
+            java.lang.reflect.Field access=MainActivity.class.getDeclaredField("privateAccess");access.setAccessible(true);Method unlock=PrivateAccess.class.getDeclaredMethod("unlock");unlock.setAccessible(true);unlock.invoke(access.get(activity));
+            java.lang.reflect.Field field=MainActivity.class.getDeclaredField("tabs");field.setAccessible(true);
+            @SuppressWarnings("unchecked") java.util.List<MainActivity.Tab> tabs=(java.util.List<MainActivity.Tab>)field.get(activity);
+            assertEquals(2,tabs.size());assertNull("The old website stays lazy",tabs.get(0).view);assertNotNull(tabs.get(1).view);assertEquals(Address.HOME,tabs.get(1).url);assertFalse(intent.hasExtra("new_private_tab"));
+        }finally{controller.pause().stop().destroy();BrowserApplication.privateReady=false;}
+    }
+    @Test public void switchingToNormalRetainsTheAreaAndDeferredNewTabOpensExactlyOnce()throws Exception{
+        BrowserApplication.privateReady=true;
+        ActivityController<PrivateActivity> controller=Robolectric.buildActivity(PrivateActivity.class).setup();
+        try{
+            MainActivity activity=controller.get();PrivateProfiles.active=PrivateUnitSupport.session(activity);
+            java.lang.reflect.Field access=MainActivity.class.getDeclaredField("privateAccess");access.setAccessible(true);PrivateAccess gate=(PrivateAccess)access.get(activity);
+            Method unlock=PrivateAccess.class.getDeclaredMethod("unlock");unlock.setAccessible(true);unlock.invoke(gate);
+            Method activeView=MainActivity.class.getDeclaredMethod("activeView");activeView.setAccessible(true);
+            android.webkit.WebView original=(android.webkit.WebView)activeView.invoke(activity);
+            Method navigate=MainActivity.class.getDeclaredMethod("navigateTyped",String.class);navigate.setAccessible(true);navigate.invoke(activity,"https://retained-private.example/");
+            PrivateProfiles.Session session=PrivateProfiles.active;
+            Method normal=MainActivity.class.getDeclaredMethod("openNormal");normal.setAccessible(true);normal.invoke(activity);
+            assertFalse("Switching mode must not finish the private Activity",activity.isFinishing());assertSame(session,PrivateProfiles.active);assertSame(original,activeView.invoke(activity));
+            android.content.Intent target=org.robolectric.Shadows.shadowOf(activity).getNextStartedActivity();assertEquals(MainActivity.class.getName(),target.getComponent().getClassName());
+            activity.getIntent().putExtra("return_second_window",true);normal.invoke(activity);
+            assertEquals(SecondBrowserActivity.class.getName(),org.robolectric.Shadows.shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
+            gate.background();assertTrue(gate.locked());
+            android.content.Intent incoming=new android.content.Intent(activity,PrivateActivity.class).putExtra("new_private_tab",true);
+            activity.onNewIntent(incoming);
+            java.lang.reflect.Field tabs=MainActivity.class.getDeclaredField("tabs");tabs.setAccessible(true);
+            assertEquals("A locked area queues the action",1,((java.util.List<?>)tabs.get(activity)).size());
+            gate.foreground();assertFalse(gate.locked());assertSame(session,PrivateProfiles.active);
+            assertEquals("The requested new private tab opens after authentication is retained",2,((java.util.List<?>)tabs.get(activity)).size());
+            assertFalse("Consumed action must not survive on the Activity intent",incoming.hasExtra("new_private_tab"));
+            activity.onNewIntent(incoming);assertEquals(2,((java.util.List<?>)tabs.get(activity)).size());
+            Method close=MainActivity.class.getDeclaredMethod("closeTab",int.class);close.setAccessible(true);close.invoke(activity,1);assertSame(original,activeView.invoke(activity));
+        }finally{controller.pause().stop().destroy();BrowserApplication.privateReady=false;}
+    }
     @Test public void privateActionsNeverOverwriteNormalTabsOrHistory() {
         Context context=RuntimeEnvironment.getApplication();context.getSharedPreferences("browser",0).edit().clear().commit();
         BrowserStore normal=new BrowserStore(context);normal.visit("https://normal.example","Normal");normal.write("tabs",Collections.singletonList(new BrowserStore.Entry("https://normal.example","Normal",0)));normal.selected(3);
@@ -36,8 +77,12 @@ public class PrivateBrowserTest {
         BrowserApplication.privateReady=true;
         ActivityController<PrivateActivity> controller=Robolectric.buildActivity(PrivateActivity.class).setup();
         try {
+            PrivateUnitSupport.authenticated(controller.get());
             java.lang.reflect.Field passwords=MainActivity.class.getDeclaredField("passwords");passwords.setAccessible(true);assertNull(passwords.get(controller.get()));
             assertTrue((controller.get().getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE)!=0);
+            new BrowserStore(controller.get(),true).visit("https://own-history.example/","Own private history");
+            Method library=MainActivity.class.getDeclaredMethod("showLibrary",String.class,String.class);library.setAccessible(true);library.invoke(controller.get(),"history","Verlauf");
+            android.app.AlertDialog history=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();assertTrue((history.getWindow().getAttributes().flags&WindowManager.LayoutParams.FLAG_SECURE)!=0);history.dismiss();
             Method navigate=MainActivity.class.getDeclaredMethod("navigateTyped",String.class);navigate.setAccessible(true);navigate.invoke(controller.get(),"secret.example");
             controller.pause().stop();assertEquals("https://normal.example",new BrowserStore(c).read("tabs").get(0).url);
         } finally { controller.destroy();BrowserApplication.privateReady=false; }

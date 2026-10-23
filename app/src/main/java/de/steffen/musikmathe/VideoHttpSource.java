@@ -18,20 +18,25 @@ import java.util.Map;
 final class VideoHttpSource extends BaseDataSource {
     private final String sourceOrigin;
     private final Map<String,String> headers;
-    private HttpURLConnection connection;
+    private volatile HttpURLConnection connection;
+    private volatile boolean cancelled;
     private InputStream input;
     private Uri current;
     private boolean started;
     private long remaining;
     VideoHttpSource(String source,Map<String,String> headers){super(true);sourceOrigin=VideoCatalog.origin(source);this.headers=VideoCatalog.safeHeaders(headers);}
+    /** Called off the main thread; abort a blocked network read without touching another job. */
+    void cancel(){cancelled=true;HttpURLConnection current=connection;if(current!=null)current.disconnect();}
     static boolean originBound(String header){return "Authorization".equalsIgnoreCase(header)||"Origin".equalsIgnoreCase(header);}
     @Override public long open(DataSpec spec)throws IOException{
         transferInitializing(spec);String url=spec.uri.toString();
         if(spec.httpMethod!=DataSpec.HTTP_METHOD_GET)throw new IOException("Nur GET-Videostreams werden unterstützt.");
         try{
             for(int redirects=0;redirects<9;redirects++){
+                if(cancelled)throw new IOException("Videodownload abgebrochen.");
                 if(!Address.isWeb(url))throw new IOException("Keine HTTP-Videoquelle.");
                 current=Uri.parse(url);connection=(HttpURLConnection)new URL(url).openConnection();connection.setInstanceFollowRedirects(false);connection.setConnectTimeout(15000);connection.setReadTimeout(20000);
+                if(cancelled)throw new IOException("Videodownload abgebrochen.");
                 connection.setRequestProperty("Accept-Encoding","identity");connection.setRequestProperty("User-Agent","BestBrowser/0.4.3");
                 for(Map.Entry<String,String> row:headers.entrySet())if(!originBound(row.getKey())||sourceOrigin.equals(VideoCatalog.origin(url))){
                     String value=row.getValue();
@@ -56,6 +61,7 @@ final class VideoHttpSource extends BaseDataSource {
         }catch(IOException|RuntimeException error){close();throw error;}
     }
     @Override public int read(byte[] buffer,int offset,int length)throws IOException{
+        if(cancelled)throw new IOException("Videodownload abgebrochen.");
         if(length==0)return 0;if(remaining==0)return C.RESULT_END_OF_INPUT;
         int count=input.read(buffer,offset,remaining==C.LENGTH_UNSET?length:(int)Math.min(length,remaining));
         if(count<0){if(remaining>0)throw new java.io.EOFException("Videodownload ist unvollständig.");return C.RESULT_END_OF_INPUT;}

@@ -36,7 +36,6 @@ final class PrivateSession {
         return false;
     }
     static void cleanIfStopped(Context context) {
-        if (android.os.Build.VERSION.SDK_INT < 28 || running(context)) return;
-        try { wipe(context); } catch (IOException ignored) { /* Startup refuses to reuse any unclean profile. */ }
+        PrivateProfiles.recoverStopped(context);
     }
 }

@@ -14,6 +14,13 @@ public class YouTubeSourcesTest {
     private JSONObject data(JSONArray formats)throws Exception{return new JSONObject().put("videoId",ID).put("title","Testfilm").put("formats",formats).put("playerData",true);}
     private JSONObject video(String url)throws Exception{return new JSONObject().put("url",url).put("itag",137).put("mimeType","video/mp4; codecs=\"avc1.640028\"").put("qualityLabel","1080p");}
     private JSONObject audio()throws Exception{return new JSONObject().put("url","https://r1.googlevideo.com/videoplayback?id=A&itag=140").put("itag",140).put("mimeType","audio/mp4").put("bitrate",128000);}
+    @Test public void keepsFormatSpecificMetadataAndSeparateAudioSize()throws Exception{
+        JSONObject picture=video("https://r1.googlevideo.com/videoplayback?id=A&itag=137").put("width",1920).put("height",1080).put("fps",60).put("bitrate",5000000).put("contentLength","2000000").put("approxDurationMs","125000");
+        JSONObject sound=audio().put("contentLength","250000").put("audioChannels",2).put("audioSampleRate","48000");
+        JSONObject data=data(new JSONArray().put(picture).put(sound)).put("duration","125").put("author","Testkanal").put("description","Vollständige Beschreibung");
+        VideoCatalog.Item item=YouTubeSources.parse(data,Collections.emptyMap(),Collections.emptyList()).items.get(0);
+        assertEquals("1920 × 1080 Pixel",item.metadata.get("Auflösung"));assertEquals("2:05",item.metadata.get("Dauer"));assertEquals("60 fps",item.metadata.get("Bildrate"));assertEquals("2,00 MB",item.metadata.get("Video-Dateigröße"));assertEquals("250,0 kB",item.metadata.get("Audio-Dateigröße"));assertEquals("",item.metadata.get("Dateigröße"));assertEquals("48000 Hz",item.metadata.get("Abtastrate"));assertEquals("2",item.metadata.get("Audiokanäle"));assertTrue(item.metadata.details(item).contains("Vollständige Beschreibung"));
+    }
     @Test public void validatesWatchShortsEmbedAndRealOrigins(){
         for(String url:new String[]{"https://www.youtube.com/watch?v="+ID,"https://m.youtube.com/shorts/"+ID,"https://www.youtube-nocookie.com/embed/"+ID,"https://youtu.be/"+ID})assertEquals(ID,YouTubeSources.videoId(url));
         assertEquals("",YouTubeSources.videoId("https://youtube.com.evil.test/watch?v="+ID));assertFalse(YouTubeSources.originAllowed("https://notyoutube.com"));assertFalse(YouTubeSources.originAllowed("http://www.youtube.com"));assertTrue(YouTubeSources.originAllowed("https://m.youtube.com"));

@@ -1,0 +1,14 @@
+<resources>
+    <color name="browser_ink">#234A43</color>
+    <color name="browser_menu_ink">#3C4043</color>
+    <color name="browser_paper">#F5F7F8</color>
+    <color name="browser_private_paper">#EDE5F4</color>
+    <color name="browser_surface">#FFFFFF</color>
+    <color name="browser_field">#E5EEEA</color>
+    <color name="browser_hint">#647E75</color>
+    <color name="browser_accent">#17685F</color>
+    <color name="browser_divider">#E8EAED</color>
+    <color name="browser_disabled">#B3C5BE</color>
+    <color name="browser_page">#F8FAF9</color>
+    <bool name="browser_light_bars">true</bool>
+</resources>

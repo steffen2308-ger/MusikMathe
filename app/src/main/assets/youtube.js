@@ -10,7 +10,8 @@
     if(originalFetch)window.fetch=function(){return originalFetch.apply(this,arguments).then(function(r){try{if(youtube(r.url)&&r.url.indexOf('/youtubei/v1/player')>=0)r.clone().json().then(take).catch(function(){});}catch(e){}return r;});};
     var open=XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open=function(){this.addEventListener('load',function(){try{if(youtube(this.responseURL)&&this.responseURL.indexOf('/youtubei/v1/player')>=0)take(this.responseType==='json'?this.response:this.responseText);}catch(e){}},{once:true});return open.apply(this,arguments);};
-    function emit(){try{if(window.musikYouTube&&window.musikYouTube.postMessage)window.musikYouTube.postMessage(JSON.stringify(snapshot()));}catch(e){}}
+    var previous='';
+    function emit(){try{if(document.hidden)return;if(window.musikYouTube&&window.musikYouTube.postMessage){var value=JSON.stringify(snapshot());if(value!==previous){previous=value;window.musikYouTube.postMessage(value);}}}catch(e){}}
     window.addEventListener('yt-navigate-finish',function(){setTimeout(emit,300);});
     window.addEventListener('yt-page-data-updated',emit);
     setInterval(emit,2000);
@@ -25,8 +26,10 @@
     var result=null;
     for(var i=0;i<responses.length;i++)try{var r=responses[i];if(typeof r==='string')r=JSON.parse(r);var id=r&&r.videoDetails&&r.videoDetails.videoId;if(id&&(!current||id===current)){result=r;if(r.streamingData)break;}}catch(e){}
     var details=result&&result.videoDetails||{},stream=result&&result.streamingData||{},state=result&&result.playabilityStatus||{};
-    var out={page:location.href,videoId:current||details.videoId||'',title:details.title||document.title||'YouTube-Video',status:state.status||'',reason:state.reason||'',formats:[],observed:[],hls:stream.hlsManifestUrl||'',dash:stream.dashManifestUrl||'',playerData:!!result};
-    function format(f){if(!f||out.formats.length>=80)return;out.formats.push({url:f.url||'',cipher:f.signatureCipher||f.cipher||'',itag:f.itag||0,mimeType:f.mimeType||'',height:f.height||0,qualityLabel:f.qualityLabel||'',bitrate:f.bitrate||0,audioQuality:f.audioQuality||'',audioSampleRate:f.audioSampleRate||'',audioTrack:f.audioTrack||{},drm:!!(f.drmFamilies&&f.drmFamilies.length)});}
+    var out={page:location.href,videoId:current||details.videoId||'',title:details.title||document.title||'YouTube-Video',duration:details.lengthSeconds||'',author:details.author||'',description:details.shortDescription||'',views:details.viewCount||'',live:!!details.isLive,uploadDate:result&&result.microformat&&result.microformat.playerMicroformatRenderer&&result.microformat.playerMicroformatRenderer.uploadDate||'',status:state.status||'',reason:state.reason||'',formats:[],observed:[],hls:stream.hlsManifestUrl||'',dash:stream.dashManifestUrl||'',playerData:!!result};
+    var captions=result&&result.captions&&result.captions.playerCaptionsTracklistRenderer&&result.captions.playerCaptionsTracklistRenderer.captionTracks||[];
+    out.subtitles=captions.map(function(t){return [t.name&&t.name.simpleText||'',t.languageCode||''].filter(Boolean).join(' · ');}).join(', ');
+    function format(f){if(!f||out.formats.length>=80)return;out.formats.push({url:f.url||'',cipher:f.signatureCipher||f.cipher||'',itag:f.itag||0,mimeType:f.mimeType||'',width:f.width||0,height:f.height||0,fps:f.fps||0,contentLength:f.contentLength||'',approxDurationMs:f.approxDurationMs||'',audioChannels:f.audioChannels||0,qualityLabel:f.qualityLabel||'',bitrate:f.bitrate||0,audioQuality:f.audioQuality||'',audioSampleRate:f.audioSampleRate||'',audioTrack:f.audioTrack||{},drm:!!(f.drmFamilies&&f.drmFamilies.length)});}
     (stream.formats||[]).slice(0,15).forEach(format);var adaptive=stream.adaptiveFormats||[];adaptive.filter(function(f){return (f.mimeType||'').indexOf('video/')===0;}).slice(0,40).forEach(format);adaptive.filter(function(f){return (f.mimeType||'').indexOf('audio/')===0;}).slice(0,25).forEach(format);
     var names=[];try{performance.getEntriesByType('resource').slice(-600).forEach(function(e){if(e.startTime>=(window.__mmYoutubeCutoff||0))names.push(e.name);});}catch(e){}
     (window.__mmVideos||[]).forEach(function(e){names.push(e.url);});

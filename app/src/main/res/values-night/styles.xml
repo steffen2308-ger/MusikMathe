@@ -1,0 +1,8 @@
+<resources>
+    <style name="BrowserAlertTheme" parent="android:style/Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">@color/browser_accent</item>
+        <item name="android:textColorPrimary">@color/browser_ink</item>
+        <item name="android:textColorSecondary">@color/browser_hint</item>
+        <item name="android:colorBackground">@color/browser_surface</item>
+    </style>
+</resources>

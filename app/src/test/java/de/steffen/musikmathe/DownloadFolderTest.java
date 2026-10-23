@@ -89,6 +89,16 @@ public class DownloadFolderTest {
             assertNotNull(DownloadFolder.create(app,first,"video/mp4","next.mp4"));
         }finally{controller.destroy();shadowOf(Looper.getMainLooper()).idle();}
     }
+    @Test public void eachPrivateAreaRemembersItsOwnGrantedVideoFolder()throws Exception{
+        DownloadFolder.remember(app,first,FLAGS);
+        try{
+            BrowserApplication.privateProcess=true;
+            PrivateProfiles.Session a=PrivateProfiles.probe(app,"Folder-A-password".toCharArray());PrivateProfiles.active=a;assertNull(DownloadFolder.selected(app));DownloadFolder.remember(app,second,FLAGS);assertEquals(second,DownloadFolder.selected(app));a.close();
+            PrivateProfiles.Session b=PrivateProfiles.probe(app,"Folder-B-password".toCharArray());PrivateProfiles.active=b;assertNull(DownloadFolder.selected(app));DownloadFolder.remember(app,first,FLAGS);assertEquals(first,DownloadFolder.selected(app));b.close();
+            PrivateProfiles.Session again=PrivateProfiles.probe(app,"Folder-A-password".toCharArray());PrivateProfiles.active=again;assertEquals(second,DownloadFolder.selected(app));assertNotNull(DownloadFolder.create(app,second,"video/mp4","Private A video.mp4"));again.close();
+        }finally{if(PrivateProfiles.active!=null)PrivateProfiles.active.close();BrowserApplication.privateProcess=false;}
+        assertEquals(first,DownloadFolder.selected(app));
+    }
     private void choose(MainActivity activity,VideoCatalog.Item item)throws Exception{
         Method method=MainActivity.class.getDeclaredMethod("chooseVideoFile",VideoCatalog.Item.class,boolean.class,long.class);method.setAccessible(true);method.invoke(activity,item,false,0L);
     }
@@ -109,6 +119,30 @@ public class DownloadFolderTest {
             choose(activity,item);Intent secondDownload=downloadIntent();assertNull(shadowOf(activity).getNextStartedActivity());assertNotEquals(firstDownload.getStringExtra("destination"),secondDownload.getStringExtra("destination"));
         }finally{controller.pause().stop().destroy();}
     }
+    private static final class MediaWebView extends android.webkit.WebView {
+        android.webkit.ValueCallback<String> callback;
+        MediaWebView(Context context){super(context);}
+        @Override public void evaluateJavascript(String script,android.webkit.ValueCallback<String> callback){if(callback!=null)this.callback=callback;}
+        void found()throws Exception{android.webkit.ValueCallback<String> next=callback;callback=null;next.onReceiveValue(org.json.JSONObject.quote(new org.json.JSONObject().put("done",true).put("items",new org.json.JSONArray().put(new org.json.JSONObject().put("url","https://media.test/photo.png"))).toString()));}
+    }
+    @Test public void batchRequiresConfirmationAndRetainsSelectionAcrossFirstFolderPicker()throws Exception{
+        ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity activity=controller.get();MediaWebView web=new MediaWebView(activity);java.util.concurrent.atomic.AtomicInteger progress=new java.util.concurrent.atomic.AtomicInteger();PageMediaDownloads media=new PageMediaDownloads(activity,()->true,progress::incrementAndGet);
+        try{
+            media.show(web,"https://page.test/",()->true);assertNull(shadowOf(RuntimeEnvironment.getApplication()).getNextStartedService());web.found();assertFalse(VideoDownloadService.busy());
+            ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick();shadowOf(Looper.getMainLooper()).idle();org.robolectric.shadows.ShadowActivity.IntentForResult choose=shadowOf(activity).getNextStartedActivityForResult();assertNotNull(choose);assertEquals(PageMediaDownloads.PICK_FOLDER,choose.requestCode);assertEquals(Intent.ACTION_OPEN_DOCUMENT_TREE,choose.intent.getAction());
+            media.pause();media.folderResult(Activity.RESULT_OK,new Intent().setData(first).addFlags(FLAGS));assertEquals(first,DownloadFolder.selected(activity));assertEquals(1,progress.get());assertEquals(1,VideoDownloadService.snapshot().waiting.size());assertTrue(VideoDownloadService.busy());assertEquals(0,new File(root,"first").listFiles().length);
+            Intent batch=shadowOf(RuntimeEnvironment.getApplication()).getNextStartedService();assertNotNull(batch);assertEquals("media-batch",batch.getAction());assertNull(batch.getStringExtra("url"));
+        }finally{media.close();VideoDownloadService.cancelAll();web.destroy();controller.pause().stop().destroy();}
+    }
+    @Test public void staleMediaScanAndCancelledPreviewNeverStartDownloads()throws Exception{
+        ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MediaWebView web=new MediaWebView(controller.get());java.util.concurrent.atomic.AtomicBoolean valid=new java.util.concurrent.atomic.AtomicBoolean(true);PageMediaDownloads media=new PageMediaDownloads(controller.get(),()->true,()->fail("No download should start"));
+        try{media.show(web,"https://page.test/",valid::get);valid.set(false);web.found();assertFalse(VideoDownloadService.busy());valid.set(true);media.show(web,"https://page.test/",valid::get);web.found();ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_NEGATIVE).performClick();assertNull(shadowOf(RuntimeEnvironment.getApplication()).getNextStartedService());assertEquals(0,new File(root,"first").listFiles().length);}
+        finally{media.close();web.destroy();controller.pause().stop().destroy();}
+    }
+    @Test public void lockedPrivateProcessCannotSubmitMediaToTheNormalService()throws Exception{
+        try{BrowserApplication.privateProcess=true;PrivateProfiles.active=null;MediaLinks.Item item=MediaLinks.item(new org.json.JSONObject().put("url","https://media.test/photo.png"));assertThrows(IllegalStateException.class,()->VideoDownloadService.enqueueMedia(app,Collections.singletonList(item),first,"https://page.test/","Agent"));assertNull(shadowOf(RuntimeEnvironment.getApplication()).getNextStartedService());assertFalse(VideoDownloadService.busy());}
+        finally{BrowserApplication.privateProcess=false;}
+    }
     public static final class TestDocuments extends DocumentsProvider {
         final File root;boolean writable=true;
         TestDocuments(File root){this.root=root;}
@@ -121,6 +155,6 @@ public class DownloadFolderTest {
             if(!writable)throw new java.io.FileNotFoundException("Folder unavailable");try{File file=new File(root,parent+"/"+name);if(!file.createNewFile())throw new java.io.IOException("Exists");return parent+"/"+name;}catch(Exception e){throw new java.io.FileNotFoundException(e.getMessage());}
         }
         @Override public ParcelFileDescriptor openDocument(String id,String mode,CancellationSignal signal)throws java.io.FileNotFoundException{return ParcelFileDescriptor.open(new File(root,id),ParcelFileDescriptor.parseMode(mode));}
-        @Override public void deleteDocument(String id){assertTrue(new File(root,id).delete());}
+        @Override public void deleteDocument(String id){File file=new File(root,id);if(file.exists())assertTrue(file.delete());}
     }
 }

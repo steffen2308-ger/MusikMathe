@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Keep the animal, orbit and tail inside the adaptive icon's safe area. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android" android:inset="10dp">
+    <bitmap android:src="@drawable/browser_emblem" android:gravity="fill" android:filter="true" />
+</inset>

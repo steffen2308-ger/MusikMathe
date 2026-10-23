@@ -16,10 +16,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
 
-/** A user-selected SAF directory, shared by both browser processes; no browsing data. */
+/** The normal browser and each unlocked private area remember their own SAF directory. */
 final class DownloadFolder {
     private static AtomicFile file(Context context){return new AtomicFile(new File(context.getFilesDir(),"video-download-folder.json"));}
     private static JSONObject read(Context context){
+        PrivateProfiles.Session profile=PrivateProfiles.forContext(context);
+        if(profile!=null)return profile.object("download_folder");
+        if(BrowserApplication.privateProcess||context instanceof PrivateActivity)return new JSONObject();
         try{return new JSONObject(new String(file(context).readFully(),StandardCharsets.UTF_8));}catch(Exception ignored){return new JSONObject();}
     }
     static boolean isTree(Uri uri){
@@ -41,12 +44,16 @@ final class DownloadFolder {
         try(Cursor cursor=query(context,document)){
             if(cursor!=null&&cursor.moveToFirst()&&!cursor.isNull(0))name=cursor.getString(0);
         }catch(Exception ignored){}
-        byte[] data=new JSONObject().put("uri",tree.toString()).put("label",name).toString().getBytes(StandardCharsets.UTF_8);
+        JSONObject value=new JSONObject().put("uri",tree.toString()).put("label",name);
+        PrivateProfiles.Session profile=PrivateProfiles.forContext(context);
+        if(profile!=null){profile.put("download_folder",value);if(!profile.failure.isEmpty())throw new IOException(profile.failure);return;}
+        if(BrowserApplication.privateProcess||context instanceof PrivateActivity)throw new IOException("Privaten Bereich zuerst entsperren.");
+        byte[] data=value.toString().getBytes(StandardCharsets.UTF_8);
         AtomicFile stored=file(context);FileOutputStream output=null;
         try{output=stored.startWrite();output.write(data);stored.finishWrite(output);}catch(Exception error){if(output!=null)stored.failWrite(output);throw error;}
         // Old grants stay valid for downloads already queued in the previous directory.
     }
-    static Uri create(Context context,Uri tree,String mime,String requested)throws Exception{
+    static synchronized Uri create(Context context,Uri tree,String mime,String requested)throws Exception{
         if(tree==null)throw new IOException("Bitte zuerst einen Downloadordner wählen.");
         String name=safeName(requested);Set<String> existing=new HashSet<>();
         Uri children=DocumentsContract.buildChildDocumentsUriUsingTree(tree,DocumentsContract.getTreeDocumentId(tree));

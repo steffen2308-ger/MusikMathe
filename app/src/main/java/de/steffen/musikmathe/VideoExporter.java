@@ -4,6 +4,7 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import androidx.media3.common.MediaItem;
+import androidx.media3.datasource.TransferListener;
 import androidx.media3.common.MimeTypes;
 import androidx.media3.common.util.Clock;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
@@ -32,9 +33,12 @@ final class VideoExporter {
         start(context,url,type,headers,output,clipMs,"",listener);
     }
     void start(Context context,String url,String type,Map<String,String> headers,File output,long clipMs,String audioUrl,Listener listener){
+        start(context,url,type,headers,output,clipMs,audioUrl,listener,null);
+    }
+    void start(Context context,String url,String type,Map<String,String> headers,File output,long clipMs,String audioUrl,Listener listener,TransferListener transfers){
         this.listener=listener;
         try{
-            DefaultMediaSourceFactory sources=new DefaultMediaSourceFactory(()->new VideoHttpSource(url,headers));
+            DefaultMediaSourceFactory sources=new DefaultMediaSourceFactory(()->{VideoHttpSource source=new VideoHttpSource(url,headers);if(transfers!=null)source.addTransferListener(transfers);return source;});
             ExoPlayerAssetLoader.Factory assets=new ExoPlayerAssetLoader.Factory(context,new DefaultDecoderFactory.Builder(context).build(),Clock.DEFAULT,sources);
             transformer=new Transformer.Builder(context).setAssetLoaderFactory(assets).setVideoMimeType(MimeTypes.VIDEO_H264).setAudioMimeType(MimeTypes.AUDIO_AAC).addListener(new Transformer.Listener(){
                 @Override public void onCompleted(Composition composition,ExportResult result){transformer=null;handler.removeCallbacks(tick);listener.completed();}

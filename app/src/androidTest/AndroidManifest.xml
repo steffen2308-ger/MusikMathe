@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <provider android:name="de.steffen.musikmathe.ProgressTestProvider" android:authorities="de.steffen.musikmathe.test.progress" android:exported="true" />
+        <provider android:name="de.steffen.musikmathe.MarkerTestProvider" android:authorities="de.steffen.musikmathe.test.markers" android:exported="true" />
+        <provider android:name="de.steffen.musikmathe.MediaTestDocuments" android:authorities="de.steffen.musikmathe.test.media" android:exported="true" android:grantUriPermissions="true" />
+    </application>
+</manifest>
