@@ -45,9 +45,9 @@ final class MediaLinks {
     static void collect(Map<String,Item> items,JSONArray values){for(int i=0;i<values.length()&&items.size()<MAX_ITEMS;i++){JSONObject value=values.optJSONObject(i);if(value==null)continue;Item item=item(value);if(item!=null)items.putIfAbsent(item.url,item);}}
     static Map<String,String> headers(String page,String target,String agent){
         Map<String,String> result=new LinkedHashMap<>();if(agent!=null&&!agent.contains("\r")&&!agent.contains("\n"))result.put("User-Agent",agent);
-        if(Address.isWeb(page)&&!(page.startsWith("https://")&&target.startsWith("http://"))){
-            Uri source=Uri.parse(page);String referrer=VideoCatalog.origin(page)+"/";
-            if(VideoCatalog.origin(page).equals(VideoCatalog.origin(target))){String authority=source.getEncodedAuthority();int at=authority.lastIndexOf('@');referrer=source.buildUpon().encodedAuthority(authority.substring(at+1)).fragment(null).build().toString();}
+        if(Address.isWeb(page)&&Address.isWeb(target)&&!("https".equalsIgnoreCase(Uri.parse(page).getScheme())&&"http".equalsIgnoreCase(Uri.parse(target).getScheme()))){
+            Uri source=Uri.parse(page);String authority=source.getEncodedAuthority();int at=authority.lastIndexOf('@');Uri clean=source.buildUpon().encodedAuthority(authority.substring(at+1)).fragment(null).build();String referrer=clean.buildUpon().path("/").clearQuery().build().toString();
+            if(VideoCatalog.origin(page).equals(VideoCatalog.origin(target)))referrer=clean.toString();
             result.put("Referer",referrer);
         }
         return result;
