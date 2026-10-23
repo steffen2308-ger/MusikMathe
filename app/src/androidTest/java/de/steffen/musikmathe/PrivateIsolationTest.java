@@ -29,7 +29,9 @@ public class PrivateIsolationTest {
     private final org.json.JSONArray openingTimes=new org.json.JSONArray();
     private void menu(String label){UiObject2 button=device.wait(Until.findObject(By.desc("Menü")),10000);assertNotNull("Browser menu",button);button.click();UiObject2 item=device.findObject(By.text(label));if(item==null)try{new androidx.test.uiautomator.UiScrollable(new androidx.test.uiautomator.UiSelector().className("android.widget.ListView")).scrollIntoView(new androidx.test.uiautomator.UiSelector().text(label));}catch(Exception error){throw new AssertionError(label,error);}item=device.wait(Until.findObject(By.text(label)),5000);assertNotNull(label,item);actionAt=android.os.SystemClock.elapsedRealtime();item.click();}
     private void navigate(String path,String expected)throws Exception{
-        UiObject2 link=device.wait(Until.findObject(By.text("Open "+path)),10000);assertNotNull("Fixture link "+path,link);link.click();
+        UiObject2 link=device.wait(Until.findObject(By.text("Open "+path)),10000);
+        if(link==null){UiObject2 address=device.findObject(By.desc("Adresse oder Suchbegriff"));throw new AssertionError("Fixture link "+path+"; address="+(address==null?"none":address.getText())+"; private="+device.hasObject(By.descStartsWith("Privater Tab"))+"; fixture requests="+requests);}
+        link.click();
         assertTrue("Fresh fixture route "+path,device.wait(Until.hasObject(By.text("Route "+path)),25000));state(expected);
     }
     private void state(String expected){
@@ -43,7 +45,6 @@ public class PrivateIsolationTest {
         long authenticated=PrivateTestSupport.unlockTimed(device,password);assertTrue(device.wait(Until.hasObject(By.text("Route /probe")),25000));
         org.json.JSONObject sample=new org.json.JSONObject().put("ordinal",openingTimes.length()+1).put("submitToBrowserMs",authenticated).put("activityToPageMs",android.os.SystemClock.elapsedRealtime()-started);openingTimes.put(sample);
         android.util.Log.i("MenuPreview","private-opening "+sample);
-        try(FileOutputStream out=context.openFileOutput("private-opening-ui.json",Context.MODE_PRIVATE)){out.write(openingTimes.toString().getBytes(StandardCharsets.UTF_8));}
     }
     private void home(){
         device.pressHome();long deadline=android.os.SystemClock.uptimeMillis()+10000;String foreground=null;

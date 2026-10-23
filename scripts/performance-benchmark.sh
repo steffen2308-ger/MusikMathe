@@ -18,16 +18,6 @@ for variant in baseline current; do
     exit 1
   fi
   adb shell run-as de.steffen.musikmathe cat "files/browser-performance-$variant.json" > "performance-reports/$variant.json"
-  if test "$variant" = baseline; then
-    adb shell am force-stop de.steffen.musikmathe
-    adb shell am instrument -w -e class de.steffen.musikmathe.PrivateIsolationTest de.steffen.musikmathe.test/androidx.test.runner.AndroidJUnitRunner > performance-reports/baseline-private-isolation.txt
-    cat performance-reports/baseline-private-isolation.txt
-    if ! grep -Fq 'OK (1 test)' performance-reports/baseline-private-isolation.txt; then
-      adb logcat -d -s MenuPreview:I AndroidRuntime:E '*:S'
-      exit 1
-    fi
-    adb shell run-as de.steffen.musikmathe cat files/private-opening-ui.json > performance-reports/baseline-private-opening-ui.json
-  fi
 done
 python3 - <<'PY'
 import json

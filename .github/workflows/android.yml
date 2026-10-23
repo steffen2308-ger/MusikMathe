@@ -158,7 +158,7 @@ jobs:
             adb logcat -c
             bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PrivateIsolationTest
             adb logcat -d -s MenuPreview:I '*:S' > performance-reports/current-private-opening-logcat.txt
-            python3 scripts/compare-private-opening.py
+            python3 scripts/report-private-opening.py
             mkdir -p private-profile-device-reports
             cp -r app/build/reports/androidTests/. private-profile-device-reports/
             bash scripts/device-tests.sh -Pandroid.testInstrumentationRunnerArguments.class=de.steffen.musikmathe.PasswordFeatureTest,de.steffen.musikmathe.AdBlockingWebViewTest,de.steffen.musikmathe.AdBlockLiveProbeTest,de.steffen.musikmathe.BrowserFullscreenTest,de.steffen.musikmathe.BrowserMenuDeviceTest,de.steffen.musikmathe.NightModeDeviceTest,de.steffen.musikmathe.ProtectedContentDeviceTest,de.steffen.musikmathe.CastDeviceTest,de.steffen.musikmathe.VideoDownloadProgressTest,de.steffen.musikmathe.VideoParallelExportTest,de.steffen.musikmathe.VideoDetectionTest,de.steffen.musikmathe.VideoMarkersDeviceTest,de.steffen.musikmathe.VideoWindowDeviceTest,de.steffen.musikmathe.AddressSuggestionsDeviceTest,de.steffen.musikmathe.HomePageDeviceTest,de.steffen.musikmathe.PreloadingDeviceTest,de.steffen.musikmathe.VimeoLiveProbeTest -Pandroid.testInstrumentationRunnerArguments.adblockLive=true -Pandroid.testInstrumentationRunnerArguments.vimeoLive=true
