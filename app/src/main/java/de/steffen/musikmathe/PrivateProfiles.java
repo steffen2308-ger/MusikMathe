@@ -53,9 +53,10 @@ final class PrivateProfiles {
         private boolean saveQueued;
         Session(Context c,String id,byte[] material,JSONObject data,boolean fresh){this.context=c.getApplicationContext();this.id=id;this.material=material;this.data=data;this.fresh=fresh;savedRevision=fresh?-1:0;}
         synchronized String string(String key,String fallback){check();return data.optString(key,fallback);}
+        synchronized Object value(String key){check();return data.opt(key);}
         synchronized int integer(String key,int fallback){check();return data.optInt(key,fallback);}
         synchronized boolean bool(String key,boolean fallback){check();return data.optBoolean(key,fallback);}
-        synchronized JSONObject object(String key){check();JSONObject value=data.optJSONObject(key);return value==null?new JSONObject():value;}
+        synchronized JSONObject object(String key){check();JSONObject value=data.optJSONObject(key);try{return value==null?new JSONObject():new JSONObject(value.toString());}catch(org.json.JSONException ignored){return new JSONObject();}}
         void put(String key,Object value){try{putAll(new JSONObject().put(key,value));}catch(org.json.JSONException e){saveFailed();}}
         void putAll(JSONObject changes){if(change(changes))flush();}
         void putAsync(String key,Object value){try{putAllAsync(new JSONObject().put(key,value));}catch(org.json.JSONException e){saveFailed();}}
@@ -63,7 +64,14 @@ final class PrivateProfiles {
         private synchronized boolean change(JSONObject changes){
             check();if(sealing)throw new IllegalStateException("Der private Bereich wird geschlossen.");try{
                 boolean changed=false;java.util.Iterator<String> keys=changes.keys();
-                while(keys.hasNext()){String key=keys.next();Object next=changes.get(key);if(!java.util.Objects.equals(data.opt(key),next)){data.put(key,next);changed=true;}}
+                while(keys.hasNext()){
+                    String key=keys.next();Object next=changes.get(key);
+                    if(!java.util.Objects.equals(data.opt(key),next)){
+                        if(next instanceof JSONObject)next=new JSONObject(next.toString());
+                        else if(next instanceof org.json.JSONArray)next=new org.json.JSONArray(next.toString());
+                        data.put(key,next);changed=true;
+                    }
+                }
                 if(changed)revision++;
                 return changed||!failure.isEmpty();
             }catch(Exception e){saveFailed();return false;}
@@ -74,10 +82,14 @@ final class PrivateProfiles {
         }
         boolean flush(){synchronized(diskLock){
             byte[] plain=null;try{
-                long snapshot;SecretKey key;
-                synchronized(this){check();if(savedRevision==revision&&failure.isEmpty())return true;snapshot=revision;plain=data.toString().getBytes(StandardCharsets.UTF_8);key=PrivateCrypto.dataKey(material);}
+                long snapshot;SecretKey key;JSONObject copy=new JSONObject();
+                synchronized(this){
+                    check();if(savedRevision==revision&&failure.isEmpty())return true;snapshot=revision;key=PrivateCrypto.dataKey(material);
+                    java.util.Iterator<String> keys=data.keys();while(keys.hasNext()){String field=keys.next();copy.put(field,data.get(field));}
+                }
                 // Encryption and AtomicFile's fsync hold only the disk lock. Reads and new
                 // changes remain available; a later revision cannot be overwritten by an old one.
+                plain=copy.toString().getBytes(StandardCharsets.UTF_8);
                 if(plain.length>8*1024*1024-29)throw new IOException("Privater Speicher zu groß");
                 write(dataFile(context,id),PrivateCrypto.encrypt(key,PrivateCrypto.aad("data",id),plain));
                 synchronized(this){savedRevision=snapshot;failure="";}return true;

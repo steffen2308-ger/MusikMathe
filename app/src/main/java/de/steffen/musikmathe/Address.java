@@ -7,8 +7,9 @@ import java.util.Locale;
 /** Treat typed text as a search unless it is a usable web address. */
 final class Address {
     static final String HOME = "file:///android_asset/start.html";
+    private static boolean whitespace(String value){for(int i=0;i<value.length();i++){char c=value.charAt(i);if(c==' '||(c>='\t'&&c<='\r'))return true;}return false;}
     static boolean isWeb(String value) {
-        if (value == null || value.matches("(?s).*\\s.*")) return false;
+        if (value == null || whitespace(value)) return false;
         try {
             URI uri = new URI(value);
             String scheme = uri.getScheme();
@@ -27,7 +28,7 @@ final class Address {
             String url = text.replace(" ", "%20");
             return isWeb(url) ? url : null;
         }
-        if (!text.matches("(?s).*\\s.*") && !text.contains("@")) {
+        if (!whitespace(text) && !text.contains("@")) {
             String host = text.split("[/?#]", 2)[0];
             if ((host.contains(".") && !host.startsWith(".") && !host.endsWith("."))
                     || host.matches("localhost(:[0-9]+)?") || host.startsWith("[")) {

@@ -63,16 +63,15 @@ final class AdBlocker {
         try {
             URI uri = new URI(url);
             if (!"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme())) return "";
-            String value = uri.getHost();
-            if (value == null) return "";
-            value = value.toLowerCase(Locale.ROOT);
-            return value.endsWith(".") ? value.substring(0,value.length()-1) : value;
+            return host(uri);
         } catch (URISyntaxException ignored) { return ""; }
     }
+    private static String host(URI uri){String value=uri.getHost();if(value==null)return "";value=value.toLowerCase(Locale.ROOT);return value.endsWith(".")?value.substring(0,value.length()-1):value;}
     static boolean excepted(String pageUrl, Set<String> exceptions) {
         return !exceptionHost(pageUrl,exceptions).isEmpty();
     }
     static String exceptionHost(String pageUrl, Set<String> exceptions) {
+        if(exceptions.isEmpty())return "";
         String pageHost = host(pageUrl);
         String best="";
         for (String allowed : exceptions) if ((pageHost.equals(allowed) || pageHost.endsWith("."+allowed))&&allowed.length()>best.length())best=allowed;
@@ -82,9 +81,10 @@ final class AdBlocker {
     static boolean shouldBlock(String url, boolean mainFrame, boolean enabled) {
         // Visiting a link explicitly must still work, including a filter-listed domain.
         if (!enabled || mainFrame || url == null) return false;
-        String host = host(url);
-        if(host.isEmpty())return false;
-        try{if(AD_SCRIPT.matcher(new URI(url).getPath()).find())return true;}catch(URISyntaxException ignored){}
+        URI uri;try{uri=new URI(url);}catch(URISyntaxException ignored){return false;}
+        if(!"http".equalsIgnoreCase(uri.getScheme())&&!"https".equalsIgnoreCase(uri.getScheme()))return false;
+        String host=host(uri);if(host.isEmpty())return false;
+        String path=uri.getPath();if(path!=null&&AD_SCRIPT.matcher(path).find())return true;
         Set<String> snapshot = hosts;
         // Compare whole DNS labels: an ad domain in a path, query or userinfo is harmless.
         while (!host.isEmpty()) {

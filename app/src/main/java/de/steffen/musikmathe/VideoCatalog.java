@@ -9,6 +9,9 @@ import java.util.Map;
 
 /** Per-page, memory-only candidates; media segments are not offered as complete videos. */
 final class VideoCatalog {
+    private static final java.util.regex.Pattern SEGMENT=java.util.regex.Pattern.compile(".*\\.(m4s|ts|aac|vtt|key)$");
+    private static final java.util.regex.Pattern MEDIA=java.util.regex.Pattern.compile(".*\\.(mp4|m4v|mov|webm|mkv|ogv|3gp)$");
+    private static final java.util.regex.Pattern FRAGMENT=java.util.regex.Pattern.compile(".*(?:init|segment|chunk|frag)[-_0-9]*\\.(mp4|m4v)$");
     static String scanScript(android.content.Context context){return BrowserScripts.read(context,"video-scan.js","JSON.stringify([])");}
     static final class Item {
         final String url, type, audioUrl, youtubeId, description,thumbnail;
@@ -73,10 +76,10 @@ final class VideoCatalog {
         Uri uri=Uri.parse(url);String path=uri.getPath()==null?"":uri.getPath().toLowerCase(Locale.ROOT),type=mime==null?"":mime.toLowerCase(Locale.ROOT);
         if(path.endsWith(".m3u8")||type.contains("mpegurl"))return "HLS";
         if(path.endsWith(".mpd")||type.contains("dash+xml"))return "DASH";
-        if(path.matches(".*\\.(m4s|ts|aac|vtt|key)$"))return null;
-        if(path.matches(".*\\.(mp4|m4v|mov|webm|mkv|ogv|3gp)$")){
+        if(SEGMENT.matcher(path).matches())return null;
+        if(MEDIA.matcher(path).matches()){
             // Initialization/numbered fragments are not standalone movies.
-            if(path.matches(".*(?:init|segment|chunk|frag)[-_0-9]*\\.(mp4|m4v)$"))return null;
+            if(FRAGMENT.matcher(path).matches())return null;
             return path.endsWith(".webm")?"WebM":path.endsWith(".mp4")||path.endsWith(".m4v")?"MP4":"Video";
         }
         String hint=uri.getQueryParameter("mime");if(hint!=null && hint.toLowerCase(Locale.ROOT).startsWith("video/"))type=hint.toLowerCase(Locale.ROOT);

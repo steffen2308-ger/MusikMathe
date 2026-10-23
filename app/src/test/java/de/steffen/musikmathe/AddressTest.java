@@ -4,6 +4,10 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class AddressTest {
+    @Test public void rawAsciiWhitespaceIsRejectedWhileEscapedSpacesRemainValid(){
+        for(char whitespace:new char[]{' ','\t','\n','\r','\f',11})assertFalse(Address.isWeb("https://example.com/a"+whitespace+"b"));
+        assertTrue(Address.isWeb("https://example.com/a%20b?q=hello+world"));
+    }
     @Test public void normalAddressesDefaultToHttps() {
         assertEquals("https://example.org/path?q=1#part",Address.resolve(" example.org/path?q=1#part ","google"));
         assertEquals("http://localhost:8080/",Address.resolve("http://localhost:8080/","google"));

@@ -52,4 +52,26 @@ public class PrivateProfilesSchedulingTest {
     @Test public void closingAnUnconfirmedUntouchedPasswordDoesNotCreateStorage()throws Exception{
         session.close();assertFalse(PrivateProfiles.dataFile(context,session.id).getBaseFile().exists());
     }
+    @Test public void historySnapshotsStayReadableAndKeepTheExistingEncryptedFormat()throws Exception{
+        assertNull(PrivateProfiles.active);PrivateProfiles.active=session;
+        try{
+            BrowserStore store=new BrowserStore(context,true),other=new BrowserStore(context,true);
+            java.util.List<BrowserStore.Entry> input=new java.util.ArrayList<>();input.add(new BrowserStore.Entry("https://a.example/","A",0));input.add(new BrowserStore.Entry("javascript:alert(1)","Invalid",0));
+            store.write("history",input);input.clear();assertEquals(1,other.read("history").size());
+            other.visit("https://a.example/","Updated");assertEquals("Updated",store.read("history").get(0).title);assertEquals(2,store.read("history").get(0).visits);assertFalse(store.frequentSites().isEmpty());
+            assertTrue(session.value("history") instanceof BrowserStore.StoredRows);assertTrue(session.flush());
+            org.json.JSONArray rows=new org.json.JSONArray(disk().getString("history"));assertEquals(1,rows.length());assertEquals("Updated",rows.getJSONObject(0).getString("title"));assertEquals(2,rows.getJSONObject(0).getLong("visits"));
+            store.write("history",java.util.Collections.emptyList());assertTrue(other.read("history").isEmpty());assertTrue(store.frequentSites().isEmpty());assertTrue(session.flush());assertEquals("[]",disk().getString("history"));
+        }finally{PrivateProfiles.active=null;}
+    }
+    @Test public void slowJsonEncodingCannotHoldTheSessionReadLock()throws Exception{
+        CountDownLatch encoding=new CountDownLatch(1),release=new CountDownLatch(1);
+        Object slow=new Object(){@Override public String toString(){encoding.countDown();try{release.await(5,TimeUnit.SECONDS);}catch(InterruptedException e){Thread.currentThread().interrupt();}return "encoded";}};
+        session.putAsync("slow",slow);
+        try{
+            assertTrue(encoding.await(2,TimeUnit.SECONDS));
+            FutureTask<Integer> ui=new FutureTask<>(()->{session.putAsync("selected",42);return session.integer("selected",-1);});new Thread(ui).start();assertEquals(Integer.valueOf(42),ui.get(2,TimeUnit.SECONDS));
+        }finally{release.countDown();}
+        assertTrue(session.flush());assertEquals(42,disk().getInt("selected"));
+    }
 }

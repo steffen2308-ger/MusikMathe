@@ -30,10 +30,30 @@ final class BrowserStore {
     private final String tabPrefix;
     private final java.util.Map<String,CachedRows> cachedRows=new java.util.HashMap<>();
     private String frequentRaw;
+    private Object frequentRows;
     private List<Entry> frequentCache;
     private static final class CachedRows {
         final String raw;final List<Entry> rows;
         CachedRows(String raw,List<Entry> rows){this.raw=raw;this.rows=new ArrayList<>(rows);}
+    }
+    /** JSONObject writes unknown values as JSON strings, preserving the existing disk format.
+     * Encoding is deferred until the storage worker takes its immutable snapshot. */
+    static final class StoredRows {
+        final String key;final List<Entry> rows;
+        private volatile String encoded;
+        StoredRows(String key,List<Entry> input){
+            this.key=key;ArrayList<Entry> valid=new ArrayList<>();int limit="tabs".equals(key)?MAX_TABS:500;
+            for(Entry row:input){if(valid.size()>=limit)break;if(Address.isWeb(row.url)||("tabs".equals(key)&&Address.HOME.equals(row.url)))valid.add(row);}
+            rows=Collections.unmodifiableList(valid);
+        }
+        @Override public String toString(){String value=encoded;if(value==null){value=encode(key,rows);encoded=value;}return value;}
+        @Override public boolean equals(Object other){
+            if(this==other)return true;if(!(other instanceof StoredRows))return false;StoredRows next=(StoredRows)other;
+            if(!key.equals(next.key)||rows.size()!=next.rows.size())return false;
+            for(int i=0;i<rows.size();i++){Entry a=rows.get(i),b=next.rows.get(i);if(a.time!=b.time||a.desktop!=b.desktop||!a.url.equals(b.url)||!a.title.equals(b.title)||("history".equals(key)&&a.visits!=b.visits))return false;}
+            return true;
+        }
+        @Override public int hashCode(){int result=key.hashCode();for(Entry row:rows){result=31*result+row.url.hashCode();result=31*result+row.title.hashCode();result=31*result+Long.hashCode(row.time);result=31*result+Boolean.hashCode(row.desktop);if("history".equals(key))result=31*result+Long.hashCode(row.visits);}return result;}
     }
     final PrivateProfiles.Session profile;
     private List<Entry> savedTabs;
@@ -58,7 +78,10 @@ final class BrowserStore {
         ArrayList<Entry> result = new ArrayList<>();
         if (privateMode && profile==null) return result;
         String raw;
-        try{raw=profile==null?prefs.getString("tabs".equals(key)?tabPrefix+key:key,"[]"):profile.string(key,"[]");}catch(RuntimeException unavailable){return result;}
+        try{
+            if(profile!=null){Object value=profile.value(key);if(value instanceof StoredRows)return new ArrayList<>(((StoredRows)value).rows);raw=value==null?"[]":value.toString();}
+            else raw=prefs.getString("tabs".equals(key)?tabPrefix+key:key,"[]");
+        }catch(RuntimeException unavailable){return result;}
         if(raw==null)return result;
         CachedRows cached=cachedRows.get(key);
         if(cached!=null&&cached.raw.equals(raw))return new ArrayList<>(cached.rows);
@@ -76,7 +99,7 @@ final class BrowserStore {
         if(cachedRows.size()<3||cachedRows.containsKey(key))cachedRows.put(key,new CachedRows(raw,result));
         return result;
     }
-    private String encode(String key,List<Entry> rows){
+    private static String encode(String key,List<Entry> rows){
         JSONArray array = new JSONArray();
         for (Entry row : rows) {
             try { JSONObject item=new JSONObject().put("url", row.url).put("title", row.title).put("time", row.time).put("desktop", row.desktop);if("history".equals(key))item.put("visits",row.visits);array.put(item); }
@@ -86,6 +109,7 @@ final class BrowserStore {
     }
     void write(String key, List<Entry> rows) {
         if (privateMode&&profile==null) return;
+        if(profile!=null&&("history".equals(key)||"bookmarks".equals(key))){profile.putAsync(key,new StoredRows(key,rows));return;}
         String encoded=encode(key,rows),stored=profile==null?prefs.getString("tabs".equals(key)?tabPrefix+key:key,"[]"):profile.string(key,"[]");
         if(encoded.equals(stored))return;
         if(profile!=null)profile.putAsync(key,encoded);else prefs.edit().putString("tabs".equals(key)?tabPrefix+key:key,encoded).apply();
@@ -122,7 +146,14 @@ final class BrowserStore {
     synchronized List<Entry> frequentSites(){
         if(privateMode&&profile==null)return Collections.emptyList();
         String raw;
-        try{raw=profile==null?prefs.getString("history","[]"):profile.string("history","[]");}catch(RuntimeException unavailable){return Collections.emptyList();}
+        try{
+            Object value=profile==null?prefs.getString("history","[]"):profile.value("history");
+            if(value instanceof StoredRows){
+                if(value!=frequentRows){frequentCache=FrequentSites.top(((StoredRows)value).rows);frequentRows=value;frequentRaw=null;}
+                return new ArrayList<>(frequentCache);
+            }
+            raw=value==null?"[]":value.toString();frequentRows=null;
+        }catch(RuntimeException unavailable){return Collections.emptyList();}
         if(raw==null)return Collections.emptyList();
         if(frequentCache==null||!raw.equals(frequentRaw)){frequentCache=FrequentSites.top(read("history"));frequentRaw=raw;}
         return new ArrayList<>(frequentCache);
