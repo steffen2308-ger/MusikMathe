@@ -6,11 +6,13 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
+import org.bouncycastle.crypto.digests.SHA256Digest;
+import org.bouncycastle.crypto.macs.HMac;
+import org.bouncycastle.crypto.params.KeyParameter;
 
 /** RFC 8018 PBKDF2-HMAC-SHA256, 96 bytes: independent blocks run on at most three threads.
- * Uses the platform HMAC primitive; rounds, block numbers and output match SecretKeyFactory.
+ * Uses Bouncy Castle's HMAC primitive with reusable state/output buffers; rounds, block
+ * numbers and output match SecretKeyFactory. Avoid native JCE context allocation per round.
  * All workers finish before shared password bytes can be erased or the result is returned. */
 final class ParallelPbkdf2 {
     static byte[] derive(char[] password,byte[] salt,int rounds)throws GeneralSecurityException{
@@ -47,13 +49,13 @@ final class ParallelPbkdf2 {
         return interrupted;
     }
     private static void block(byte[] password,byte[] salt,int rounds,int number,byte[] result,int offset)throws GeneralSecurityException{
-        Mac mac=Mac.getInstance("HmacSHA256");mac.init(new SecretKeySpec(password,"HmacSHA256"));
-        byte[] value=null,sum=null;
+        HMac mac=new HMac(new SHA256Digest());mac.init(new KeyParameter(password));
+        byte[] value=new byte[32],sum=null;
         try{
-            mac.update(salt);value=mac.doFinal(new byte[]{0,0,0,(byte)number});sum=value.clone();
+            mac.update(salt,0,salt.length);mac.update(new byte[]{0,0,0,(byte)number},0,4);mac.doFinal(value,0);sum=value.clone();
             for(int round=1;round<rounds;round++){
                 if((round&1023)==0&&Thread.currentThread().isInterrupted())throw new GeneralSecurityException("Password derivation interrupted");
-                mac.update(value);mac.doFinal(value,0);
+                mac.update(value,0,value.length);mac.doFinal(value,0);
                 for(int i=0;i<32;i++)sum[i]^=value[i];
             }
             System.arraycopy(sum,0,result,offset,32);

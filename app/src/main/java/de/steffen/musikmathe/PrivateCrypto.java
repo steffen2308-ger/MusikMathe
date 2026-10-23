@@ -21,7 +21,7 @@ final class PrivateCrypto {
     static byte[] derive(char[] password,byte[] salt)throws GeneralSecurityException{
         if(password.length<4||password.length>256||salt.length!=32)throw new GeneralSecurityException("Bitte ein Passwort mit 4 bis 256 Zeichen verwenden.");
         try{return ParallelPbkdf2.derive(password,salt,ITERATIONS);}
-        catch(GeneralSecurityException unavailable){if(Thread.currentThread().isInterrupted())throw unavailable;/* Retain the platform path for unsupported encodings/providers. */}
+        catch(GeneralSecurityException|LinkageError unavailable){if(Thread.currentThread().isInterrupted())throw new GeneralSecurityException("Password derivation interrupted",unavailable);/* Retain the platform path for unsupported encodings/runtimes. */}
         PBEKeySpec spec=new PBEKeySpec(password,salt,ITERATIONS,768);
         try{return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).getEncoded();}finally{spec.clearPassword();}
     }

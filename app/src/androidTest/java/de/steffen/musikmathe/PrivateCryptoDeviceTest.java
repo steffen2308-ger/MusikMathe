@@ -16,8 +16,9 @@ public class PrivateCryptoDeviceTest {
         for(String text:new String[]{"1234","äÖß中🔒","nul\0password",new String(longest)}){
             char[] password=text.toCharArray();PBEKeySpec spec=new PBEKeySpec(password,salt,210000,768);byte[] reference=null,parallel=null;
             try{
-                reference=SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).getEncoded();parallel=PrivateCrypto.derive(password,salt);
+                reference=SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).getEncoded();parallel=ParallelPbkdf2.derive(password,salt,210000);
                 assertArrayEquals("Exact 96-byte compatibility, all 210000 rounds",reference,parallel);
+                if(text.equals("1234")){byte[] production=PrivateCrypto.derive(password,salt);try{assertArrayEquals(parallel,production);}finally{Arrays.fill(production,(byte)0);}}
                 String id=PrivateCrypto.id(reference);byte[] data=PrivateCrypto.encrypt(PrivateCrypto.dataKey(reference),PrivateCrypto.aad("data",id),new byte[]{1,2,3});
                 assertEquals(id,PrivateCrypto.id(parallel));assertArrayEquals(new byte[]{1,2,3},PrivateCrypto.decrypt(PrivateCrypto.dataKey(parallel),PrivateCrypto.aad("data",id),data));
             }finally{spec.clearPassword();Arrays.fill(password,'\0');if(reference!=null)Arrays.fill(reference,(byte)0);if(parallel!=null)Arrays.fill(parallel,(byte)0);}
