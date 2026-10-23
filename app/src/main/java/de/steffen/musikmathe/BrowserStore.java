@@ -112,7 +112,16 @@ final class BrowserStore {
         if(profile!=null&&("history".equals(key)||"bookmarks".equals(key))){profile.putAsync(key,new StoredRows(key,rows));return;}
         String encoded=encode(key,rows),stored=profile==null?prefs.getString("tabs".equals(key)?tabPrefix+key:key,"[]"):profile.string(key,"[]");
         if(encoded.equals(stored))return;
-        if(profile!=null)profile.putAsync(key,encoded);else prefs.edit().putString("tabs".equals(key)?tabPrefix+key:key,encoded).apply();
+        if(profile!=null)profile.putAsync(key,encoded);
+        else{
+            prefs.edit().putString("tabs".equals(key)?tabPrefix+key:key,encoded).apply();
+            // The next navigation can reuse the validated rows we just wrote instead
+            // of parsing all 500 history objects again. Other windows still check raw.
+            if("history".equals(key)){
+                List<Entry> valid=new StoredRows(key,rows).rows;
+                synchronized(this){cachedRows.put(key,new CachedRows(encoded,valid));}
+            }
+        }
     }
     private String tabSnapshot(List<Entry> rows){
         boolean same=savedTabs!=null&&savedTabs.size()==rows.size();

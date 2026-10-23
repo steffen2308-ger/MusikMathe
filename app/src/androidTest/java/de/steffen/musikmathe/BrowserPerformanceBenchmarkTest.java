@@ -84,10 +84,22 @@ public class BrowserPerformanceBenchmarkTest {
                 assertSame("Backgrounding preserves recently used tabs",first,tabs().get(0).view);assertSame(second,tabs().get(1).view);
             });
             main(activity::finish);instrumentation.waitForIdleSync();activity=null;
+            benchmarkNormalHistory(report);
             benchmarkPrivateStorage(report);
             Log.i("MenuPreview","browser-performance "+report);
             try(java.io.FileOutputStream out=app.openFileOutput("browser-performance-"+label+".json",Context.MODE_PRIVATE)){out.write(report.toString().getBytes(StandardCharsets.UTF_8));}
         }finally{if(activity!=null)main(activity::finish);}
+    }
+    private void benchmarkNormalHistory(JSONObject report)throws Exception{
+        BrowserStore store=new BrowserStore(app);List<BrowserStore.Entry> history=new ArrayList<>();
+        for(int i=0;i<500;i++)history.add(new BrowserStore.Entry("https://normal-history.example/"+i,"Normal article "+i+" · stored title and metadata",i));
+        store.write("history",history);List<Double> visits=new ArrayList<>();
+        for(int i=0;i<30;i++){
+            String url="https://normal-history.example/"+i;double[] elapsed={0};
+            main(()->{long start=SystemClock.elapsedRealtimeNanos();store.visit(url,"Updated normal article");elapsed[0]=(SystemClock.elapsedRealtimeNanos()-start)/1000000.0;});visits.add(elapsed[0]);
+        }
+        assertEquals("https://normal-history.example/29",new BrowserStore(app).read("history").get(0).url);
+        report.put("normalHistorySaveUiMedianMs",median(visits)).put("normalStorageRounds",30);
     }
     private void benchmarkPrivateStorage(JSONObject report)throws Exception{
         assertNull(PrivateProfiles.active);byte[] material=new byte[96];new java.security.SecureRandom().nextBytes(material);

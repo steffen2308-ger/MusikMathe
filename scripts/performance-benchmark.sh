@@ -24,7 +24,7 @@ import json
 from pathlib import Path
 before=json.loads(Path('performance-reports/baseline.json').read_text())
 after=json.loads(Path('performance-reports/current.json').read_text())
-report={'baseline':before,'current':after,'relative_change_percent':{key:round(100*(after[key]-before[key])/before[key],1) for key in ['warmActivityReadyMedianMs','tabSwitchUiMedianMs','tabSwitchFrameMedianMs','privateTabSaveUiMedianMs','privateHistorySaveUiMedianMs'] if before[key]>0}}
+report={'baseline':before,'current':after,'relative_change_percent':{key:round(100*(after[key]-before[key])/before[key],1) for key in ['warmActivityReadyMedianMs','tabSwitchUiMedianMs','tabSwitchFrameMedianMs','privateTabSaveUiMedianMs','privateHistorySaveUiMedianMs','normalHistorySaveUiMedianMs'] if before[key]>0}}
 Path('performance-reports/comparison.json').write_text(json.dumps(report,indent=2))
 print('BROWSER PERFORMANCE COMPARISON '+json.dumps(report))
 PY

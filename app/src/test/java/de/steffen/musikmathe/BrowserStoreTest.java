@@ -48,6 +48,13 @@ public class BrowserStoreTest {
         assertEquals("Second",store.read("history").get(0).title);store.frequentSites().clear();assertFalse(store.frequentSites().isEmpty());
         other.write("history",java.util.Collections.emptyList());assertTrue(store.read("history").isEmpty());assertTrue(store.frequentSites().isEmpty());
     }
+    @Test public void writtenHistoryCacheStillFiltersInvalidUrlsAndTracksExternalClears(){
+        Context context=RuntimeEnvironment.getApplication();
+        store.write("history",Arrays.asList(new BrowserStore.Entry("javascript:alert(1)","Invalid",0),new BrowserStore.Entry("https://good.example/","Valid",0)));
+        assertEquals(1,store.read("history").size());assertEquals("Valid",store.read("history").get(0).title);
+        store.read("history").clear();assertEquals(1,store.read("history").size());
+        context.getSharedPreferences("browser",0).edit().remove("history").commit();assertTrue(store.read("history").isEmpty());
+    }
     @Test public void tabSnapshotUpdatesTabsAndSelectionTogetherAndSkipsUnchangedWrites(){
         android.content.SharedPreferences prefs=RuntimeEnvironment.getApplication().getSharedPreferences("browser",0);
         java.util.List<BrowserStore.Entry> rows=Arrays.asList(new BrowserStore.Entry(Address.HOME,"Start",0),new BrowserStore.Entry("https://example.org/","Example",0));
